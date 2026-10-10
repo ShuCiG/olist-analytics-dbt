@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: olist
+    description: >
+      Olist Brazilian e-commerce public dataset (Kaggle), ~100k orders 2016-2018.
+      Loaded by dlt (`ingestion/pipeline.py`); every column is VARCHAR.
+    schema: raw
+    tables:
+      - name: orders
+        description: One row per order. `customer_id` is generated per order.
+      - name: order_items
+        description: One row per item within an order (`order_item_id` is the line number).
+      - name: order_payments
+        description: One row per payment of an order; an order can be split across payment methods.
+      - name: order_reviews
+        description: Customer reviews. `review_id` is NOT unique; (`review_id`, `order_id`) is.
+      - name: customers
+        description: One row per order-level `customer_id`; `customer_unique_id` identifies the person.
+      - name: products
+        description: Product catalogue with Portuguese category names.
+      - name: sellers
+        description: Marketplace sellers.
+      - name: geolocation
+        description: Many lat/lng points per zip code prefix (~1M rows, ~19k prefixes).

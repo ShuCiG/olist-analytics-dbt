@@ -1,0 +1,183 @@
+version: 2
+
+models:
+  - name: stg_olist__orders
+    description: Orders, one row per order, typed timestamps.
+    columns:
+      - name: order_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Order-level customer key (1:1 with order).
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__customers')
+                field: customer_id
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
+      - name: purchased_at
+        data_tests: [not_null]
+      - name: estimated_delivery_date
+        data_tests: [not_null]
+
+  - name: stg_olist__order_items
+    description: Order line items.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, order_item_number]
+    columns:
+      - name: order_item_sk
+        description: Surrogate key of (order_id, order_item_number).
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__products')
+                field: product_id
+      - name: seller_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__sellers')
+                field: seller_id
+      - name: price
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
+      - name: freight_value
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: stg_olist__order_payments
+    description: Payments; an order may have several (split methods, vouchers).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: payment_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [credit_card, boleto, voucher, debit_card, not_defined]
+      - name: payment_installments
+        description: Number of installments; 2 source rows have 0.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 24
+              config:
+                severity: warn
+      - name: payment_value
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: stg_olist__order_reviews
+    description: >
+      Reviews. `review_id` alone is not unique (same review reused across orders),
+      and some orders have several reviews.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [review_id, order_id]
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__orders')
+                field: order_id
+      - name: review_score
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+
+  - name: stg_olist__customers
+    description: One row per order-level customer_id.
+    columns:
+      - name: customer_id
+        description: Primary key (order-level).
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: Real person identifier; grain of dim_customers.
+        data_tests: [not_null]
+      - name: zip_code_prefix
+        description: 278 customers have a prefix missing from geolocation.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_olist__geolocation')
+                field: zip_code_prefix
+              config:
+                severity: warn
+
+  - name: stg_olist__products
+    description: Products; category name in Portuguese (translated in dim_products).
+    columns:
+      - name: product_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: category_name_pt
+        description: 610 products have no category.
+
+  - name: stg_olist__sellers
+    description: Marketplace sellers.
+    columns:
+      - name: seller_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: zip_code_prefix
+        data_tests: [not_null]
+
+  - name: stg_olist__geolocation
+    description: Raw lat/lng points; many per zip prefix. Aggregated in int_zip_codes_located.
+    columns:
+      - name: zip_code_prefix
+        data_tests: [not_null]
+      - name: latitude
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -90
+                max_value: 90
+      - name: longitude
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -180
+                max_value: 180

@@ -1,0 +1,9 @@
+olist:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Relative to transform/ (dbt is run from there); override for Docker/CI
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/olist.duckdb') }}"
+      schema: main
+      threads: 4

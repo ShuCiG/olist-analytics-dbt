@@ -33,3 +33,10 @@ Public `github.com/ShuCiG/olist-analytics-dbt`. GCP service-account key lives on
 
 ## D8 · 2026-10-10 · Raw layer is all-VARCHAR
 dlt loads every column as string; dbt staging casts types. Why: zip prefixes have leading zeros, raw mirrors source exactly, casting logic is visible and tested in dbt.
+
+## D9 · 2026-10-10 · dbt conventions
+- dbt runs from `transform/`; `profiles.yml` committed (no secrets; DuckDB path via `DBT_DUCKDB_PATH`).
+- Custom `generate_schema_name`: dev/prod → plain schema (`staging`, `marts`); other targets (CI) → `<target_schema>_<schema>` for isolation.
+- Test syntax uses `arguments:` block (dbt ≥1.10 style).
+- Known data defects get `severity: warn` instead of being hidden — documents data quality.
+- dim_customers grain = `customer_unique_id` (person), not order-level `customer_id`.

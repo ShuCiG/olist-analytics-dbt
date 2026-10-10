@@ -15,7 +15,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 
 ## Commands
 - Env: `uv sync` (Python 3.12 pinned; system Python 3.14 is unsupported by dbt)
-- dbt: `uv run dbt <cmd> --project-dir transform --profiles-dir transform`
+- dbt: `cd transform && uv run dbt <cmd>` (profiles.yml lives in transform/; DuckDB path via env `DBT_DUCKDB_PATH`)
 - Lint: `uv run sqlfluff lint transform/models`
 
 ## Conventions
