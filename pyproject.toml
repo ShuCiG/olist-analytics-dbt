@@ -1,0 +1,19 @@
+[project]
+name = "olist-analytics-dbt"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "dbt-bigquery>=1.12.1",
+    "dbt-core>=1.12.5",
+    "dbt-duckdb>=1.11.0",
+    "dlt[bigquery,duckdb]>=1.31.0",
+    "duckdb>=1.5.6",
+    "kagglehub>=1.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "sqlfluff>=4.4.0",
+    "sqlfluff-templater-dbt>=4.4.0",
+]

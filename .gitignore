@@ -1,0 +1,30 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+
+# Data (never commit raw data or warehouse files)
+data/
+*.duckdb
+*.duckdb.wal
+
+# dbt
+transform/target/
+transform/dbt_packages/
+transform/logs/
+logs/
+
+# dlt
+.dlt/secrets.toml
+**/.dlt/secrets.toml
+
+# Secrets
+*.json.key
+*service-account*.json
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,69 @@
+"""Load Olist CSVs from Kaggle into DuckDB schema `raw` with dlt.
+
+All columns are loaded as strings: the raw layer mirrors the source exactly
+(e.g. zip prefixes keep leading zeros). Typing happens in dbt staging.
+The category translation file is a dbt seed, not loaded here.
+"""
+
+import csv
+from pathlib import Path
+
+import dlt
+import kagglehub
+import pyarrow as pa
+import pyarrow.csv as pacsv
+
+ROOT = Path(__file__).resolve().parents[1]
+DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
+KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
+
+# dlt table name -> source file
+TABLES = {
+    "customers": "olist_customers_dataset.csv",
+    "geolocation": "olist_geolocation_dataset.csv",
+    "orders": "olist_orders_dataset.csv",
+    "order_items": "olist_order_items_dataset.csv",
+    "order_payments": "olist_order_payments_dataset.csv",
+    "order_reviews": "olist_order_reviews_dataset.csv",
+    "products": "olist_products_dataset.csv",
+    "sellers": "olist_sellers_dataset.csv",
+}
+
+
+def read_csv_as_strings(path: Path) -> pa.Table:
+    with path.open(newline="", encoding="utf-8") as f:
+        header = next(csv.reader(f))
+    return pacsv.read_csv(
+        path,
+        convert_options=pacsv.ConvertOptions(
+            column_types={name: pa.string() for name in header},
+            strings_can_be_null=True,
+        ),
+    )
+
+
+@dlt.source(name="olist")
+def olist_source(source_dir: Path):
+    for table_name, file_name in TABLES.items():
+        yield dlt.resource(
+            read_csv_as_strings(source_dir / file_name),
+            name=table_name,
+            write_disposition="replace",
+        )
+
+
+def main() -> None:
+    source_dir = Path(kagglehub.dataset_download(KAGGLE_DATASET))
+    DUCKDB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="olist",
+        destination=dlt.destinations.duckdb(str(DUCKDB_PATH)),
+        dataset_name="raw",
+    )
+    load_info = pipeline.run(olist_source(source_dir))
+    print(load_info)
+
+
+if __name__ == "__main__":
+    main()
