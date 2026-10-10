@@ -17,7 +17,8 @@ publishes the dbt docs.
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema |
 | Warehouse | DuckDB (local dev). BigQuery target planned |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
-| CI/CD | GitHub Actions: full `dbt build` on every PR, docs → GitHub Pages on merge |
+| Code quality | sqlfluff (dbt templater) + pre-commit hooks |
+| CI/CD | GitHub Actions: `sqlfluff lint` → full `dbt build` on every PR, docs → GitHub Pages on merge |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -169,7 +170,8 @@ uv run dbt docs generate && uv run dbt docs serve
 
 ## Development workflow
 
-Feature branch → PR → CI (`dbt build` on real data) must pass → squash merge → dbt docs redeployed.
+Feature branch → PR → CI (`sqlfluff lint`, then `dbt build` on real data) must pass → squash merge → dbt docs redeployed.
+Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Roadmap

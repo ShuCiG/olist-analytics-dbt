@@ -8,7 +8,7 @@ ranked as (
         *,
         row_number() over (
             partition by order_id
-            order by review_created_at desc, review_answered_at desc, review_id
+            order by review_created_at desc, review_answered_at desc, review_id asc
         ) as review_rank
     from reviews
 )

@@ -7,3 +7,9 @@ olist:
       path: "{{ env_var('DBT_DUCKDB_PATH', '../data/olist.duckdb') }}"
       schema: main
       threads: 4
+    # Used by sqlfluff's dbt templater: compiles without data or a DB file
+    lint:
+      type: duckdb
+      path: ":memory:"
+      schema: main
+      threads: 1

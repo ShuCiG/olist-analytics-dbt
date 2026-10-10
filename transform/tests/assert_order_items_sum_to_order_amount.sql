@@ -1,6 +1,8 @@
 -- fct_order_items must reconcile exactly with fct_orders.order_amount.
 with items as (
-    select order_id, sum(item_amount) as items_total
+    select
+        order_id,
+        sum(item_amount) as items_total
     from {{ ref('fct_order_items') }}
     group by order_id
 )

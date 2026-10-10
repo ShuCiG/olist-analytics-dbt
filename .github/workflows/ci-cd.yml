@@ -15,8 +15,30 @@ permissions:
   contents: read
 
 jobs:
+  sqlfluff-lint:
+    name: sqlfluff lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: dbt deps (templater needs package macros)
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: sqlfluff lint
+        run: uv run sqlfluff lint transform/models transform/tests --format github-annotation-native
+
   dbt-build:
     name: dbt build
+    needs: sqlfluff-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
