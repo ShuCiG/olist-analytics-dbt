@@ -47,3 +47,10 @@ dlt loads every column as string; dbt staging casts types. Why: zip prefixes hav
 - Geolocation collapsed to zip centroid (avg lat/lng); dims left-join it (278 customer zips unmatched).
 - Missing category → English translation → Portuguese name → 'unknown'.
 - `dim_date` via `dbt_date.get_date_dimension` (2016–2019).
+
+## D11 · 2026-10-10 · PR-based git flow, CI/CD pulled into MVP
+Context: direct pushes to main were not how a real team works.
+Decision: feature branches → PR → user merges; `main` protected (PR + green `dbt build` check required, no direct push).
+CI runs the full pipeline with real data (kagglehub needs no token; dataset cached), not `--empty` — data is small (~45MB, ~1 min).
+CD: on merge, dbt docs (static, with lineage) deployed to GitHub Pages.
+Supersedes the CI part of D4 until BigQuery (phase 3).
