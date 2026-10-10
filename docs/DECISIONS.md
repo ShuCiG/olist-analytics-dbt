@@ -54,3 +54,11 @@ Decision: feature branches → PR → user merges; `main` protected (PR + green 
 CI runs the full pipeline with real data (kagglehub needs no token; dataset cached), not `--empty` — data is small (~45MB, ~1 min).
 CD: on merge, dbt docs (static, with lineage) deployed to GitHub Pages.
 Supersedes the CI part of D4 until BigQuery (phase 3).
+
+## D12 · 2026-10-10 · SQL linting
+- sqlfluff with **dbt templater** (renders real macros), dialect duckdb, max line 120.
+- Templater uses a dedicated `lint` target (DuckDB `:memory:`): no data or DB file needed, works in CI and from repo root.
+- ST06 (column order by expression type) excluded: marts group columns by business meaning.
+- Jinja loop bodies indented one level; avoid whitespace control (`-%}`) inside select lists, it confuses LT02.
+- CI: `sqlfluff lint` job gates `dbt build` (`needs:`). Both are required checks (a skipped required job would otherwise count as passing).
+- pre-commit: standard hygiene hooks + `no-commit-to-branch main` + local sqlfluff hook via `uv run` (same version as CI).

@@ -7,13 +7,13 @@ with payments as (
 pivoted as (
     select
         order_id,
+        {% for payment_type in payment_types %}
+            sum(case when payment_type = '{{ payment_type }}' then payment_value else 0 end)
+                as {{ payment_type }}_amount,
+        {% endfor %}
         count(*) as payments_count,
         max(payment_installments) as max_installments,
-        sum(payment_value) as total_payment_value,
-        {%- for payment_type in payment_types %}
-        sum(case when payment_type = '{{ payment_type }}' then payment_value else 0 end)
-            as {{ payment_type }}_amount{{ ',' if not loop.last }}
-        {%- endfor %}
+        sum(payment_value) as total_payment_value
     from payments
     group by order_id
 )

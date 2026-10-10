@@ -1,0 +1,14 @@
+[sqlfluff]
+templater = dbt
+dialect = duckdb
+max_line_length = 120
+# ST06: marts group columns by meaning (keys, amounts, payments, delivery), not by expression type
+exclude_rules = ST06
+
+[sqlfluff:templater:dbt]
+project_dir = transform
+profiles_dir = transform
+target = lint
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True

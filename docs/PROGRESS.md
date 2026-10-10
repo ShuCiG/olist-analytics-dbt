@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 1 — MVP (complete after README PR merge) → next: Phase 2
-**Next step:** Phase 2 — start with sqlfluff + pre-commit + lint step in CI, then unit tests, contracts, custom generic test.
+**Current phase:** 2 — Quality
+**Next step:** PR 2.2 `feat/unit-tests` — dbt unit tests for int_payments_pivoted_to_orders, int_orders_delivery_metrics, dim_customers.
 
 ## Phases
 
@@ -22,7 +22,10 @@ Goal: honest "dbt Core, hands-on project" on resume.
 - [x] README (EN): badges, architecture + lineage + ER diagrams (Mermaid), data-quality findings, how to run, roadmap
 - [x] Push to GitHub (public): https://github.com/ShuCiG/olist-analytics-dbt (pushed early, commit per step)
 
-### Phase 2 — Quality & CI
+### Phase 2 — Quality & CI ⏳
+- [x] PR 2.1: sqlfluff (dbt templater) + pre-commit + lint job in CI (gates dbt build)
+- [ ] PR 2.2: unit tests
+- [ ] PR 2.3: contracts on marts, custom generic test, doc blocks
 Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit, GitHub Actions CI (lint + `build --empty` + unit tests), docs → GitHub Pages.
 
 ### Phase 3 — BigQuery + CD
@@ -44,3 +47,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — Intermediate + marts done (19 models, 106 tests). Sanity: 96,096 customers, 2,997 repeat (~3%), LTV total ~R$15.7M, avg delivery 12.5 days, 6.8% late. 249 orders paid ≠ items+freight → warn singular test. Repo pushed public.
 - 2026-10-10 — Switched to PR flow (user request): feature branches, user merges, CI/CD in GitHub Actions pulled forward from phase 2 (full dbt build with real data in CI; docs → Pages on main).
 - 2026-10-10 — PR #1 merged (CI/CD live, docs at https://shucig.github.io/olist-analytics-dbt/). README written (Mermaid lineage generated from manifest.json). Phase 1 done on merge.
+- 2026-10-10 — PR #2 (README) merged → Phase 1 done. PR 2.1: sqlfluff + pre-commit + CI lint gate.

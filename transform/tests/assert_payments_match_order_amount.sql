@@ -6,6 +6,7 @@ select
     order_amount,
     payment_value
 from {{ ref('fct_orders') }}
-where payments_count > 0
+where
+    payments_count > 0
     and items_count > 0
     and abs(payment_value - order_amount) > 1

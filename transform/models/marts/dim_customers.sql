@@ -27,7 +27,7 @@ customer_orders as (
         orders.purchased_at,
         row_number() over (
             partition by customers.customer_unique_id
-            order by orders.purchased_at desc, orders.order_id
+            order by orders.purchased_at desc, orders.order_id asc
         ) as recency_rank
     from customers
     inner join orders
