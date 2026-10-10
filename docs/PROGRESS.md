@@ -1,7 +1,7 @@
 # Progress
 
 **Current phase:** 1 — MVP
-**Next step:** README (EN) with lineage screenshot + how to run. Then Phase 1 done.
+**Next step:** user merges PR `ci/github-actions-pipeline`; then README (EN) on a new branch. Then Phase 1 done.
 
 ## Phases
 
@@ -18,6 +18,7 @@ Goal: honest "dbt Core, hands-on project" on resume.
 - [x] intermediate (5): int_payments_pivoted_to_orders, int_order_items_aggregated_to_orders, int_orders_delivery_metrics, int_order_reviews_deduplicated, int_zip_codes_located
 - [x] marts (6): dim_customers, dim_sellers, dim_products, dim_date (dbt_date), fct_orders, fct_order_items
 - [x] 2 singular tests; `dbt build` PASS 103, WARN 3 (expected), 19 models; `dbt docs generate` ok
+- [x] Git flow: branches + PRs, user merges; branch protection on main; CI/CD (dbt build on PR, docs → GitHub Pages on merge)
 - [ ] README (EN): goal, stack, lineage screenshot, how to run
 - [x] Push to GitHub (public): https://github.com/ShuCiG/olist-analytics-dbt (pushed early, commit per step)
 
@@ -41,3 +42,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — dlt pipeline done: 8 raw tables loaded (orders 99,441; order_items 112,650; geolocation 1,000,163). Raw = all VARCHAR, typing in staging. Translation CSV (has BOM) → dbt seed. No commits yet.
 - 2026-10-10 — dbt staging done. Data quirks found (→ tests): review_id not unique (use review_id+order_id; 547 orders have >1 review); customer_id is per-order, person = customer_unique_id (96,096); 278 customer zips missing in geolocation (warn); 2 categories lack translation; 1 order without payments; 2 payments with 0 installments (warn).
 - 2026-10-10 — Intermediate + marts done (19 models, 106 tests). Sanity: 96,096 customers, 2,997 repeat (~3%), LTV total ~R$15.7M, avg delivery 12.5 days, 6.8% late. 249 orders paid ≠ items+freight → warn singular test. Repo pushed public.
+- 2026-10-10 — Switched to PR flow (user request): feature branches, user merges, CI/CD in GitHub Actions pulled forward from phase 2 (full dbt build with real data in CI; docs → Pages on main).

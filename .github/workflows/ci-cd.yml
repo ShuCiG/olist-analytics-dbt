@@ -1,0 +1,80 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dbt-build:
+    name: dbt build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Ingest raw data (dlt → DuckDB)
+        run: uv run python ingestion/pipeline.py
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt build (models + tests)
+        working-directory: transform
+        run: uv run dbt build
+
+      - name: dbt docs generate
+        working-directory: transform
+        run: uv run dbt docs generate --static
+
+      - name: Prepare docs site
+        run: |
+          mkdir -p _site
+          cp transform/target/static_index.html _site/index.html
+
+      - name: Upload docs artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy-docs:
+    name: Deploy dbt docs to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: dbt-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
