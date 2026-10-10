@@ -40,3 +40,10 @@ dlt loads every column as string; dbt staging casts types. Why: zip prefixes hav
 - Test syntax uses `arguments:` block (dbt ≥1.10 style).
 - Known data defects get `severity: warn` instead of being hidden — documents data quality.
 - dim_customers grain = `customer_unique_id` (person), not order-level `customer_id`.
+
+## D10 · 2026-10-10 · Mart modeling choices
+- `order_amount` (items + freight) and `payment_value` (actually paid) kept separate; mismatch >1 BRL is a warn test, not "fixed".
+- Latest review per order wins (`int_order_reviews_deduplicated`).
+- Geolocation collapsed to zip centroid (avg lat/lng); dims left-join it (278 customer zips unmatched).
+- Missing category → English translation → Portuguese name → 'unknown'.
+- `dim_date` via `dbt_date.get_date_dimension` (2016–2019).

@@ -1,0 +1,114 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Calendar dimension 2016-2019 (dbt_date).
+    columns:
+      - name: date_day
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_customers
+    description: >
+      One row per person (`customer_unique_id`). Location from the latest order.
+      `lifetime_value` = payments on orders not canceled/unavailable.
+    columns:
+      - name: customer_unique_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: orders_count
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+      - name: lifetime_value
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: dim_sellers
+    description: One row per seller with zip-prefix centroid coordinates.
+    columns:
+      - name: seller_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_products
+    description: One row per product; category translated to English ('unknown' if missing).
+    columns:
+      - name: product_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: category_name
+        data_tests: [not_null]
+
+  - name: fct_orders
+    description: >
+      One row per order with item, payment, delivery and review measures.
+      `order_amount` = items + freight; `payment_value` = what was paid (can differ: installment fees, vouchers).
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_equal_other_table:
+          arguments:
+            compare_model: ref('stg_olist__orders')
+    columns:
+      - name: order_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_unique_id
+      - name: purchase_date
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: review_score
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+
+  - name: fct_order_items
+    description: One row per order line item.
+    columns:
+      - name: order_item_sk
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: seller_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sellers')
+                field: seller_id
+      - name: customer_unique_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_unique_id
+      - name: purchase_date
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day

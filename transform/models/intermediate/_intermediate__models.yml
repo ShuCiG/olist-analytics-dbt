@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: int_payments_pivoted_to_orders
+    description: Payments pivoted to one row per order, amount per payment type.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: total_payment_value
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: int_order_items_aggregated_to_orders
+    description: Order items aggregated to one row per order.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: items_count
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+
+  - name: int_orders_delivery_metrics
+    description: Delivery timing metrics per order. Null durations for undelivered orders.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: days_to_deliver
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+              config:
+                severity: warn
+
+  - name: int_order_reviews_deduplicated
+    description: Latest review per order.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+
+  - name: int_zip_codes_located
+    description: One centroid (avg lat/lng) per zip code prefix.
+    columns:
+      - name: zip_code_prefix
+        data_tests: [unique, not_null]
