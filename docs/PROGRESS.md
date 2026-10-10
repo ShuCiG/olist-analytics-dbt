@@ -1,11 +1,11 @@
 # Progress
 
-**Current phase:** 1 — MVP
-**Next step:** user merges PR `ci/github-actions-pipeline`; then README (EN) on a new branch. Then Phase 1 done.
+**Current phase:** 1 — MVP (complete after README PR merge) → next: Phase 2
+**Next step:** Phase 2 — start with sqlfluff + pre-commit + lint step in CI, then unit tests, contracts, custom generic test.
 
 ## Phases
 
-### Phase 1 — MVP (local, DuckDB) ⏳
+### Phase 1 — MVP (local, DuckDB) ✅
 Goal: honest "dbt Core, hands-on project" on resume.
 - [x] git, uv, Python 3.12, deps, .gitignore
 - [x] CLAUDE.md, docs/DECISIONS.md, docs/PROGRESS.md
@@ -19,7 +19,7 @@ Goal: honest "dbt Core, hands-on project" on resume.
 - [x] marts (6): dim_customers, dim_sellers, dim_products, dim_date (dbt_date), fct_orders, fct_order_items
 - [x] 2 singular tests; `dbt build` PASS 103, WARN 3 (expected), 19 models; `dbt docs generate` ok
 - [x] Git flow: branches + PRs, user merges; branch protection on main; CI/CD (dbt build on PR, docs → GitHub Pages on merge)
-- [ ] README (EN): goal, stack, lineage screenshot, how to run
+- [x] README (EN): badges, architecture + lineage + ER diagrams (Mermaid), data-quality findings, how to run, roadmap
 - [x] Push to GitHub (public): https://github.com/ShuCiG/olist-analytics-dbt (pushed early, commit per step)
 
 ### Phase 2 — Quality & CI
@@ -43,3 +43,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — dbt staging done. Data quirks found (→ tests): review_id not unique (use review_id+order_id; 547 orders have >1 review); customer_id is per-order, person = customer_unique_id (96,096); 278 customer zips missing in geolocation (warn); 2 categories lack translation; 1 order without payments; 2 payments with 0 installments (warn).
 - 2026-10-10 — Intermediate + marts done (19 models, 106 tests). Sanity: 96,096 customers, 2,997 repeat (~3%), LTV total ~R$15.7M, avg delivery 12.5 days, 6.8% late. 249 orders paid ≠ items+freight → warn singular test. Repo pushed public.
 - 2026-10-10 — Switched to PR flow (user request): feature branches, user merges, CI/CD in GitHub Actions pulled forward from phase 2 (full dbt build with real data in CI; docs → Pages on main).
+- 2026-10-10 — PR #1 merged (CI/CD live, docs at https://shucig.github.io/olist-analytics-dbt/). README written (Mermaid lineage generated from manifest.json). Phase 1 done on merge.

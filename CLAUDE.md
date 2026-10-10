@@ -11,7 +11,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - Never commit or push to `main` (branch protection enforces it).
 - One branch per task: `feat/…`, `fix/…`, `ci/…`, `docs/…`, `chore/…`. Commit + push to the branch.
 - Open PR with `gh pr create` (fill `.github/pull_request_template.md`). **User merges — Claude never merges.**
-- After user merges: `git switch main && git pull && git branch -d <branch>`.
+- After user merges: `git switch main && git pull && git branch -D <branch> && git fetch -p` (`-D`: squash merge makes `-d` refuse).
 - CI (`.github/workflows/ci-cd.yml`) on every PR: dlt ingest → `dbt build`. On merge to main: same + dbt docs → GitHub Pages.
 
 ## Layout
