@@ -1,0 +1,65 @@
+version: 2
+
+unit_tests:
+  - name: test_payments_pivot_sums_per_type
+    model: int_payments_pivoted_to_orders
+    description: >
+      Multiple payments of one type are summed; absent types are 0, not null.
+      An unknown payment type (Olist has 'not_defined') counts toward the total
+      but lands in no per-type bucket.
+    given:
+      - input: ref('stg_olist__order_payments')
+        rows:
+          - {order_id: o1, payment_type: credit_card, payment_installments: 3, payment_value: 100.00}
+          - {order_id: o1, payment_type: voucher, payment_installments: 1, payment_value: 20.00}
+          - {order_id: o1, payment_type: voucher, payment_installments: 1, payment_value: 5.50}
+          - {order_id: o2, payment_type: boleto, payment_installments: 1, payment_value: 50.00}
+          - {order_id: o3, payment_type: not_defined, payment_installments: 1, payment_value: 10.00}
+    expect:
+      rows:
+        - {order_id: o1, credit_card_amount: 100.00, boleto_amount: 0, voucher_amount: 25.50,
+           debit_card_amount: 0, payments_count: 3, max_installments: 3, total_payment_value: 125.50}
+        - {order_id: o2, credit_card_amount: 0, boleto_amount: 50.00, voucher_amount: 0,
+           debit_card_amount: 0, payments_count: 1, max_installments: 1, total_payment_value: 50.00}
+        - {order_id: o3, credit_card_amount: 0, boleto_amount: 0, voucher_amount: 0,
+           debit_card_amount: 0, payments_count: 1, max_installments: 1, total_payment_value: 10.00}
+
+  - name: test_delivery_metrics_lateness_rules
+    model: int_orders_delivery_metrics
+    description: >
+      Lateness compares dates, not timestamps: delivery late in the evening of the
+      estimated day is on time. Undelivered orders get null durations and are not late.
+      Timestamps avoid midnight-crossing intervals so results match on DuckDB and BigQuery.
+    given:
+      - input: ref('stg_olist__orders')
+        rows:
+          - order_id: early
+            purchased_at: 2018-01-01 10:00:00
+            approved_at: 2018-01-01 13:00:00
+            delivered_to_customer_at: 2018-01-08 15:00:00
+            estimated_delivery_date: 2018-01-15
+          - order_id: on_estimate_day
+            purchased_at: 2018-02-01 09:00:00
+            approved_at: 2018-02-01 09:00:00
+            delivered_to_customer_at: 2018-02-10 23:00:00
+            estimated_delivery_date: 2018-02-10
+          - order_id: late
+            purchased_at: 2018-03-01 08:00:00
+            approved_at: 2018-03-02 08:00:00
+            delivered_to_customer_at: 2018-03-20 12:00:00
+            estimated_delivery_date: 2018-03-15
+          - order_id: undelivered
+            purchased_at: 2018-04-01 08:00:00
+            approved_at: null
+            delivered_to_customer_at: null
+            estimated_delivery_date: 2018-04-20
+    expect:
+      rows:
+        - {order_id: early, hours_to_approve: 3, days_to_deliver: 7, days_delivered_before_estimate: 7,
+           is_delivered: true, is_delivered_late: false}
+        - {order_id: on_estimate_day, hours_to_approve: 0, days_to_deliver: 9, days_delivered_before_estimate: 0,
+           is_delivered: true, is_delivered_late: false}
+        - {order_id: late, hours_to_approve: 24, days_to_deliver: 19, days_delivered_before_estimate: -5,
+           is_delivered: true, is_delivered_late: true}
+        - {order_id: undelivered, hours_to_approve: null, days_to_deliver: null,
+           days_delivered_before_estimate: null, is_delivered: false, is_delivered_late: false}

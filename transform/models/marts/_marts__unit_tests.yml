@@ -1,0 +1,67 @@
+version: 2
+
+unit_tests:
+  - name: test_dim_customers_lifetime_value
+    model: dim_customers
+    description: >
+      One row per person across their per-order customer_ids. Canceled orders count
+      as orders but not toward lifetime value; an order without payments adds 0.
+    given:
+      - input: ref('stg_olist__customers')
+        rows:
+          - {customer_id: c1a, customer_unique_id: u1, zip_code_prefix: '01001', city: sao paulo, state: SP}
+          - {customer_id: c1b, customer_unique_id: u1, zip_code_prefix: '01001', city: sao paulo, state: SP}
+          - {customer_id: c1c, customer_unique_id: u1, zip_code_prefix: '01001', city: sao paulo, state: SP}
+          - {customer_id: c2, customer_unique_id: u2, zip_code_prefix: '01001', city: sao paulo, state: SP}
+      - input: ref('stg_olist__orders')
+        rows:
+          - {order_id: o1, customer_id: c1a, order_status: delivered, purchased_at: 2018-01-01 10:00:00}
+          - {order_id: o2, customer_id: c1b, order_status: canceled, purchased_at: 2018-03-01 10:00:00}
+          - {order_id: o3, customer_id: c1c, order_status: delivered, purchased_at: 2018-06-01 10:00:00}
+          - {order_id: o4, customer_id: c2, order_status: delivered, purchased_at: 2018-02-01 10:00:00}
+      - input: ref('int_payments_pivoted_to_orders')
+        rows:
+          - {order_id: o1, total_payment_value: 100.00}
+          - {order_id: o2, total_payment_value: 30.00}
+          - {order_id: o3, total_payment_value: 50.00}
+      - input: ref('int_zip_codes_located')
+        rows:
+          - {zip_code_prefix: '01001', latitude: -23.55, longitude: -46.63}
+    expect:
+      rows:
+        - {customer_unique_id: u1, first_order_at: 2018-01-01 10:00:00, last_order_at: 2018-06-01 10:00:00,
+           orders_count: 3, is_repeat_customer: true, lifetime_value: 150.00}
+        - {customer_unique_id: u2, first_order_at: 2018-02-01 10:00:00, last_order_at: 2018-02-01 10:00:00,
+           orders_count: 1, is_repeat_customer: false, lifetime_value: 0}
+
+  - name: test_dim_customers_location_from_latest_order
+    model: dim_customers
+    description: >
+      Location comes from the person's latest order (ties broken by order_id),
+      not the first one. A zip missing from geolocation keeps the row with null coordinates.
+    given:
+      - input: ref('stg_olist__customers')
+        rows:
+          - {customer_id: c1a, customer_unique_id: u1, zip_code_prefix: '01001', city: sao paulo, state: SP}
+          - {customer_id: c1b, customer_unique_id: u1, zip_code_prefix: '20000', city: rio de janeiro, state: RJ}
+          - {customer_id: c2a, customer_unique_id: u2, zip_code_prefix: '99999', city: nowhere, state: AC}
+          - {customer_id: c2b, customer_unique_id: u2, zip_code_prefix: '01001', city: sao paulo, state: SP}
+      - input: ref('stg_olist__orders')
+        rows:
+          - {order_id: o1, customer_id: c1a, order_status: delivered, purchased_at: 2018-01-01 10:00:00}
+          - {order_id: o2, customer_id: c1b, order_status: delivered, purchased_at: 2018-06-01 10:00:00}
+          # same timestamp: order_id 'o3' < 'o4' wins
+          - {order_id: o3, customer_id: c2a, order_status: delivered, purchased_at: 2018-05-01 10:00:00}
+          - {order_id: o4, customer_id: c2b, order_status: delivered, purchased_at: 2018-05-01 10:00:00}
+      - input: ref('int_payments_pivoted_to_orders')
+        rows: []
+      - input: ref('int_zip_codes_located')
+        rows:
+          - {zip_code_prefix: '01001', latitude: -23.55, longitude: -46.63}
+          - {zip_code_prefix: '20000', latitude: -22.91, longitude: -43.17}
+    expect:
+      rows:
+        - {customer_unique_id: u1, zip_code_prefix: '20000', city: rio de janeiro, state: RJ,
+           latitude: -22.91, longitude: -43.17}
+        - {customer_unique_id: u2, zip_code_prefix: '99999', city: nowhere, state: AC,
+           latitude: null, longitude: null}

@@ -1,7 +1,7 @@
 # Progress
 
 **Current phase:** 2 — Quality
-**Next step:** PR 2.2 `feat/unit-tests` — dbt unit tests for int_payments_pivoted_to_orders, int_orders_delivery_metrics, dim_customers.
+**Next step:** PR 2.3 `feat/contracts` — model contracts on marts, custom generic test, doc blocks.
 
 ## Phases
 
@@ -24,7 +24,7 @@ Goal: honest "dbt Core, hands-on project" on resume.
 
 ### Phase 2 — Quality & CI ⏳
 - [x] PR 2.1: sqlfluff (dbt templater) + pre-commit + lint job in CI (gates dbt build)
-- [ ] PR 2.2: unit tests
+- [x] PR 2.2: unit tests (4: payments pivot, delivery lateness, dim_customers LTV + location)
 - [ ] PR 2.3: contracts on marts, custom generic test, doc blocks
 Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit, GitHub Actions CI (lint + `build --empty` + unit tests), docs → GitHub Pages.
 
@@ -48,3 +48,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — Switched to PR flow (user request): feature branches, user merges, CI/CD in GitHub Actions pulled forward from phase 2 (full dbt build with real data in CI; docs → Pages on main).
 - 2026-10-10 — PR #1 merged (CI/CD live, docs at https://shucig.github.io/olist-analytics-dbt/). README written (Mermaid lineage generated from manifest.json). Phase 1 done on merge.
 - 2026-10-10 — PR #2 (README) merged → Phase 1 done. PR 2.1: sqlfluff + pre-commit + CI lint gate.
+- 2026-10-11 — PR #3 merged. PR 2.2: 4 dbt unit tests; mutation-checked (flipped sort / timestamp-vs-date compare → tests fail). `dbt build` PASS 107, WARN 3. README test count fixed (106 was build nodes; 86 data tests).

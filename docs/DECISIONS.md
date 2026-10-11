@@ -62,3 +62,11 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - Jinja loop bodies indented one level; avoid whitespace control (`-%}`) inside select lists, it confuses LT02.
 - CI: `sqlfluff lint` job gates `dbt build` (`needs:`). Both are required checks (a skipped required job would otherwise count as passing).
 - pre-commit: standard hygiene hooks + `no-commit-to-branch main` + local sqlfluff hook via `uv run` (same version as CI).
+
+## D13 · 2026-10-11 · Unit tests
+- Native dbt `unit_tests:` (≥1.8), in `_<layer>__unit_tests.yml` next to model ymls.
+- Unit-test business rules, not SQL: only models with real logic (pivot, lateness, LTV/location). Staging renames are covered by data tests.
+- Fixtures list only columns the model reads; `expect` lists only asserted columns.
+- Fixture timestamps avoid midnight-crossing intervals: `dbt.datediff` counts boundaries on DuckDB, BigQuery semantics may differ.
+- New tests are mutation-checked once (break the rule, confirm failure).
+- Unit tests run inside `dbt build` (before the model is built; parents must exist). Prod runs (phase 3) will add `--exclude-resource-type unit_test`.
