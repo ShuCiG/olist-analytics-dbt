@@ -1,8 +1,10 @@
 version: 2
 
 # Contracts: data types use names both DuckDB and BigQuery accept (string, bigint,
-# integer, numeric(18, 2), boolean, date, timestamp). Exception: `double` (BigQuery: float64).
-# Money columns are cast explicitly with the to_money() macro: DuckDB checks decimal precision.
+# integer, boolean, date, timestamp). Money and float types differ per adapter:
+# YAML anchors &money_type / &float_type (first use below) switch on target.type.
+# BigQuery forbids parameterized types in CAST (contracts cast), so plain NUMERIC.
+# Money columns are cast explicitly with to_money(): DuckDB checks decimal precision.
 
 models:
   - name: dim_date
@@ -38,10 +40,10 @@ models:
         data_type: string
       - name: latitude
         description: "{{ doc('latitude') }}"
-        data_type: double
+        data_type: &float_type "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: longitude
         description: "{{ doc('longitude') }}"
-        data_type: double
+        data_type: *float_type
       - name: first_order_at
         description: Purchase timestamp of the first order.
         data_type: timestamp
@@ -64,7 +66,7 @@ models:
         data_type: boolean
       - name: lifetime_value
         description: Sum of payments on orders that are not canceled/unavailable, in BRL.
-        data_type: numeric(18, 2)
+        data_type: &money_type "{{ 'numeric' if target.type == 'bigquery' else 'numeric(18, 2)' }}"
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -94,10 +96,10 @@ models:
         data_type: string
       - name: latitude
         description: "{{ doc('latitude') }}"
-        data_type: double
+        data_type: *float_type
       - name: longitude
         description: "{{ doc('longitude') }}"
-        data_type: double
+        data_type: *float_type
 
   - name: dim_products
     description: One row per product; category translated to English ('unknown' if missing).
@@ -234,34 +236,34 @@ models:
         data_type: bigint
       - name: items_amount
         description: Sum of item prices, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: freight_amount
         description: Sum of freight, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: order_amount
         description: "{{ doc('order_amount') }}"
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: payments_count
         description: Number of payment records.
         data_type: bigint
       - name: payment_value
         description: "{{ doc('payment_value') }}"
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: max_installments
         description: Largest installment count among the order's payments.
         data_type: integer
       - name: credit_card_amount
         description: Paid by credit card, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: boleto_amount
         description: Paid by boleto (bank slip), BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: voucher_amount
         description: Paid by voucher, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: debit_card_amount
         description: Paid by debit card, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: hours_to_approve
         description: Hours from purchase to approval (boundary count).
         data_type: bigint
@@ -360,10 +362,10 @@ models:
                 earlier_column: purchased_at
       - name: price
         description: Item price, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: freight_value
         description: Freight allocated to the item, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type
       - name: item_amount
         description: price + freight_value, BRL.
-        data_type: numeric(18, 2)
+        data_type: *money_type

@@ -78,3 +78,13 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - PKs get `not_null` + `primary_key` constraints (enforced on DuckDB, informational on BigQuery) and keep `unique`/`not_null` data tests, which work on every engine.
 - Generic test `is_not_before(earlier_column)`: logical invariants = error, known source defects (carrier timestamps) = warn.
 - Shared column descriptions in doc blocks (`models/_docs.md`), `__overview__` replaces the default docs-site landing page.
+
+## D15 · 2026-10-11 · BigQuery targets and cross-DB types
+- GCP project `olist-analytics-dbt-472315`, location `EU`, billing enabled (sandbox forbids DML; dlt state tables and phase-4 `merge` need it). Budget alert $1.
+- Auth everywhere = Application Default Credentials (`GOOGLE_APPLICATION_CREDENTIALS`): dbt `method: oauth`, dlt default credentials, CI via `google-github-actions/auth`. Key lives outside the repo; no path in config.
+- Service account `dbt-runner`: BigQuery Data Editor + Job User (project level).
+- Targets: `prod` (datasets `staging`, `intermediate`, `marts`, `seeds`), `ci` (datasets prefixed with `DBT_CI_SCHEMA`, see `generate_schema_name`). `dev`/`lint` stay DuckDB.
+- dlt: `--destination duckdb|bigquery`, separate pipeline state per destination (`olist_<destination>`).
+- BigQuery forbids parameterized types in CAST, and contracts cast. Money: `to_money()` dispatches (`adapter.dispatch`) to `numeric(18, 2)` on DuckDB, `round(x, 2)` + `numeric` on BigQuery. Contract `data_type` switches on `target.type` inline; YAML anchors avoid repeating it ×16.
+- Rejected: project macros in yml `data_type` (not in the yml render context); `vars` with Jinja in `dbt_project.yml` (value reached the contract unrendered).
+- Seed `column_types` switch on `target.type` (`varchar` vs `string`).

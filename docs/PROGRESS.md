@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 2 — Quality (done once PR 2.3 is merged)
-**Next step:** Phase 3 — BigQuery + CD. Ask before starting; needs GCP project + service account from the user.
+**Current phase:** 3 — BigQuery + CD
+**Next step:** after PR 3.1 merge → PR 3.2: GitHub secrets (user) + CI on BigQuery (ephemeral `ci_pr_<N>` datasets), then slim CI and CD.
 
 ## Phases
 
@@ -29,7 +29,11 @@ Goal: honest "dbt Core, hands-on project" on resume.
 Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit, GitHub Actions CI (lint + `build --empty` + unit tests), docs → GitHub Pages.
 
 ### Phase 3 — BigQuery + CD
-GCP project, service account, `ci`/`prod` targets, dlt → BigQuery, slim CI with ephemeral datasets, deploy on merge.
+- [x] GCP project `olist-analytics-dbt-472315` (EU), billing + $1 budget alert, SA `dbt-runner`, key outside repo, `GOOGLE_APPLICATION_CREDENTIALS` (user env)
+- [x] PR 3.1: `prod`/`ci` BigQuery targets, dlt `--destination bigquery`, cross-DB fixes (seed types, money/float contract types). BQ and DuckDB both PASS 111, WARN 6
+- [ ] PR 3.2: GitHub secrets `GCP_SA_KEY`; CI builds on BigQuery in per-PR datasets, dropped after
+- [ ] PR 3.3: slim CI `state:modified+ --defer` against prod manifest
+- [ ] PR 3.4: CD — merge to main → `dbt build --target prod` + docs
 
 ### Phase 4 — Incremental realism
 dlt monthly-chunk loads, incremental `fct_order_items`, snapshot `snap_sellers` (SCD2), source freshness.
@@ -50,3 +54,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — PR #2 (README) merged → Phase 1 done. PR 2.1: sqlfluff + pre-commit + CI lint gate.
 - 2026-10-11 — PR #3 merged. PR 2.2: 4 dbt unit tests; mutation-checked (flipped sort / timestamp-vs-date compare → tests fail). `dbt build` PASS 107, WARN 3. README test count fixed (106 was build nodes; 86 data tests).
 - 2026-10-11 — PR #4 merged. PR 2.3: contracts on marts (DuckDB checks decimal precision → money cast to numeric(18,2)); `is_not_before` found 3 new source defects (warn). `dbt build` PASS 111, WARN 6. Phase 2 done.
+- 2026-10-11 — PR #5 merged → Phase 2 done. Phase 3 started: GCP setup with user (sandbox blocked dlt DML → billing). PR 3.1: BigQuery targets + cross-DB type fixes; `dbt build` PASS 111, WARN 6 on BigQuery and DuckDB.

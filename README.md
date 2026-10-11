@@ -14,8 +14,8 @@ publishes the dbt docs.
 
 | Layer | Tool |
 |---|---|
-| Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema |
-| Warehouse | DuckDB (local dev). BigQuery target planned |
+| Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset |
+| Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Code quality | sqlfluff (dbt templater) + pre-commit hooks |
 | CI/CD | GitHub Actions: `sqlfluff lint` → full `dbt build` on every PR, docs → GitHub Pages on merge |
@@ -160,6 +160,15 @@ cd transform
 uv run dbt deps
 uv run dbt build                      # seed + 19 models + 93 data tests + 4 unit tests
 uv run dbt docs generate && uv run dbt docs serve
+```
+
+BigQuery (needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*):
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json   # Application Default Credentials
+export GCP_PROJECT_ID=<your-project>
+uv run python ingestion/pipeline.py --destination bigquery
+cd transform && uv run dbt build --target prod
 ```
 
 ## Project structure
