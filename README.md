@@ -200,12 +200,12 @@ cd transform && uv run dbt build --target prod
 
 Feature branch → PR → CI must pass → squash merge → CD.
 
-- **PR:** `sqlfluff lint`, then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
+- **PR:** `sqlfluff lint` + `pyright`, then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
   only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
 - **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
   `manifest.json` stored as an artifact for slim CI.
-Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks before every commit.
+Locally, `uv run pre-commit install` enables the same lint and type check plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Roadmap

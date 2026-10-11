@@ -15,6 +15,15 @@ dependencies = [
 dev = [
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
+    "pyright>=1.1.414",
     "sqlfluff>=4.4.0",
     "sqlfluff-templater-dbt>=4.4.0",
 ]
+
+# Pylance in VS Code reads the same section, so editor and CI agree
+[tool.pyright]
+include = ["ingestion"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"

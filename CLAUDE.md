@@ -24,7 +24,8 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - Env: `uv sync` (Python 3.12 pinned; system Python 3.14 is unsupported by dbt)
 - dbt: `cd transform && uv run dbt <cmd>` (profiles.yml lives in transform/; DuckDB path via env `DBT_DUCKDB_PATH`)
 - Lint: `uv run sqlfluff lint transform/models transform/tests` (dbt templater, in-memory `lint` target, ~40s); `uv run sqlfluff fix` breaks Jinja-heavy files — review diff
-- Hooks: `uv run pre-commit install` once; runs whitespace/yaml/secrets checks, blocks commits to main, sqlfluff on changed SQL
+- Types: `uv run pyright` (config `[tool.pyright]` in pyproject.toml, shared with Pylance); must stay at 0 errors
+- Hooks: `uv run pre-commit install` once; runs whitespace/yaml/secrets checks, blocks commits to main, sqlfluff on changed SQL, pyright on Python changes
 
 ## Conventions
 - Models: `stg_<source>__<entity>`, `int_<entity>_<verb>`, `fct_`, `dim_`

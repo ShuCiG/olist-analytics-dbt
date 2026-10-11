@@ -22,3 +22,11 @@ repos:
         language: system
         files: ^transform/(models|tests|macros|snapshots|analyses)/.*\.sql$
         require_serial: true
+
+      # Whole project, not just staged files: config ([tool.pyright]) decides the scope
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false

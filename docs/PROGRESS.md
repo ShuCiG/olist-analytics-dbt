@@ -36,6 +36,7 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 
 ### Phase 4 — Incremental realism
 - [x] PR 4.1: dlt monthly chunks (`--until`, state cursor, merge for order tables), `_loaded_at`, source freshness (CI + CD), pyright clean
+- [x] PR 4.1b: pyright in pre-commit + CI (gates `dbt build`)
 - [ ] PR 4.2: incremental `fct_order_items`
 - [ ] PR 4.3: snapshot `snap_sellers` (SCD2)
 
@@ -60,3 +61,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — PR #7 merged. PR 3.3: CD to BigQuery prod + slim CI. Local check: unchanged state → empty selection; touched `dim_sellers` → 4 nodes, parents deferred to prod datasets.
 - 2026-10-11 — PR #8 merged. First prod deploy on main green (ingest, build, docs from BigQuery, `prod-manifest` artifact). Smoke-test PR #9 (closed unmerged): slim CI built 4/117 nodes, parents deferred to prod. Phase 3 done.
 - 2026-10-11 — Phase 4 started. PR 4.1: monthly-chunk dlt loads (checked: 14,940 + 4,026 + 80,475 = 99,441 orders, re-run = 0), freshness warn-only; verified on scratch BigQuery datasets (chunks + migration of old `raw`). Pylance issues fixed (pyarrow-stubs, typed credentials).
+- 2026-10-11 — PR 4.1b (stacked on 4.1, user request): pyright config shared with Pylance, pre-commit hook + CI job; mutation-checked (injected type error → hook fails).
