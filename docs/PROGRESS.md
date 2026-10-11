@@ -1,7 +1,7 @@
 # Progress
 
 **Current phase:** 3 — BigQuery + CD
-**Next step:** after PR 3.2 merge → PR 3.3: slim CI (`state:modified+ --defer` against prod manifest).
+**Next step:** after PR 3.3 merge: watch the first deploy on main, then a test PR to confirm slim CI picks up the manifest. Then Phase 4 (ask first).
 
 ## Phases
 
@@ -32,8 +32,7 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 - [x] GCP project `olist-analytics-dbt-472315` (EU), billing + $1 budget alert, SA `dbt-runner`, key outside repo, `GOOGLE_APPLICATION_CREDENTIALS` (user env)
 - [x] PR 3.1: `prod`/`ci` BigQuery targets, dlt `--destination bigquery`, cross-DB fixes (seed types, money/float contract types). BQ and DuckDB both PASS 111, WARN 6
 - [x] PR 3.2: secret `GCP_SA_KEY`; CI job `dbt build (BigQuery)` on PRs in `ci_pr_<N>_<run_id>_*` datasets, dropped after (`drop_ci_datasets`, guarded to target `ci`)
-- [ ] PR 3.3: slim CI `state:modified+ --defer` against prod manifest
-- [ ] PR 3.4: CD — merge to main → `dbt build --target prod` + docs
+- [x] PR 3.3 (+3.4 merged into it): CD on main (dlt → BQ, `dbt build --target prod`, docs from prod, manifest artifact) + slim CI (`state:modified+ --defer`, full-build fallback)
 
 ### Phase 4 — Incremental realism
 dlt monthly-chunk loads, incremental `fct_order_items`, snapshot `snap_sellers` (SCD2), source freshness.
@@ -56,3 +55,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — PR #4 merged. PR 2.3: contracts on marts (DuckDB checks decimal precision → money cast to numeric(18,2)); `is_not_before` found 3 new source defects (warn). `dbt build` PASS 111, WARN 6. Phase 2 done.
 - 2026-10-11 — PR #5 merged → Phase 2 done. Phase 3 started: GCP setup with user (sandbox blocked dlt DML → billing). PR 3.1: BigQuery targets + cross-DB type fixes; `dbt build` PASS 111, WARN 6 on BigQuery and DuckDB.
 - 2026-10-11 — PR #6 merged. PR 3.2: BigQuery CI job with per-run datasets + cleanup macro; secret set and $1 budget alert confirmed by user.
+- 2026-10-11 — PR #7 merged. PR 3.3: CD to BigQuery prod + slim CI. Local check: unchanged state → empty selection; touched `dim_sellers` → 4 nodes, parents deferred to prod datasets.

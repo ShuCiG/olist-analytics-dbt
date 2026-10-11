@@ -4,9 +4,9 @@
 [![dbt docs](https://img.shields.io/badge/dbt_docs-lineage-FF694B?logo=dbt&logoColor=white)](https://shucig.github.io/olist-analytics-dbt/)
 
 An end-to-end ELT project on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
-(~100k orders, 2016–2018, 8 related tables). Raw data is loaded with **dlt** into **DuckDB** and modeled with
-**dbt Core** into a tested star schema. Every pull request rebuilds the whole pipeline in CI. Every merge
-publishes the dbt docs.
+(~100k orders, 2016–2018, 8 related tables). Raw data is loaded with **dlt** into **DuckDB** (local dev) and
+**BigQuery** (prod) and modeled with **dbt Core** into a tested star schema. Every pull request is built in CI on
+DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishes the dbt docs.
 
 **📖 Live dbt docs with lineage graph:** https://shucig.github.io/olist-analytics-dbt/
 
@@ -18,7 +18,7 @@ publishes the dbt docs.
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Code quality | sqlfluff (dbt templater) + pre-commit hooks |
-| CI/CD | GitHub Actions: `sqlfluff lint` → full `dbt build` on every PR, docs → GitHub Pages on merge |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -26,7 +26,7 @@ publishes the dbt docs.
 ```mermaid
 flowchart LR
     kaggle[(Kaggle<br/>Olist CSV)] -->|dlt| raw
-    subgraph duckdb[DuckDB]
+    subgraph wh[DuckDB dev / BigQuery prod]
         raw[raw<br/>8 tables, all VARCHAR] --> staging
         seed[seed:<br/>category translation] --> marts
         staging[staging<br/>8 views: typed, renamed] --> intermediate
@@ -145,7 +145,7 @@ where it is visible and tested. Casts use cross-database macros (`dbt.type_times
 the same models can run on BigQuery.
 
 Mart models have **enforced contracts**: every column is declared with its type, and the build fails if the SQL
-returns anything else. Money columns are cast explicitly to `numeric(18, 2)` (`to_money()` macro). Shared column
+returns anything else. Money columns are cast explicitly to `numeric(18, 2)` (`to_money()` macro, per-adapter via `adapter.dispatch`). Shared column
 descriptions live in doc blocks (`models/_docs.md`) and are reused across models.
 
 ## How to run
@@ -183,13 +183,19 @@ cd transform && uv run dbt build --target prod
 │   ├── seeds/                   # category translation
 │   ├── tests/                   # singular tests
 │   └── macros/                  # generate_schema_name (dev/prod vs CI isolation)
-├── .github/workflows/ci-cd.yml  # CI on PR, docs deploy on merge
+├── .github/workflows/ci-cd.yml  # CI on PR (DuckDB + slim BigQuery), prod deploy + docs on merge
 └── docs/                        # PROGRESS.md, DECISIONS.md (architecture decision log)
 ```
 
 ## Development workflow
 
-Feature branch → PR → CI (`sqlfluff lint`, then `dbt build` on real data) must pass → squash merge → dbt docs redeployed.
+Feature branch → PR → CI must pass → squash merge → CD.
+
+- **PR:** `sqlfluff lint`, then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
+  only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
+  from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
+- **Merge to `main`:** dlt → BigQuery `raw`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
+  `manifest.json` stored as an artifact for slim CI.
 Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
@@ -197,7 +203,7 @@ Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks be
 
 - [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, data tests, CI/CD, docs on Pages
 - [x] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
-- [ ] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets
+- [x] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets, CD on merge
 - [ ] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [ ] **Phase 5 — Orchestration:** Airflow + Astronomer Cosmos (Docker)
 - [ ] **Phase 6 — Dashboard:** Streamlit over marts, dbt exposures

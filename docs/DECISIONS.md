@@ -95,3 +95,11 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - `run_id` in dataset names: `cancel-in-progress` cancels older runs, and their `if: always()` cleanup must not drop a newer run's datasets.
 - Cleanup = `dbt run-operation drop_ci_datasets` (`adapter.drop_schema`), refuses any target but `ci`.
 - Auth = JSON key in secret `GCP_SA_KEY` via `google-github-actions/auth@v3`. Possible upgrade: Workload Identity Federation (no long-lived key).
+
+## D17 · 2026-10-11 · CD and slim CI
+- Slim CI and CD shipped in one PR: slim CI needs the manifest that only CD produces.
+- CD (push to `main`, after lint + DuckDB build): dlt → BigQuery `raw` (replace, idempotent), `dbt build --target prod --exclude-resource-type unit_test`, docs generated from prod → Pages.
+- Prod state = `manifest.json` as workflow artifact `prod-manifest` (90 days). PR job takes it from the last successful run on `main` via `gh run download` (`actions: read`). No artifact → full build. Rejected: GCS bucket (more IAM, not needed at this scale).
+- PR build: `state:modified+ --defer --state prod-state` — modified models + children in `ci_pr_*`, unmodified refs resolve to prod datasets.
+- `cancel-in-progress` only for PRs: a prod deploy is never cancelled halfway.
+- DuckDB job no longer builds docs; it stays as the free full-pipeline check (fresh ingest).
