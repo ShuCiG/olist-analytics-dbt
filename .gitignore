@@ -22,6 +22,7 @@ logs/
 # Secrets
 *.json.key
 *service-account*.json
+gha-creds-*.json
 .env
 
 # IDE / OS
