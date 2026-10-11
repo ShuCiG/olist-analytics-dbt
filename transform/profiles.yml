@@ -7,6 +7,30 @@ olist:
       path: "{{ env_var('DBT_DUCKDB_PATH', '../data/olist.duckdb') }}"
       schema: main
       threads: 4
+    # BigQuery. Auth = Application Default Credentials: set
+    # GOOGLE_APPLICATION_CREDENTIALS to the service-account key path (locally)
+    # or let google-github-actions/auth set it (CI). No key path in the repo.
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'olist-analytics-dbt-472315') }}"
+      dataset: main
+      location: EU
+      threads: 8
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
+    # Per-PR CI on BigQuery: datasets become <DBT_CI_SCHEMA>_staging, ..._marts
+    ci:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'olist-analytics-dbt-472315') }}"
+      dataset: "{{ env_var('DBT_CI_SCHEMA', 'ci_local') }}"
+      location: EU
+      threads: 8
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
     # Used by sqlfluff's dbt templater: compiles without data or a DB file
     lint:
       type: duckdb

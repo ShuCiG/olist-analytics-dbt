@@ -28,6 +28,7 @@ seeds:
   olist:
     +schema: seeds
     product_category_name_translation:
+      # Macros (dbt.type_string) aren't available here, `target` is
       +column_types:
-        product_category_name: varchar
-        product_category_name_english: varchar
+        product_category_name: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        product_category_name_english: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
