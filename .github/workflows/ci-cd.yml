@@ -9,7 +9,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a prod deploy halfway; superseded PR runs can go
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -71,27 +72,17 @@ jobs:
         working-directory: transform
         run: uv run dbt build
 
-      - name: dbt docs generate
-        working-directory: transform
-        run: uv run dbt docs generate --static
-
-      - name: Prepare docs site
-        run: |
-          mkdir -p _site
-          cp transform/target/static_index.html _site/index.html
-
-      - name: Upload docs artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: _site
-
-  # Same project on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
+  # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
+  # Builds only modified models + children; unmodified parents are read from prod
+  # (--defer to the manifest of the last successful deploy). Full build if none.
   # Reads the shared `raw` dataset (no ingest here: raw is prod data).
   dbt-build-bigquery:
     name: dbt build (BigQuery)
     if: github.event_name == 'pull_request'
     needs: sqlfluff-lint
+    permissions:
+      contents: read
+      actions: read  # download the prod manifest artifact
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -120,19 +111,99 @@ jobs:
         working-directory: transform
         run: uv run dbt deps
 
+      - name: Download prod manifest (last successful run on main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --workflow ci-cd.yml --branch main --status success             --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
+            echo "SLIM_CI=true" >> "$GITHUB_ENV"
+          else
+            echo "::notice::No prod manifest found, running a full build"
+          fi
+
       - name: dbt build (target ci)
         working-directory: transform
-        run: uv run dbt build --target ci
+        run: |
+          if [ "$SLIM_CI" = true ]; then
+            uv run dbt build --target ci --select state:modified+ --defer --state ../prod-state
+          else
+            uv run dbt build --target ci
+          fi
 
       - name: Drop CI datasets
         if: always()
         working-directory: transform
         run: uv run dbt run-operation drop_ci_datasets --target ci
 
+  # CD: main → ingest raw + build prod on BigQuery, publish docs and the manifest
+  # that slim CI defers to. Unit tests already ran in the PR (see D13).
+  deploy-prod:
+    name: Deploy to BigQuery prod
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: dbt-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Ingest raw data (dlt → BigQuery)
+        run: uv run python ingestion/pipeline.py --destination bigquery
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt build (target prod)
+        working-directory: transform
+        run: uv run dbt build --target prod --exclude-resource-type unit_test
+
+      - name: dbt docs generate
+        working-directory: transform
+        run: uv run dbt docs generate --target prod --static
+
+      - name: Upload prod manifest (state for slim CI)
+        uses: actions/upload-artifact@v7
+        with:
+          name: prod-manifest
+          path: transform/target/manifest.json
+          retention-days: 90
+
+      - name: Prepare docs site
+        run: |
+          mkdir -p _site
+          cp transform/target/static_index.html _site/index.html
+
+      - name: Upload docs artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
   deploy-docs:
     name: Deploy dbt docs to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: dbt-build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: deploy-prod
     runs-on: ubuntu-latest
     permissions:
       pages: write

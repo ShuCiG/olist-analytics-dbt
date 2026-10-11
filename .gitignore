@@ -30,3 +30,7 @@ gha-creds-*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Slim CI state (prod manifest)
+prod-state/
+.prod-state/
