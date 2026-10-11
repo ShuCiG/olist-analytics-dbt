@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 3 — BigQuery + CD ✅ (done)
-**Next step:** Phase 4 — incremental realism. Ask before starting.
+**Current phase:** 4 — Incremental realism (in progress)
+**Next step:** PR 4.2 — incremental `fct_order_items` (merge on `order_item_sk`, cursor `_loaded_at`), then PR 4.3 snapshot `snap_sellers`.
 
 ## Phases
 
@@ -35,7 +35,9 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 - [x] PR 3.3 (+3.4 merged into it): CD on main (dlt → BQ, `dbt build --target prod`, docs from prod, manifest artifact) + slim CI (`state:modified+ --defer`, full-build fallback)
 
 ### Phase 4 — Incremental realism
-dlt monthly-chunk loads, incremental `fct_order_items`, snapshot `snap_sellers` (SCD2), source freshness.
+- [x] PR 4.1: dlt monthly chunks (`--until`, state cursor, merge for order tables), `_loaded_at`, source freshness (CI + CD), pyright clean
+- [ ] PR 4.2: incremental `fct_order_items`
+- [ ] PR 4.3: snapshot `snap_sellers` (SCD2)
 
 ### Phase 5 — Airflow + Cosmos
 Docker Compose, DAG: dlt ingest → dbt build (Cosmos task group), backfill.
@@ -57,3 +59,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — PR #6 merged. PR 3.2: BigQuery CI job with per-run datasets + cleanup macro; secret set and $1 budget alert confirmed by user.
 - 2026-10-11 — PR #7 merged. PR 3.3: CD to BigQuery prod + slim CI. Local check: unchanged state → empty selection; touched `dim_sellers` → 4 nodes, parents deferred to prod datasets.
 - 2026-10-11 — PR #8 merged. First prod deploy on main green (ingest, build, docs from BigQuery, `prod-manifest` artifact). Smoke-test PR #9 (closed unmerged): slim CI built 4/117 nodes, parents deferred to prod. Phase 3 done.
+- 2026-10-11 — Phase 4 started. PR 4.1: monthly-chunk dlt loads (checked: 14,940 + 4,026 + 80,475 = 99,441 orders, re-run = 0), freshness warn-only; verified on scratch BigQuery datasets (chunks + migration of old `raw`). Pylance issues fixed (pyarrow-stubs, typed credentials).

@@ -103,3 +103,12 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - PR build: `state:modified+ --defer --state prod-state` — modified models + children in `ci_pr_*`, unmodified refs resolve to prod datasets.
 - `cancel-in-progress` only for PRs: a prod deploy is never cancelled halfway.
 - DuckDB job no longer builds docs; it stays as the free full-pipeline check (fresh ingest).
+
+## D18 · 2026-10-11 · Monthly-chunk ingestion and source freshness
+- The Kaggle dump is static; arrival is simulated by purchase month. Order tables (`orders` + `order_items`, `order_payments`, `order_reviews` of those orders) load with `merge` on their primary keys; reference tables (customers, products, sellers, geolocation) are full snapshots, `replace`.
+- Cursor = last loaded month in dlt source state (`orders_loaded_until`), committed atomically with the load. `--until YYYY-MM` caps a run; no flag loads the rest; `--full-refresh` = dlt `refresh="drop_sources"` (tables + state). Rejected: `dlt.sources.incremental` on the purchase timestamp: child tables have no timestamp and must follow their orders.
+- Chunk selection runs lazily inside the resource generators, after dlt applies `refresh`; computing it in the source body would read the pre-refresh state.
+- Every row gets `_loaded_at` (UTC instant of the run; TIMESTAMPTZ on DuckDB, TIMESTAMP on BigQuery): incremental cursor for dbt (phase 4) and `loaded_at_field` for freshness. Metadata column, so the "raw = all strings" rule doesn't apply.
+- Freshness on all sources, `warn_after: 1 day`, no `error_after`: after the last month is loaded, order tables honestly stop changing; an error would fail every later deploy. Runs in the DuckDB CI job (fresh ingest, checks the plumbing) and in CD after ingest. Not in BigQuery PR CI (reads shared `raw`, nothing to learn).
+- Migration of existing prod `raw` (replace, no `_loaded_at`) verified on a scratch BigQuery dataset: first run merges all rows without duplicates, the next is a no-op.
+- `pyarrow-stubs` (dev): `pyarrow.compute` functions are generated at runtime, Pylance can't see them otherwise. Pyright: 0 errors.

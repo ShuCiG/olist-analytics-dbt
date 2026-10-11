@@ -68,6 +68,11 @@ jobs:
         working-directory: transform
         run: uv run dbt deps
 
+      # Fresh ingest just ran, so this checks the `_loaded_at` plumbing (warn-only, D18)
+      - name: dbt source freshness
+        working-directory: transform
+        run: uv run dbt source freshness
+
       - name: dbt build (models + tests)
         working-directory: transform
         run: uv run dbt build
@@ -174,6 +179,11 @@ jobs:
       - name: dbt deps
         working-directory: transform
         run: uv run dbt deps
+
+      # Warns once order tables stop receiving new months (static dump, D18)
+      - name: dbt source freshness (target prod)
+        working-directory: transform
+        run: uv run dbt source freshness --target prod
 
       - name: dbt build (target prod)
         working-directory: transform
