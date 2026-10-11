@@ -122,7 +122,11 @@ erDiagram
 
 ## Testing & data quality
 
-**106 tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test and 2 singular tests.
+**86 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test and 2 singular tests.
+
+**4 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
+payment pivot by type, delivery lateness rules (date vs timestamp comparison, undelivered orders),
+and `dim_customers` lifetime value (canceled orders excluded) and location (latest order, deterministic tie-break).
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**:
 
@@ -148,7 +152,7 @@ uv run python ingestion/pipeline.py   # download Olist, load into data/olist.duc
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 19 models + 106 tests
+uv run dbt build                      # seed + 19 models + 86 data tests + 4 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 ```
 
@@ -176,7 +180,7 @@ Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks be
 
 ## Roadmap
 
-- [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, 106 tests, CI/CD, docs on Pages
+- [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, 86 data tests, CI/CD, docs on Pages
 - [ ] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
 - [ ] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets
 - [ ] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
