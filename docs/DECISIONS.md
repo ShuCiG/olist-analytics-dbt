@@ -88,3 +88,10 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - BigQuery forbids parameterized types in CAST, and contracts cast. Money: `to_money()` dispatches (`adapter.dispatch`) to `numeric(18, 2)` on DuckDB, `round(x, 2)` + `numeric` on BigQuery. Contract `data_type` switches on `target.type` inline; YAML anchors avoid repeating it ×16.
 - Rejected: project macros in yml `data_type` (not in the yml render context); `vars` with Jinja in `dbt_project.yml` (value reached the contract unrendered).
 - Seed `column_types` switch on `target.type` (`varchar` vs `string`).
+
+## D16 · 2026-10-11 · CI on BigQuery
+- PRs run a second build job on BigQuery (`--target ci`); the DuckDB job stays (free, tests full ingestion, builds docs for Pages).
+- No ingest in the BigQuery CI job: `raw` is shared with prod, PRs must not overwrite it. CI reads `raw`, writes only `ci_pr_<N>_<run_id>_*`.
+- `run_id` in dataset names: `cancel-in-progress` cancels older runs, and their `if: always()` cleanup must not drop a newer run's datasets.
+- Cleanup = `dbt run-operation drop_ci_datasets` (`adapter.drop_schema`), refuses any target but `ci`.
+- Auth = JSON key in secret `GCP_SA_KEY` via `google-github-actions/auth@v3`. Possible upgrade: Workload Identity Federation (no long-lived key).

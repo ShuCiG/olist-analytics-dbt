@@ -1,7 +1,7 @@
 # Progress
 
 **Current phase:** 3 — BigQuery + CD
-**Next step:** after PR 3.1 merge → PR 3.2: GitHub secrets (user) + CI on BigQuery (ephemeral `ci_pr_<N>` datasets), then slim CI and CD.
+**Next step:** after PR 3.2 merge → PR 3.3: slim CI (`state:modified+ --defer` against prod manifest).
 
 ## Phases
 
@@ -31,7 +31,7 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 ### Phase 3 — BigQuery + CD
 - [x] GCP project `olist-analytics-dbt-472315` (EU), billing + $1 budget alert, SA `dbt-runner`, key outside repo, `GOOGLE_APPLICATION_CREDENTIALS` (user env)
 - [x] PR 3.1: `prod`/`ci` BigQuery targets, dlt `--destination bigquery`, cross-DB fixes (seed types, money/float contract types). BQ and DuckDB both PASS 111, WARN 6
-- [ ] PR 3.2: GitHub secrets `GCP_SA_KEY`; CI builds on BigQuery in per-PR datasets, dropped after
+- [x] PR 3.2: secret `GCP_SA_KEY`; CI job `dbt build (BigQuery)` on PRs in `ci_pr_<N>_<run_id>_*` datasets, dropped after (`drop_ci_datasets`, guarded to target `ci`)
 - [ ] PR 3.3: slim CI `state:modified+ --defer` against prod manifest
 - [ ] PR 3.4: CD — merge to main → `dbt build --target prod` + docs
 
@@ -55,3 +55,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — PR #3 merged. PR 2.2: 4 dbt unit tests; mutation-checked (flipped sort / timestamp-vs-date compare → tests fail). `dbt build` PASS 107, WARN 3. README test count fixed (106 was build nodes; 86 data tests).
 - 2026-10-11 — PR #4 merged. PR 2.3: contracts on marts (DuckDB checks decimal precision → money cast to numeric(18,2)); `is_not_before` found 3 new source defects (warn). `dbt build` PASS 111, WARN 6. Phase 2 done.
 - 2026-10-11 — PR #5 merged → Phase 2 done. Phase 3 started: GCP setup with user (sandbox blocked dlt DML → billing). PR 3.1: BigQuery targets + cross-DB type fixes; `dbt build` PASS 111, WARN 6 on BigQuery and DuckDB.
+- 2026-10-11 — PR #6 merged. PR 3.2: BigQuery CI job with per-run datasets + cleanup macro; secret set and $1 budget alert confirmed by user.
