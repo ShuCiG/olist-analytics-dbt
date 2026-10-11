@@ -65,7 +65,7 @@ final as (
         order_stats.last_order_at,
         order_stats.orders_count,
         order_stats.orders_count > 1 as is_repeat_customer,
-        order_stats.lifetime_value
+        {{ to_money('order_stats.lifetime_value') }} as lifetime_value
     from customer_orders as latest
     inner join order_stats
         on latest.customer_unique_id = order_stats.customer_unique_id

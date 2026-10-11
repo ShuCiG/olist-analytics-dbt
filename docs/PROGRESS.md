@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 2 — Quality
-**Next step:** PR 2.3 `feat/contracts` — model contracts on marts, custom generic test, doc blocks.
+**Current phase:** 2 — Quality (done once PR 2.3 is merged)
+**Next step:** Phase 3 — BigQuery + CD. Ask before starting; needs GCP project + service account from the user.
 
 ## Phases
 
@@ -22,10 +22,10 @@ Goal: honest "dbt Core, hands-on project" on resume.
 - [x] README (EN): badges, architecture + lineage + ER diagrams (Mermaid), data-quality findings, how to run, roadmap
 - [x] Push to GitHub (public): https://github.com/ShuCiG/olist-analytics-dbt (pushed early, commit per step)
 
-### Phase 2 — Quality & CI ⏳
+### Phase 2 — Quality & CI ✅
 - [x] PR 2.1: sqlfluff (dbt templater) + pre-commit + lint job in CI (gates dbt build)
 - [x] PR 2.2: unit tests (4: payments pivot, delivery lateness, dim_customers LTV + location)
-- [ ] PR 2.3: contracts on marts, custom generic test, doc blocks
+- [x] PR 2.3: contracts on 5 marts (+ PK constraints), `to_money()` macro, generic test `is_not_before`, doc blocks + `__overview__`
 Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit, GitHub Actions CI (lint + `build --empty` + unit tests), docs → GitHub Pages.
 
 ### Phase 3 — BigQuery + CD
@@ -49,3 +49,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-10 — PR #1 merged (CI/CD live, docs at https://shucig.github.io/olist-analytics-dbt/). README written (Mermaid lineage generated from manifest.json). Phase 1 done on merge.
 - 2026-10-10 — PR #2 (README) merged → Phase 1 done. PR 2.1: sqlfluff + pre-commit + CI lint gate.
 - 2026-10-11 — PR #3 merged. PR 2.2: 4 dbt unit tests; mutation-checked (flipped sort / timestamp-vs-date compare → tests fail). `dbt build` PASS 107, WARN 3. README test count fixed (106 was build nodes; 86 data tests).
+- 2026-10-11 — PR #4 merged. PR 2.3: contracts on marts (DuckDB checks decimal precision → money cast to numeric(18,2)); `is_not_before` found 3 new source defects (warn). `dbt build` PASS 111, WARN 6. Phase 2 done.
