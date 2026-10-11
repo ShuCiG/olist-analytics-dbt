@@ -122,7 +122,7 @@ erDiagram
 
 ## Testing & data quality
 
-**86 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test and 2 singular tests.
+**93 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
 
 **4 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
 payment pivot by type, delivery lateness rules (date vs timestamp comparison, undelivered orders),
@@ -137,10 +137,16 @@ Known defects in the source data are **surfaced as `warn` tests, not hidden**:
 | 249 orders where amount paid ≠ items + freight (> 1 BRL) | singular test `assert_payments_match_order_amount`, `severity: warn` |
 | 2 payments with 0 installments | range test, `severity: warn` |
 | 2 product categories have no English translation | `coalesce` fallback to the Portuguese name |
+| 1,359 orders handed to the carrier before payment approval (166 before purchase) | `is_not_before`, `severity: warn` |
+| 23 orders delivered to the customer before carrier pickup | `is_not_before`, `severity: warn` |
 
 Raw data is loaded as **all-VARCHAR**: zip prefixes keep their leading zeros, and all type casting happens in staging,
 where it is visible and tested. Casts use cross-database macros (`dbt.type_timestamp()`, `dbt.datediff`, ...) so
 the same models can run on BigQuery.
+
+Mart models have **enforced contracts**: every column is declared with its type, and the build fails if the SQL
+returns anything else. Money columns are cast explicitly to `numeric(18, 2)` (`to_money()` macro). Shared column
+descriptions live in doc blocks (`models/_docs.md`) and are reused across models.
 
 ## How to run
 
@@ -152,7 +158,7 @@ uv run python ingestion/pipeline.py   # download Olist, load into data/olist.duc
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 19 models + 86 data tests + 4 unit tests
+uv run dbt build                      # seed + 19 models + 93 data tests + 4 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 ```
 
@@ -180,8 +186,8 @@ Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks be
 
 ## Roadmap
 
-- [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, 86 data tests, CI/CD, docs on Pages
-- [ ] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
+- [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, data tests, CI/CD, docs on Pages
+- [x] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
 - [ ] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets
 - [ ] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [ ] **Phase 5 — Orchestration:** Airflow + Astronomer Cosmos (Docker)

@@ -23,9 +23,9 @@ final as (
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,
         order_items.shipping_limit_at,
-        order_items.price,
-        order_items.freight_value,
-        order_items.price + order_items.freight_value as item_amount
+        {{ to_money('order_items.price') }} as price,
+        {{ to_money('order_items.freight_value') }} as freight_value,
+        {{ to_money('order_items.price + order_items.freight_value') }} as item_amount
     from order_items
     inner join orders
         on order_items.order_id = orders.order_id
