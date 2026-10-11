@@ -14,7 +14,7 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 
 | Layer | Tool |
 |---|---|
-| Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset |
+| Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Code quality | sqlfluff (dbt templater) + pre-commit hooks |
@@ -162,6 +162,15 @@ uv run dbt build                      # seed + 19 models + 93 data tests + 4 uni
 uv run dbt docs generate && uv run dbt docs serve
 ```
 
+Simulate data arriving month by month (the dump is static; dlt state remembers the last loaded month):
+
+```bash
+uv run python ingestion/pipeline.py --full-refresh --until 2017-06   # orders up to June 2017
+uv run python ingestion/pipeline.py --until 2017-07                  # adds July 2017 only
+uv run python ingestion/pipeline.py                                  # adds the rest; re-run = no-op
+cd transform && uv run dbt source freshness                          # checks raw `_loaded_at`
+```
+
 BigQuery (needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*):
 
 ```bash
@@ -174,7 +183,7 @@ cd transform && uv run dbt build --target prod
 ## Project structure
 
 ```
-├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB raw
+├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery raw, monthly chunks
 ├── transform/                   # dbt project
 │   ├── models/
 │   │   ├── staging/olist/       # 1:1 with sources: cast, rename
@@ -194,7 +203,7 @@ Feature branch → PR → CI must pass → squash merge → CD.
 - **PR:** `sqlfluff lint`, then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
   only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
-- **Merge to `main`:** dlt → BigQuery `raw`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
+- **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
   `manifest.json` stored as an artifact for slim CI.
 Locally, `uv run pre-commit install` enables the same lint plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
