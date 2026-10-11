@@ -112,3 +112,8 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - Freshness on all sources, `warn_after: 1 day`, no `error_after`: after the last month is loaded, order tables honestly stop changing; an error would fail every later deploy. Runs in the DuckDB CI job (fresh ingest, checks the plumbing) and in CD after ingest. Not in BigQuery PR CI (reads shared `raw`, nothing to learn).
 - Migration of existing prod `raw` (replace, no `_loaded_at`) verified on a scratch BigQuery dataset: first run merges all rows without duplicates, the next is a no-op.
 - `pyarrow-stubs` (dev): `pyarrow.compute` functions are generated at runtime, Pylance can't see them otherwise. Pyright: 0 errors.
+
+## D19 · 2026-10-11 · Type checking with pyright
+- `pyright` (dev dependency, pinned in uv.lock) with `[tool.pyright]` in `pyproject.toml`: Pylance reads the same section, so the editor and CI report the same problems. Mode `standard`, scope `ingestion/`.
+- Pre-commit hook on Python changes (whole-project run, `pass_filenames: false`) and a CI job `pyright`.
+- Gating without touching branch protection: required check `dbt build` now `needs: [sqlfluff-lint, pyright]`, so a type error skips it and blocks the merge.

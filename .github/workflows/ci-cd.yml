@@ -37,9 +37,28 @@ jobs:
       - name: sqlfluff lint
         run: uv run sqlfluff lint transform/models transform/tests --format github-annotation-native
 
+  # Type check (same config as Pylance: [tool.pyright] in pyproject.toml)
+  pyright:
+    name: pyright
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: pyright
+        run: uv run pyright
+
+  # Required check: gating it on pyright blocks merges with type errors
   dbt-build:
     name: dbt build
-    needs: sqlfluff-lint
+    needs: [sqlfluff-lint, pyright]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
