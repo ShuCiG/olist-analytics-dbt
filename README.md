@@ -122,11 +122,12 @@ erDiagram
 
 ## Testing & data quality
 
-**93 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
+**96 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
 
-**4 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
+**5 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
 payment pivot by type, delivery lateness rules (date vs timestamp comparison, undelivered orders),
-and `dim_customers` lifetime value (canceled orders excluded) and location (latest order, deterministic tie-break).
+`dim_customers` lifetime value (canceled orders excluded) and location (latest order, deterministic tie-break),
+and the incremental filter of `fct_order_items` (`is_incremental()` overridden, `this` as a fixture).
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**:
 
@@ -158,7 +159,7 @@ uv run python ingestion/pipeline.py   # download Olist, load into data/olist.duc
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 19 models + 93 data tests + 4 unit tests
+uv run dbt build                      # seed + 19 models + 96 data tests + 5 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 ```
 
@@ -169,6 +170,7 @@ uv run python ingestion/pipeline.py --full-refresh --until 2017-06   # orders up
 uv run python ingestion/pipeline.py --until 2017-07                  # adds July 2017 only
 uv run python ingestion/pipeline.py                                  # adds the rest; re-run = no-op
 cd transform && uv run dbt source freshness                          # checks raw `_loaded_at`
+uv run dbt build        # after each chunk: fct_order_items merges only the new rows
 ```
 
 BigQuery (needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*):

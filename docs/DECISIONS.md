@@ -117,3 +117,13 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - `pyright` (dev dependency, pinned in uv.lock) with `[tool.pyright]` in `pyproject.toml`: Pylance reads the same section, so the editor and CI report the same problems. Mode `standard`, scope `ingestion/`.
 - Pre-commit hook on Python changes (whole-project run, `pass_filenames: false`) and a CI job `pyright`.
 - Gating without touching branch protection: required check `dbt build` now `needs: [sqlfluff-lint, pyright]`, so a type error skips it and blocks the merge.
+
+## D20 · 2026-10-11 · Incremental fct_order_items
+- `materialized: incremental`, `incremental_strategy: merge`, `unique_key: order_item_sk` — the one strategy both adapters support with update semantics (dbt-duckdb `merge` needs DuckDB ≥1.4).
+- Cursor = `_loaded_at` from raw, carried through `stg_olist__orders` / `stg_olist__order_items`. Filter: item **or** its order loaded at/after `max(_loaded_at)` in `{{ this }}`, so an order reloaded with a new status reprocesses its items. `>=`: the last batch is re-merged (idempotent) rather than risk a gap. Customers are replaced every load, so not in the cursor. Output `_loaded_at = greatest(item, order)`.
+- Rejected: `microbatch` (dbt ≥1.9). Batches by event time up to *now*; with 2016-2018 data every run would need explicit `--event-time-start/end`. A good fit later for Airflow backfills (phase 5).
+- BigQuery: partition by `purchase_date` (month; daily would exceed partition limits for no gain at this size) + cluster by `seller_id, product_id`; config is `target.type`-conditional, DuckDB gets none.
+- Contract stays enforced; `on_schema_change: append_new_columns`. `_loaded_at` type differs (TIMESTAMPTZ vs TIMESTAMP) → inline `target.type` switch.
+- Unit test of the incremental branch: `overrides.macros.is_incremental: true` + fixture for `this`. The `this` fixture uses `format: sql`: a dict fixture makes dbt introspect the existing table, which fails on a fresh CI database and lacks newly added columns. Fixtures don't render macros → plain `cast(... as timestamp)`.
+- Verified: DuckDB chunked run (2017-06 full → 2017-07 → rest → no-op) equals `--full-refresh` (112,650 rows, R$15,843,553.24); BigQuery full refresh + incremental run in scratch datasets, same totals.
+- Prod migration: the existing prod table (plain table, no `_loaded_at`, not partitioned) can't be merged into → one-off full refresh. CD got a `workflow_dispatch` input `full_refresh` for this and future rebuilds.
