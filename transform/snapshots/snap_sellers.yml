@@ -1,0 +1,43 @@
+version: 2
+
+# YAML-defined snapshot (dbt >= 1.9): no SQL file, it reads the source directly.
+# Snapshot sources, not models: history must not depend on transformation logic.
+snapshots:
+  - name: snap_sellers
+    relation: source('olist', 'sellers')
+    description: >
+      SCD2 history of seller location. A new version opens when zip, city or state
+      changes; a seller missing from a load gets a closing version (`dbt_is_deleted`).
+      The Kaggle dump never changes sellers, so prod holds one version per seller;
+      see the README for a local demo of a change.
+    config:
+      schema: snapshots
+      unique_key: seller_id
+      # `check`, not `timestamp`: the source has no reliable updated_at.
+      # Only business columns: _loaded_at / _dlt_* change on every load.
+      strategy: check
+      check_cols: [seller_zip_code_prefix, seller_city, seller_state]
+      hard_deletes: new_record
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [seller_id, dbt_valid_from]
+    columns:
+      - name: seller_id
+        description: "Seller key; not unique here, one row per version."
+        data_tests:
+          - not_null
+          # Exactly one open version per seller
+          - unique:
+              config:
+                where: dbt_valid_to is null
+      - name: dbt_scd_id
+        description: Version key (hash of seller_id + dbt_updated_at). Primary key.
+        data_tests: [unique, not_null]
+      - name: dbt_valid_from
+        description: When this version became current (snapshot run time).
+        data_tests: [not_null]
+      - name: dbt_valid_to
+        description: When this version was replaced; null = current version.
+      - name: dbt_is_deleted
+        description: "'True' on the version that records the seller disappearing from the source."

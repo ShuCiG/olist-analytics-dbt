@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 4 — Incremental realism (in progress)
-**Next step:** PR 4.3 — snapshot `snap_sellers` (SCD2).
+**Current phase:** 4 — Incremental realism ✅ (done on merge of PR 4.3)
+**Next step:** Phase 5 — Airflow + Cosmos. Ask before starting.
 
 ## Phases
 
@@ -34,11 +34,11 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 - [x] PR 3.2: secret `GCP_SA_KEY`; CI job `dbt build (BigQuery)` on PRs in `ci_pr_<N>_<run_id>_*` datasets, dropped after (`drop_ci_datasets`, guarded to target `ci`)
 - [x] PR 3.3 (+3.4 merged into it): CD on main (dlt → BQ, `dbt build --target prod`, docs from prod, manifest artifact) + slim CI (`state:modified+ --defer`, full-build fallback)
 
-### Phase 4 — Incremental realism
+### Phase 4 — Incremental realism ✅
 - [x] PR 4.1: dlt monthly chunks (`--until`, state cursor, merge for order tables), `_loaded_at`, source freshness (CI + CD), pyright clean
 - [x] PR 4.1b: pyright in pre-commit + CI (gates `dbt build`)
 - [x] PR 4.2: incremental `fct_order_items` (merge, `_loaded_at` cursor, BQ partitions, unit test of incremental branch), CD `full_refresh` input
-- [ ] PR 4.3: snapshot `snap_sellers` (SCD2)
+- [x] PR 4.3: snapshot `snap_sellers` (SCD2, check strategy, hard deletes), CI cleanup covers `_snapshots`
 
 ### Phase 5 — Airflow + Cosmos
 Docker Compose, DAG: dlt ingest → dbt build (Cosmos task group), backfill.
@@ -63,3 +63,5 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — Phase 4 started. PR 4.1: monthly-chunk dlt loads (checked: 14,940 + 4,026 + 80,475 = 99,441 orders, re-run = 0), freshness warn-only; verified on scratch BigQuery datasets (chunks + migration of old `raw`). Pylance issues fixed (pyarrow-stubs, typed credentials).
 - 2026-10-11 — PR 4.1b (stacked on 4.1, user request): pyright config shared with Pylance, pre-commit hook + CI job; mutation-checked (injected type error → hook fails).
 - 2026-10-11 — PR 4.2: incremental `fct_order_items`; chunked incremental result = full refresh on DuckDB and BigQuery. `dbt build` PASS 115, WARN 6 (121 nodes). Prod needs one-off full refresh of `fct_order_items` (old table has no `_loaded_at`).
+- 2026-10-12 — PR #13 merged; auto deploy failed as predicted on old prod `fct_order_items` (no `_loaded_at`); user ran CD with `full_refresh=true` → green, prod table MONTH-partitioned + clustered, 112,650 rows. Lesson: drop/migrate before merge, the deploy starts right away.
+- 2026-10-12 — PR 4.3: `snap_sellers`; demo change/delete/restore → correct versions; reload without changes = no versions. `dbt build` PASS 122, WARN 6 (128 nodes). Phase 4 done on merge.

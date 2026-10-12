@@ -8,7 +8,7 @@
     {% if target.name != 'ci' %}
         {{ exceptions.raise_compiler_error("drop_ci_datasets runs only on target 'ci', got '" ~ target.name ~ "'") }}
     {% endif %}
-    {% set suffixes = ['', '_staging', '_intermediate', '_marts', '_seeds'] %}
+    {% set suffixes = ['', '_staging', '_intermediate', '_marts', '_seeds', '_snapshots'] %}
     {% for suffix in suffixes %}
         {% set relation = api.Relation.create(database=target.database, schema=target.schema ~ suffix) %}
         {% do log("Dropping " ~ relation.database ~ "." ~ relation.schema, info=true) %}
