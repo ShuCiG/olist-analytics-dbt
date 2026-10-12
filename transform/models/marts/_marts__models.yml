@@ -292,7 +292,9 @@ models:
         data_type: boolean
 
   - name: fct_order_items
-    description: One row per order line item.
+    description: >
+      One row per order line item. Incremental (merge on `order_item_sk`): a run
+      processes only items whose raw item or order row was loaded since the last run.
     config:
       contract:
         enforced: true
@@ -369,3 +371,7 @@ models:
       - name: item_amount
         description: price + freight_value, BRL.
         data_type: *money_type
+      - name: _loaded_at
+        description: "{{ doc('loaded_at') }} Latest of the item's and its order's raw load; incremental cursor."
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamp with time zone' }}"
+        data_tests: [not_null]

@@ -25,6 +25,9 @@ models:
         data_tests: [not_null]
       - name: estimated_delivery_date
         data_tests: [not_null]
+      - name: _loaded_at
+        description: "{{ doc('loaded_at') }}"
+        data_tests: [not_null]
 
   - name: stg_olist__order_items
     description: Order line items.
@@ -36,6 +39,9 @@ models:
       - name: order_item_sk
         description: Surrogate key of (order_id, order_item_number).
         data_tests: [unique, not_null]
+      - name: _loaded_at
+        description: "{{ doc('loaded_at') }}"
+        data_tests: [not_null]
       - name: order_id
         data_tests:
           - not_null

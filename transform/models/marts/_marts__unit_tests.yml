@@ -65,3 +65,41 @@ unit_tests:
            latitude: -22.91, longitude: -43.17}
         - {customer_unique_id: u2, zip_code_prefix: '99999', city: nowhere, state: AC,
            latitude: null, longitude: null}
+
+  - name: test_fct_order_items_incremental_picks_new_loads
+    model: fct_order_items
+    description: >
+      Incremental run: only items whose item or order row was loaded at/after the
+      max `_loaded_at` already in the table (2026-01-15) are processed. i1 is old
+      (skipped), i2 is a new item, i3 is an old item whose order was reloaded
+      (status change).
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      # SQL fixture: a dict fixture for `this` makes dbt introspect the existing
+      # table, which fails on a fresh CI database (and lacks newly added columns).
+      # Fixtures are not Jinja-rendered with macros, hence a plain cross-DB cast.
+      - input: this
+        format: sql
+        rows: |
+          select
+            'i0' as order_item_sk,
+            cast('2026-01-15 00:00:00' as timestamp) as _loaded_at  -- valid on DuckDB and BigQuery
+      - input: ref('stg_olist__order_items')
+        rows:
+          - {order_item_sk: i1, order_id: o1, price: 10, freight_value: 1, _loaded_at: 2026-01-01 00:00:00}
+          - {order_item_sk: i2, order_id: o2, price: 20, freight_value: 2, _loaded_at: 2026-02-01 00:00:00}
+          - {order_item_sk: i3, order_id: o3, price: 30, freight_value: 3, _loaded_at: 2026-01-01 00:00:00}
+      - input: ref('stg_olist__orders')
+        rows:
+          - {order_id: o1, customer_id: c1, order_status: delivered, _loaded_at: 2026-01-01 00:00:00}
+          - {order_id: o2, customer_id: c1, order_status: delivered, _loaded_at: 2026-02-01 00:00:00}
+          - {order_id: o3, customer_id: c1, order_status: canceled, _loaded_at: 2026-02-01 00:00:00}
+      - input: ref('stg_olist__customers')
+        rows:
+          - {customer_id: c1, customer_unique_id: u1}
+    expect:
+      rows:
+        - {order_item_sk: i2, order_status: delivered, item_amount: 22.00, _loaded_at: 2026-02-01 00:00:00}
+        - {order_item_sk: i3, order_status: canceled, item_amount: 33.00, _loaded_at: 2026-02-01 00:00:00}

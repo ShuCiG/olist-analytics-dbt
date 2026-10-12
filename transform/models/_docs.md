@@ -50,3 +50,8 @@ prefix is missing from the geolocation dataset.
 {% docs longitude %}
 Longitude of the zip-prefix centroid. Null when the prefix is missing from the geolocation dataset.
 {% enddocs %}
+
+{% docs loaded_at %}
+UTC time of the dlt run that wrote the raw row (TIMESTAMPTZ on DuckDB, TIMESTAMP on BigQuery).
+Cursor for incremental models.
+{% enddocs %}

@@ -11,7 +11,8 @@ renamed as (
         seller_id,
         cast(shipping_limit_date as {{ dbt.type_timestamp() }}) as shipping_limit_at,
         cast(price as {{ dbt.type_numeric() }}) as price,
-        cast(freight_value as {{ dbt.type_numeric() }}) as freight_value
+        cast(freight_value as {{ dbt.type_numeric() }}) as freight_value,
+        _loaded_at
     from source
 )
 
