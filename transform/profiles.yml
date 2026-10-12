@@ -31,6 +31,18 @@ olist:
       job_execution_timeout_seconds: 300
       job_retries: 1
       priority: interactive
+    # Airflow's BigQuery DAG: datasets airflow_staging, ..._marts; reads airflow_raw
+    # (DBT_RAW_SCHEMA). Kept apart from prod, which GitHub Actions CD owns.
+    airflow:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'olist-analytics-dbt-472315') }}"
+      dataset: airflow
+      location: EU
+      threads: 8
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
     # Used by sqlfluff's dbt templater: compiles without data or a DB file
     lint:
       type: duckdb

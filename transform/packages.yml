@@ -3,3 +3,8 @@ packages:
     version: [">=1.3.0", "<2.0.0"]
   - package: metaplane/dbt_expectations
     version: [">=0.10.0", "<1.0.0"]
+  # Used directly (dim_date), so declared, not only pulled in by dbt_expectations.
+  # Also keeps the declared count = installed count: Cosmos runs dbt without
+  # package-lock.yml, and dbt then checks packages.yml against dbt_packages/.
+  - package: godatadriven/dbt_date
+    version: [">=0.21.0", "<1.0.0"]

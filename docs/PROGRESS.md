@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 4 — Incremental realism ✅ (done on merge of PR 4.3)
-**Next step:** Phase 5 — Airflow + Cosmos. Ask before starting.
+**Current phase:** 5 — Airflow + Cosmos (in progress)
+**Next step:** merge PR 5.1; then PR 5.2 (DAG parse check in CI, BigQuery DAG run, root README section).
 
 ## Phases
 
@@ -42,6 +42,8 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 
 ### Phase 5 — Airflow + Cosmos
 Docker Compose, DAG: dlt ingest → dbt build (Cosmos task group), backfill.
+- [x] PR 5.1: Airflow 3.3.2 + Cosmos 1.15.1 in Docker Compose; DAG factory `olist_elt_duckdb` / `olist_elt_bigquery` (monthly, `--until` = interval month); DuckDB pool; backfill 2016-09..11 verified
+- [ ] PR 5.2: CI check that DAGs import (built image), BigQuery DAG run, README section
 
 ### Phase 6 — Dashboard
 Streamlit over marts, dbt exposures, README screenshots.
@@ -65,3 +67,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-11 — PR 4.2: incremental `fct_order_items`; chunked incremental result = full refresh on DuckDB and BigQuery. `dbt build` PASS 115, WARN 6 (121 nodes). Prod needs one-off full refresh of `fct_order_items` (old table has no `_loaded_at`).
 - 2026-10-12 — PR #13 merged; auto deploy failed as predicted on old prod `fct_order_items` (no `_loaded_at`); user ran CD with `full_refresh=true` → green, prod table MONTH-partitioned + clustered, 112,650 rows. Lesson: drop/migrate before merge, the deploy starts right away.
 - 2026-10-12 — PR 4.3: `snap_sellers`; demo change/delete/restore → correct versions; reload without changes = no versions. `dbt build` PASS 122, WARN 6 (128 nodes). Phase 4 done on merge.
+- 2026-10-12 — PR #14 merged → Phase 4 done. Phase 5 started (user: both warehouses → two DAGs from one factory, D22). C: full broke the image build; user moved Docker's disk to D:. Fixes found by running: Cosmos drops package-lock.yml (declared dbt_date), eager test selection (→ cautious + detached multi-parent tests), backfill ignores DAG max_active_runs (→ `--max-active-runs 1`). Backfill 2016-09..11: raw/fct_orders = CSV (4, 324, 0), fct_order_items 369 rows over 2 loads, snapshot 1 version/seller. ~30 s/task, ~25 min/month on DuckDB.
