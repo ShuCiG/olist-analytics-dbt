@@ -1,4 +1,4 @@
-"""Load Olist CSVs from Kaggle into schema/dataset `raw` with dlt.
+"""Load Olist CSVs from Kaggle into schema/dataset `raw` (`--dataset`) with dlt.
 
 Destination: DuckDB (default, local dev) or BigQuery (`--destination bigquery`).
 BigQuery auth = Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
@@ -21,6 +21,9 @@ Examples:
     python ingestion/pipeline.py --until 2017-07   # loads July 2017 only
     python ingestion/pipeline.py                   # loads the rest
     python ingestion/pipeline.py --full-refresh    # drop tables + state, reload
+
+Airflow (airflow/dags/olist_elt.py) passes `--duckdb-path` / `--dataset` to keep its
+runs apart from local dev and prod.
 """
 
 import argparse
@@ -147,14 +150,14 @@ def olist_source(source_dir: Path, until: str | None = None):
         )
 
 
-def make_destination(name: str):
+def make_destination(name: str, duckdb_path: Path):
     if name == "bigquery":
         # No key given: dlt falls back to Application Default Credentials
         credentials = GcpServiceAccountCredentials()
         credentials.project_id = GCP_PROJECT_ID
         return dlt.destinations.bigquery(credentials=credentials, location=BQ_LOCATION)
-    DUCKDB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return dlt.destinations.duckdb(str(DUCKDB_PATH))
+    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
+    return dlt.destinations.duckdb(str(duckdb_path))
 
 
 def main() -> None:
@@ -166,16 +169,23 @@ def main() -> None:
         "--until", type=month_key, help="load order months up to this one, YYYY-MM (default: all)"
     )
     parser.add_argument(
+        "--dataset", default="raw", help="target schema (DuckDB) / dataset (BigQuery)"
+    )
+    parser.add_argument(
+        "--duckdb-path", type=Path, default=DUCKDB_PATH, help="DuckDB file (default: %(default)s)"
+    )
+    parser.add_argument(
         "--full-refresh", action="store_true", help="drop raw tables and dlt state first"
     )
     args = parser.parse_args()
 
     source_dir = Path(kagglehub.dataset_download(KAGGLE_DATASET))
     pipeline = dlt.pipeline(
-        # Separate state per destination
-        pipeline_name=f"olist_{args.destination}",
-        destination=make_destination(args.destination),
-        dataset_name="raw",
+        # Separate state per destination and dataset
+        pipeline_name=f"olist_{args.destination}"
+        + ("" if args.dataset == "raw" else f"_{args.dataset}"),
+        destination=make_destination(args.destination, args.duckdb_path),
+        dataset_name=args.dataset,
     )
     source = olist_source(source_dir, until=args.until)
     if args.full_refresh:

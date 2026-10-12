@@ -1,0 +1,118 @@
+# Local Airflow 3 for the olist ELT DAGs. Not for production: LocalExecutor,
+# no login (all users admin), fixed local secrets.
+#   docker compose -f airflow/docker-compose.yml up -d --build
+#   UI: http://localhost:8080
+# BigQuery DAG: set GCP_KEY_FILE in airflow/.env (see .env.example).
+
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: airflow/Dockerfile
+  image: olist-airflow:local
+  user: "${AIRFLOW_UID:-50000}:0"
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/project/airflow/dags
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # Shared by the components that sign / check task tokens; local-only value
+    AIRFLOW__API_AUTH__JWT_SECRET: local-dev-only-not-a-secret
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
+    # key, and the BigQuery DAG is not created.
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
+  volumes:
+    - ..:/opt/project
+    - ${GCP_KEY_FILE:-./gcp-key.placeholder}:/opt/gcp/key.json:ro
+    - kagglehub-cache:/home/airflow/.cache/kagglehub
+    - dlt-pipelines:/home/airflow/.dlt
+  depends_on: &airflow-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        airflow db migrate
+        # dbt packages once for all tasks (Cosmos: install_dbt_deps=False)
+        cd /opt/project/transform && /opt/project-venv/bin/dbt deps
+        # DuckDB allows one writer: the DuckDB DAG's dbt tasks share one slot
+        airflow pools set duckdb 1 "DuckDB single-writer lock"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-db:
+  kagglehub-cache:
+  dlt-pipelines:
