@@ -4,7 +4,11 @@ version: 2
 # integer, boolean, date, timestamp). Money and float types differ per adapter:
 # YAML anchors &money_type / &float_type (first use below) switch on target.type.
 # BigQuery forbids parameterized types in CAST (contracts cast), so plain NUMERIC.
+# dbt warns about it on every BigQuery build ("unspecified precision/scale"): expected,
+# to_money() rounds to 2 decimals.
 # Money columns are cast explicitly with to_money(): DuckDB checks decimal precision.
+# primary_key: DuckDB enforces it; BigQuery only records it (warn_unenforced: false), the
+# unique + not_null tests check it there.
 
 models:
   - name: dim_date
@@ -28,6 +32,7 @@ models:
         constraints:
           - type: not_null
           - type: primary_key
+            warn_unenforced: false
         data_tests: [unique, not_null]
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }} From the latest order."
@@ -84,6 +89,7 @@ models:
         constraints:
           - type: not_null
           - type: primary_key
+            warn_unenforced: false
         data_tests: [unique, not_null]
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }}"
@@ -113,6 +119,7 @@ models:
         constraints:
           - type: not_null
           - type: primary_key
+            warn_unenforced: false
         data_tests: [unique, not_null]
       - name: category_name_pt
         description: Original Portuguese category name (null if missing in source).
@@ -164,6 +171,7 @@ models:
         constraints:
           - type: not_null
           - type: primary_key
+            warn_unenforced: false
         data_tests: [unique, not_null]
       - name: customer_unique_id
         description: "{{ doc('customer_unique_id') }}"
@@ -305,6 +313,7 @@ models:
         constraints:
           - type: not_null
           - type: primary_key
+            warn_unenforced: false
         data_tests: [unique, not_null]
       - name: order_id
         description: "{{ doc('order_id') }}"
