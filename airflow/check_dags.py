@@ -1,8 +1,10 @@
 """CI check: parse the DAG folder the way the dag-processor does.
 
 Runs inside the Airflow image (see the `airflow-dags` job in ci-cd.yml). Fails on
-any import error (including Cosmos' `dbt ls`) and when an expected DAG is missing
-or has no dbt tasks. A non-empty dummy key must be mounted so the BigQuery DAG is
+any import error, when an expected DAG is missing or has no dbt tasks, when the
+Cosmos watcher producer is missing, or when the DuckDB pool holds anything but the
+writers (dlt + producer): a sensor in the 1-slot pool waits for the producer it
+watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
 """
 
@@ -11,6 +13,8 @@ import sys
 from airflow.dag_processing.dagbag import DagBag
 
 EXPECTED = {"olist_elt_duckdb", "olist_elt_bigquery"}
+PRODUCER = "dbt.dbt_producer_watcher"
+DUCKDB_WRITERS = {"dlt_ingest", PRODUCER}
 
 bag = DagBag(dag_folder="/opt/project/airflow/dags")
 
@@ -28,5 +32,17 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
     if not dbt_tasks:
         print(f"{dag_id} has no dbt tasks", file=sys.stderr)
         missing.add(dag_id)
+    if PRODUCER not in dag.task_ids:
+        print(f"{dag_id} has no {PRODUCER} (not in watcher mode?)", file=sys.stderr)
+        missing.add(dag_id)
+    if dag_id == "olist_elt_duckdb":
+        pooled = {t.task_id for t in dag.tasks if t.pool == "duckdb"}
+        if pooled != DUCKDB_WRITERS:
+            print(
+                f"{dag_id}: pool duckdb — unexpected {len(pooled - DUCKDB_WRITERS)} tasks,"
+                f" missing {sorted(DUCKDB_WRITERS - pooled)}",
+                file=sys.stderr,
+            )
+            missing.add(dag_id)
 
 sys.exit(1 if bag.import_errors or missing else 0)

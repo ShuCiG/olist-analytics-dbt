@@ -17,7 +17,7 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
-| Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: monthly DAG `dlt ingest → dbt` (one task per dbt node), backfills over the dump's history |
+| Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: monthly DAG `dlt ingest → dbt` (watcher mode: one `dbt build` per run, one Airflow task per dbt node), backfills over the dump's history |
 | Code quality | sqlfluff (dbt templater) + pre-commit hooks |
 | CI/CD | GitHub Actions. PR: `sqlfluff lint` → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
 | Environment | uv, Python 3.12 |
@@ -207,22 +207,26 @@ cd transform && uv run dbt build --target prod
 ## Orchestration (Airflow + Cosmos)
 
 Local Airflow 3 replays the dump month by month. Each DAG run loads one purchase month with dlt
-(`--until` = the run's data interval), then runs the dbt project as a Cosmos task group: one `dbt build`
-task per model / seed / snapshot (with its own tests), `dbt source freshness` per source, and a separate
-task for each multi-parent test (relationships) after all its parents.
+(`--until` = the run's data interval), then runs the dbt project as a Cosmos task group in **watcher
+mode**: a producer task runs `dbt source freshness` and one `dbt build` for the whole project (dbt threads
+run independent nodes in parallel), while one sensor task per node (model run, model tests, seed, snapshot,
+source) mirrors that node's result from the producer's log. The Airflow graph still shows every dbt node;
+dbt starts and parses the project once per run instead of once per task: **~29 → ~6 min per month on
+DuckDB, ~19 → ~6–9 min on BigQuery**.
 
 ```mermaid
 flowchart LR
-    ingest[dlt_ingest<br/>one month] --> src[8 × source<br/>freshness]
-    ingest --> seed[seed] --> marts
-    src --> stg[8 × stg_*<br/>build] --> int[5 × int_*<br/>build] --> marts[6 × marts<br/>build]
-    src --> snap[snap_sellers<br/>snapshot]
-    stg --> rel[relationships<br/>tests]
-    marts --> rel
+    ingest[dlt_ingest<br/>one month] --> producer[dbt_producer_watcher<br/>freshness + dbt build]
+    producer -. node results .-> sensors
+    subgraph sensors[sensor tasks, same graph as dbt]
+        direction LR
+        src[8 × source] --> stg[8 × stg_*<br/>run + test] --> int[5 × int_*<br/>run + test] --> marts[6 × marts<br/>run + test]
+        src --> snap[snap_sellers]
+    end
 ```
 
-Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, writes serialized by a
-1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD). History via backfill:
+Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, dlt and the dbt producer
+serialized by a 1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD). History via backfill:
 
 ```bash
 docker compose -f airflow/docker-compose.yml up -d --build      # UI: http://localhost:8080
@@ -231,8 +235,8 @@ docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
   --from-date 2016-09-01 --to-date 2017-01-01 --max-active-runs 1
 ```
 
-Details (BigQuery key, params, reset) in [airflow/README.md](airflow/README.md). CI builds the image and checks
-that both DAGs parse.
+Details (BigQuery key, params, reset, re-running a failed month) in [airflow/README.md](airflow/README.md). CI
+builds the image and checks that both DAGs parse in watcher mode with only the writers in the DuckDB pool.
 
 ## Project structure
 

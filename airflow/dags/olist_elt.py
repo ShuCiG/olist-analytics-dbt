@@ -9,6 +9,11 @@ Why two DAGs and not a `target` param: Cosmos renders the dbt graph with a fixed
 profile at parse time, and dlt keeps a separate load cursor per destination, so
 each warehouse needs its own run history (and backfills).
 
+dbt runs in Cosmos' watcher mode: one producer task runs a single `dbt build` for
+the whole project (one parse, dbt's own threads), and every node is a sensor task
+that mirrors its status from the producer's log. See the speed notes in
+airflow/README.md.
+
 Schedule: monthly over the dump's purchase months. A run for the interval starting
 2017-03-01 loads orders up to 2017-03 (`pipeline.py --until 2017-03`). History is
 replayed with a backfill, see airflow/README.md.
@@ -25,6 +30,7 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG, Param
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import (
+    ExecutionMode,
     InvocationMode,
     LoadMode,
     SourceRenderingBehavior,
@@ -57,6 +63,15 @@ class Warehouse:
     dlt_args: list[str]
     env: dict[str, str] = field(default_factory=dict)
     pool: str | None = None  # for every task that writes to the warehouse
+
+
+def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
+    """Watcher freshness callback: never skip nodes downstream of stale sources.
+
+    Freshness is a warn-only signal here (D18): a month without new orders leaves the
+    order tables honestly stale, and their models must still run.
+    """
+    return []
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
@@ -95,6 +110,10 @@ def build_dag(wh: Warehouse) -> DAG:
         # dlt's cursor moves forward month by month: runs must not overlap.
         # Backfills don't inherit this: pass `--max-active-runs 1` (airflow/README.md)
         max_active_runs=1,
+        # No retries: a watcher producer never reruns (attempt > 1 is skipped), and
+        # retried node tasks run their own dbt command instead, outside the DuckDB
+        # pool (lock errors). Recover with a new run, not Clear (airflow/README.md).
+        default_args={"retries": 0},
         params={
             "until": Param(
                 None,
@@ -138,11 +157,25 @@ def build_dag(wh: Warehouse) -> DAG:
                 profiles_yml_filepath=DBT_PROJECT_DIR / "profiles.yml",
             ),
             execution_config=ExecutionConfig(
+                # One `dbt build` per run in a producer task; node tasks are sensors
+                # that read its per-node results. Per-task startup + parse (~40 s per
+                # node in LOCAL mode) is paid once.
+                execution_mode=ExecutionMode.WATCHER,
                 dbt_executable_path=DBT_EXECUTABLE,
                 invocation_mode=InvocationMode.SUBPROCESS,
                 # Only tests whose parents are all in the node's selection; the
-                # default (eager) runs relationships tests before the other parent exists
+                # default (eager) runs relationships tests before the other parent
+                # exists. Matters when a node task falls back to its own dbt run
+                # (retry after a failed producer); the producer builds everything.
                 test_indirect_selection=TestIndirectSelection.CAUTIOUS,
+                # Producer only: the sensors don't write, and in the 1-slot pool they
+                # would wait for the producer they are watching
+                setup_operator_args={
+                    "freshness_callback": no_freshness_skips,
+                    # Unit tests check logic on fixtures: CI's job, not the data pipeline's
+                    "dbt_cmd_flags": ["--exclude-resource-type", "unit_test"],
+                    **({"pool": wh.pool} if wh.pool else {}),
+                },
             ),
             render_config=RenderConfig(
                 # Graph from the manifest, not `dbt ls`: Airflow 3 re-parses the DAG
@@ -150,18 +183,17 @@ def build_dag(wh: Warehouse) -> DAG:
                 # can't be written from tasks, so each task ran 2 uncached dbt ls
                 # (minutes under load, past the import timeout: endless retries)
                 load_method=LoadMode.DBT_MANIFEST,
-                # One `dbt build --select <node>` task per node: model + its tests
-                test_behavior=TestBehavior.BUILD,
-                # ...and multi-parent tests (relationships) get their own task after
-                # all parents, otherwise cautious selection would never run them
-                should_detach_multiple_parents_tests=True,
+                # Per model a run task + a test task, both sensors of the producer's
+                # build (the watcher has no BUILD behavior: the build is the producer)
+                test_behavior=TestBehavior.AFTER_EACH,
+                # Multi-parent tests (relationships) stay in one parent's test task.
+                # Detached, they become sensors the producer never reports (it reports
+                # tests per model) and fail with "no information about the node"
+                should_detach_multiple_parents_tests=False,
                 # Source tasks run `dbt source freshness` (warn-only, D18)
                 source_rendering_behavior=SourceRenderingBehavior.WITH_TESTS_OR_FRESHNESS,
             ),
-            operator_args={
-                "full_refresh": "{{ params.full_refresh }}",
-                **({"pool": wh.pool} if wh.pool else {}),
-            },
+            operator_args={"full_refresh": "{{ params.full_refresh }}"},
         )
 
         ingest >> dbt
