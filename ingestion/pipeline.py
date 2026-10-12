@@ -185,7 +185,8 @@ def main() -> None:
 
     source_dir = Path(kagglehub.dataset_download(KAGGLE_DATASET))
     pipeline = dlt.pipeline(
-        # Separate state per destination and dataset
+        # Separate state per destination and dataset. Not per DuckDB file: Airflow's
+        # file has its own dlt state dir (container volume), so names don't clash.
         pipeline_name=f"olist_{args.destination}"
         + ("" if args.dataset == "raw" else f"_{args.dataset}"),
         destination=make_destination(args.destination, args.duckdb_path),

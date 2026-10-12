@@ -5,8 +5,10 @@ models:
     description: Payments pivoted to one row per order, amount per payment type.
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests: [unique, not_null]
       - name: total_payment_value
+        description: Sum of all payments of the order, BRL (all types, incl. `not_defined`).
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -16,8 +18,10 @@ models:
     description: Order items aggregated to one row per order.
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests: [unique, not_null]
       - name: items_count
+        description: Number of line items.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -27,8 +31,10 @@ models:
     description: Delivery timing metrics per order. Null durations for undelivered orders.
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests: [unique, not_null]
       - name: days_to_deliver
+        description: Days from purchase to delivery; null if not delivered.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -40,10 +46,12 @@ models:
     description: Latest review per order.
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests: [unique, not_null]
 
   - name: int_zip_codes_located
     description: One centroid (avg lat/lng) per zip code prefix.
     columns:
       - name: zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }}"
         data_tests: [unique, not_null]

@@ -8,7 +8,6 @@ seed-paths: ["seeds"]
 test-paths: ["tests"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
-analysis-paths: ["analyses"]
 
 clean-targets: ["target", "dbt_packages"]
 

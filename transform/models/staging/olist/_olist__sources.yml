@@ -4,7 +4,7 @@ sources:
   - name: olist
     description: >
       Olist Brazilian e-commerce public dataset (Kaggle), ~100k orders 2016-2018.
-      Loaded by dlt (`ingestion/pipeline.py`); every source column is VARCHAR.
+      Loaded by dlt (`ingestion/pipeline.py`); every source column is a string, plus `_loaded_at`.
       Order tables arrive in monthly chunks (merge), reference tables are replaced
       on every run. `_loaded_at` = UTC time of the dlt run that wrote the row.
     # Airflow's BigQuery DAG loads its own raw dataset (airflow_raw), apart from prod

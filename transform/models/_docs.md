@@ -2,7 +2,9 @@
 # Olist analytics
 
 ELT on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce):
-dlt loads the raw CSV files into DuckDB, dbt builds staging → intermediate → marts (star schema).
+dlt loads the raw CSV files in monthly chunks, dbt builds staging → intermediate → marts (star schema).
+These docs are generated from the BigQuery prod build; the same project runs on DuckDB locally and in CI,
+and month by month in Airflow (Cosmos).
 
 - **Facts:** `fct_orders` (one row per order), `fct_order_items` (one row per line item)
 - **Dimensions:** `dim_customers`, `dim_sellers`, `dim_products`, `dim_date`

@@ -5,6 +5,8 @@ seeds:
     description: Portuguese → English product category names (from the Olist dataset; BOM stripped).
     columns:
       - name: product_category_name
+        description: Portuguese category name, as in the products source.
         data_tests: [unique, not_null]
       - name: product_category_name_english
+        description: English category name.
         data_tests: [not_null]

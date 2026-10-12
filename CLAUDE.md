@@ -12,10 +12,11 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - One branch per task: `feat/…`, `fix/…`, `ci/…`, `docs/…`, `chore/…`. Commit + push to the branch.
 - Open PR with `gh pr create` (fill `.github/pull_request_template.md`). **User merges — Claude never merges.**
 - After user merges: `git switch main && git pull && git branch -D <branch> && git fetch -p` (`-D`: squash merge makes `-d` refuse).
-- CI (`.github/workflows/ci-cd.yml`) on every PR: dlt ingest → `dbt build`. On merge to main: same + dbt docs → GitHub Pages.
+- CI (`.github/workflows/ci-cd.yml`) on every PR: sqlfluff + pyright + Airflow DAG parse, `dbt build` on DuckDB (fresh dlt ingest), slim CI on BigQuery. On merge to main: dlt → BigQuery, `dbt build --target prod`, dbt docs → GitHub Pages.
 
 ## Layout
-- `ingestion/` — dlt pipeline: Olist CSV → DuckDB schema `raw`
+- `ingestion/` — dlt pipeline: Olist CSV → DuckDB schema / BigQuery dataset `raw`, monthly chunks
+- `airflow/` — Airflow 3 + Cosmos (Docker Compose), DAGs `olist_elt_duckdb` / `olist_elt_bigquery`
 - `transform/` — dbt project (staging → intermediate → marts)
 - `data/` — raw CSV + `olist.duckdb` (gitignored)
 - `docs/` — PROGRESS.md, DECISIONS.md
@@ -25,6 +26,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - dbt: `cd transform && uv run dbt <cmd>` (profiles.yml lives in transform/; DuckDB path via env `DBT_DUCKDB_PATH`)
 - Lint: `uv run sqlfluff lint transform/models transform/tests` (dbt templater, in-memory `lint` target, ~40s); `uv run sqlfluff fix` breaks Jinja-heavy files — review diff
 - Types: `uv run pyright` (config `[tool.pyright]` in pyproject.toml, shared with Pylance); must stay at 0 errors
+- Airflow: `docker compose -f airflow/docker-compose.yml up -d --build` (UI :8080); rerun `airflow-init` after model changes (manifest); see airflow/README.md
 - Hooks: `uv run pre-commit install` once; runs whitespace/yaml/secrets checks, blocks commits to main, sqlfluff on changed SQL, pyright on Python changes
 
 ## Conventions
