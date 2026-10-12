@@ -61,8 +61,8 @@ jobs:
         run: uv run pyright
 
   # Airflow image builds, `dbt parse` writes the manifest Cosmos renders from, and
-  # both DAGs parse. No DB or warehouse needed. A dummy key makes the BigQuery DAG render; parsing never
-  # authenticates.
+  # both DAGs parse (check_dags.py). No DB or warehouse needed. A dummy key makes
+  # the BigQuery DAG render; parsing never authenticates.
   airflow-dags:
     name: airflow DAGs parse
     if: github.event_name == 'pull_request'
@@ -178,7 +178,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(gh run list --workflow ci-cd.yml --branch main --status success             --limit 1 --json databaseId --jq '.[0].databaseId')
+          run_id=$(gh run list --workflow ci-cd.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
             echo "SLIM_CI=true" >> "$GITHUB_ENV"
           else

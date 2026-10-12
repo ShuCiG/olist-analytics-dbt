@@ -18,8 +18,8 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: monthly DAG `dlt ingest → dbt` (watcher mode: one `dbt build` per run, one Airflow task per dbt node), backfills over the dump's history |
-| Code quality | sqlfluff (dbt templater) + pre-commit hooks |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
+| Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -28,7 +28,8 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 flowchart LR
     kaggle[(Kaggle<br/>Olist CSV)] -->|dlt| raw
     subgraph wh[DuckDB dev / BigQuery prod]
-        raw[raw<br/>8 tables, all VARCHAR] --> staging
+        raw[raw<br/>8 tables, all strings] --> staging
+        raw --> snapshots[snapshots<br/>SCD2 sellers]
         seed[seed:<br/>category translation] --> marts
         staging[staging<br/>8 views: typed, renamed] --> intermediate
         intermediate[intermediate<br/>5 views: rollups, dedup] --> marts
@@ -46,6 +47,7 @@ flowchart LR
     classDef int fill:#fdf3e1,stroke:#c48a1c
     classDef mart fill:#e6f4ea,stroke:#3a8a4f
     classDef seed fill:#f1e8fb,stroke:#7a4ab5
+    classDef snap fill:#f3f3f3,stroke:#777777
 
     stg_orders[stg_olist__orders]:::stg
     stg_items[stg_olist__order_items]:::stg
@@ -56,6 +58,8 @@ flowchart LR
     stg_sellers[stg_olist__sellers]:::stg
     stg_geo[stg_olist__geolocation]:::stg
     translation[product_category_name_translation]:::seed
+    src_sellers[(source: sellers)]
+    snap_sellers:::snap
 
     int_pay[int_payments_pivoted_to_orders]:::int
     int_items[int_order_items_aggregated_to_orders]:::int
@@ -97,6 +101,8 @@ flowchart LR
 
     stg_products --> dim_products
     translation --> dim_products
+
+    src_sellers --> snap_sellers
 ```
 
 ## Data model
@@ -147,8 +153,10 @@ where it is visible and tested. Casts use cross-database macros (`dbt.type_times
 the same models can run on BigQuery.
 
 Mart models have **enforced contracts**: every column is declared with its type, and the build fails if the SQL
-returns anything else. Money columns are cast explicitly to `numeric(18, 2)` (`to_money()` macro, per-adapter via `adapter.dispatch`). Shared column
-descriptions live in doc blocks (`models/_docs.md`) and are reused across models.
+returns anything else. Money columns are cast explicitly by the `to_money()` macro (per adapter via
+`adapter.dispatch`): `numeric(18, 2)` on DuckDB, `round(x, 2)` as `NUMERIC` on BigQuery, which forbids
+parameterized types in `CAST`. Shared column descriptions live in doc blocks (`models/_docs.md`) and are
+reused across models.
 
 ## How to run
 
@@ -250,8 +258,8 @@ builds the image and checks that both DAGs parse in watcher mode with only the w
 │   │   └── marts/               # star schema
 │   ├── seeds/                   # category translation
 │   ├── snapshots/               # snap_sellers (SCD2, YAML-defined)
-│   ├── tests/                   # singular tests
-│   └── macros/                  # generate_schema_name, drop_isolated_datasets (CI / Airflow cleanup)
+│   ├── tests/                   # singular tests + generic test is_not_before
+│   └── macros/                  # to_money, generate_schema_name, drop_isolated_datasets (CI / Airflow cleanup)
 ├── .github/workflows/ci-cd.yml  # CI on PR (DuckDB + slim BigQuery), prod deploy + docs on merge
 └── docs/                        # PROGRESS.md, DECISIONS.md (architecture decision log)
 ```
@@ -265,6 +273,7 @@ Feature branch → PR → CI must pass → squash merge → CD.
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
 - **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
   `manifest.json` stored as an artifact for slim CI.
+
 Locally, `uv run pre-commit install` enables the same lint and type check plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 

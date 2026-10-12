@@ -17,13 +17,16 @@ models:
                 to: ref('stg_olist__customers')
                 field: customer_id
       - name: order_status
+        description: "{{ doc('order_status') }}"
         data_tests:
           - accepted_values:
               arguments:
                 values: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
       - name: purchased_at
+        description: Purchase timestamp, as in the source (no time zone).
         data_tests: [not_null]
       - name: estimated_delivery_date
+        description: Delivery date promised to the customer at purchase.
         data_tests: [not_null]
       - name: _loaded_at
         description: "{{ doc('loaded_at') }}"
@@ -43,6 +46,7 @@ models:
         description: "{{ doc('loaded_at') }}"
         data_tests: [not_null]
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests:
           - not_null
           - relationships:
@@ -50,6 +54,7 @@ models:
                 to: ref('stg_olist__orders')
                 field: order_id
       - name: product_id
+        description: Product of the line item.
         data_tests:
           - not_null
           - relationships:
@@ -57,6 +62,7 @@ models:
                 to: ref('stg_olist__products')
                 field: product_id
       - name: seller_id
+        description: Seller that fulfils the line item.
         data_tests:
           - not_null
           - relationships:
@@ -64,12 +70,14 @@ models:
                 to: ref('stg_olist__sellers')
                 field: seller_id
       - name: price
+        description: Item price, BRL.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
                 strictly: true
       - name: freight_value
+        description: Freight charged for the item, BRL (split across items of the order).
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -83,6 +91,7 @@ models:
             combination_of_columns: [order_id, payment_sequential]
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests:
           - not_null
           - relationships:
@@ -90,6 +99,7 @@ models:
                 to: ref('stg_olist__orders')
                 field: order_id
       - name: payment_type
+        description: Payment method; `not_defined` on 3 source rows.
         data_tests:
           - accepted_values:
               arguments:
@@ -104,6 +114,7 @@ models:
               config:
                 severity: warn
       - name: payment_value
+        description: Amount of this payment, BRL.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -119,6 +130,7 @@ models:
             combination_of_columns: [review_id, order_id]
     columns:
       - name: order_id
+        description: "{{ doc('order_id') }}"
         data_tests:
           - not_null
           - relationships:
@@ -126,6 +138,7 @@ models:
                 to: ref('stg_olist__orders')
                 field: order_id
       - name: review_score
+        description: Customer rating, 1–5.
         data_tests:
           - accepted_values:
               arguments:
@@ -168,20 +181,24 @@ models:
         description: Primary key.
         data_tests: [unique, not_null]
       - name: zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }}"
         data_tests: [not_null]
 
   - name: stg_olist__geolocation
     description: Raw lat/lng points; many per zip prefix. Aggregated in int_zip_codes_located.
     columns:
       - name: zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }}"
         data_tests: [not_null]
       - name: latitude
+        description: Latitude of one geolocation point.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: -90
                 max_value: 90
       - name: longitude
+        description: Longitude of one geolocation point.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

@@ -7,7 +7,7 @@ dependencies = [
     "dbt-core>=1.12.5",
     "dbt-duckdb>=1.11.0",
     "dlt[bigquery,duckdb]>=1.31.0",
-    "duckdb>=1.5.6",
+    "duckdb>=1.5.6",  # dbt-duckdb merge strategy needs >= 1.4 (D20)
     "kagglehub>=1.0.2",
 ]
 

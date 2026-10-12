@@ -3,12 +3,12 @@ version: 2
 # Contracts: data types use names both DuckDB and BigQuery accept (string, bigint,
 # integer, boolean, date, timestamp). Money and float types differ per adapter:
 # YAML anchors &money_type / &float_type (first use below) switch on target.type.
-# BigQuery forbids parameterized types in CAST (contracts cast), so plain NUMERIC.
-# dbt warns about it on every BigQuery build ("unspecified precision/scale"): expected,
-# to_money() rounds to 2 decimals.
-# Money columns are cast explicitly with to_money(): DuckDB checks decimal precision.
-# primary_key: DuckDB enforces it; BigQuery only records it (warn_unenforced: false), the
-# unique + not_null tests check it there.
+# Money columns are cast explicitly with to_money(): DuckDB checks decimal precision,
+# so numeric(18, 2) there. BigQuery forbids parameterized types in CAST (contracts
+# cast), so plain NUMERIC + round(x, 2); dbt warns "unspecified precision/scale" on
+# every BigQuery build — expected (D24).
+# primary_key: DuckDB enforces it; BigQuery only records it (warn_unenforced: false),
+# the unique + not_null tests check it there.
 
 models:
   - name: dim_date

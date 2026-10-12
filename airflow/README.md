@@ -43,7 +43,7 @@ Re-run a failed month with a **new** run, not with Clear (or a backfill with
 `--reprocess-behavior`, which reuses the run id):
 
 ```bash
-docker compose -f airflow/docker-compose.yml exec airflow-scheduler   airflow dags trigger olist_elt_duckdb --conf '{"until": "2016-10"}'
+docker compose -f airflow/docker-compose.yml exec airflow-scheduler \n  airflow dags trigger olist_elt_duckdb --conf '{"until": "2016-10"}'
 ```
 
 Why: a Cosmos watcher producer never runs twice — on attempt 2+ it skips itself,
