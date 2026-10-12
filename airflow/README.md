@@ -35,6 +35,22 @@ docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
 (default 10) and ignores the DAG's `max_active_runs=1`. Parallel months race on
 the dlt cursor and the Kaggle download cache.
 
+## BigQuery DAG
+
+Put the service-account key path in `airflow/.env` (`GCP_KEY_FILE=...`, see `.env.example`) and
+recreate the stack (`up -d`). The DAG writes `airflow_raw` (dlt) and `airflow_staging`, `airflow_marts`,
+... (dbt target `airflow`), never prod. Reset it (drops all `airflow*` datasets, guarded to targets
+`ci` / `airflow`):
+
+```bash
+cd transform && uv run dbt run-operation drop_isolated_datasets --target airflow
+```
+
+The dlt cursor lives in `airflow_raw` and in the `dlt-pipelines` volume; after dropping the datasets also
+clear it: `docker compose -f airflow/docker-compose.yml exec airflow-scheduler rm -rf /home/airflow/.dlt/pipelines/olist_bigquery_airflow_raw`.
+
+## Params
+
 Params on a manual run: `until` (`YYYY-MM`, load up to that month at once) and
 `full_refresh` (drop raw tables + dlt state, rebuild incremental models).
 

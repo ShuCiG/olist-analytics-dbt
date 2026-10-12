@@ -10,7 +10,7 @@ x-airflow-common: &airflow-common
     dockerfile: airflow/Dockerfile
   image: olist-airflow:local
   user: "${AIRFLOW_UID:-50000}:0"
-  environment: &airflow-env
+  environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
@@ -21,6 +21,10 @@ x-airflow-common: &airflow-common
     # Shared by the components that sign / check task tokens; local-only value
     AIRFLOW__API_AUTH__JWT_SECRET: local-dev-only-not-a-secret
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # Cosmos runs `dbt ls` per DAG when the project changed (cache miss): ~15 s
+    # each, over the 30 s default for the whole file
+    AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "180"
+    AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: "240"
     # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
     # key, and the BigQuery DAG is not created.
     GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
