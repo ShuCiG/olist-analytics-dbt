@@ -59,7 +59,9 @@ Params on a manual run: `until` (`YYYY-MM`, load up to that month at once) and
 - dbt and dlt run from `/opt/project-venv`, built from `uv.lock` (same versions as
   local dev and CI, no clash with Airflow's dependencies). Cosmos calls dbt as a
   subprocess (`ExecutionMode.LOCAL`, `InvocationMode.SUBPROCESS`).
-- The repo is mounted at `/opt/project`: edit models on the host, the DAG picks
-  them up on the next parse (Cosmos caches the `dbt ls` result by project hash).
-- `airflow-init` migrates the metadata DB, creates the `duckdb` pool and runs
-  `dbt deps` once.
+- The repo is mounted at `/opt/project`: tasks always run the current models. The
+  DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
+  `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse); after adding/removing models
+  or tests, rebuild it: `docker compose -f airflow/docker-compose.yml run --rm airflow-init`.
+- `airflow-init` migrates the metadata DB, creates the `duckdb` pool, runs
+  `dbt deps` and `dbt parse` (the manifest).

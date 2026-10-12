@@ -60,8 +60,8 @@ jobs:
       - name: pyright
         run: uv run pyright
 
-  # Airflow image builds and both DAGs parse (incl. Cosmos `dbt ls`), no DB or
-  # warehouse needed. A dummy key makes the BigQuery DAG render; parsing never
+  # Airflow image builds, `dbt parse` writes the manifest Cosmos renders from, and
+  # both DAGs parse. No DB or warehouse needed. A dummy key makes the BigQuery DAG render; parsing never
   # authenticates.
   airflow-dags:
     name: airflow DAGs parse
@@ -91,10 +91,8 @@ jobs:
             -v "$PWD:/opt/project" \
             -v "$RUNNER_TEMP/dummy-key.json:/opt/gcp/key.json:ro" \
             -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
-            -e AIRFLOW__COSMOS__ENABLE_CACHE=False \
-            -e AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT=180 \
             --entrypoint bash olist-airflow:ci \
-            -c 'cd /opt/project/transform && /opt/project-venv/bin/dbt deps && python /opt/project/airflow/check_dags.py'
+            -c 'cd /opt/project/transform && /opt/project-venv/bin/dbt deps && /opt/project-venv/bin/dbt parse --target-path target_airflow && python /opt/project/airflow/check_dags.py'
 
   # Required check: gating it on pyright blocks merges with type errors
   dbt-build:

@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 5 — Airflow + Cosmos (in progress)
-**Next step:** merge PR 5.1; then PR 5.2 (DAG parse check in CI, BigQuery DAG run, root README section).
+**Current phase:** 5 — Airflow + Cosmos ✅ (done on merge of PR 5.2)
+**Next step:** Phase 6 — Dashboard, or the Airflow speed-up from the backlog. Ask before starting.
 
 ## Phases
 
@@ -43,10 +43,20 @@ Unit tests, model contracts, custom generic test, macros, sqlfluff + pre-commit,
 ### Phase 5 — Airflow + Cosmos
 Docker Compose, DAG: dlt ingest → dbt build (Cosmos task group), backfill.
 - [x] PR 5.1: Airflow 3.3.2 + Cosmos 1.15.1 in Docker Compose; DAG factory `olist_elt_duckdb` / `olist_elt_bigquery` (monthly, `--until` = interval month); DuckDB pool; backfill 2016-09..11 verified
-- [ ] PR 5.2: CI check that DAGs import (built image), BigQuery DAG run, README section
+- [x] PR 5.2: CI job `airflow DAGs parse` (built image), Cosmos `DBT_MANIFEST` (fixes endless dbt-ls retries), BigQuery DAG verified (2016-09..10 = DuckDB results, prod untouched), `drop_isolated_datasets` (ci + airflow), task logs in UI (shared secret_key + logs volume), README section
 
 ### Phase 6 — Dashboard
 Streamlit over marts, dbt exposures, README screenshots.
+
+## Backlog (ideas, not scheduled)
+- **Faster Airflow runs.** DuckDB ~16 s/task, ~25 min/month (1-slot pool). BigQuery ~19 min/month, but ~5 min per task under 10-way parallelism on 4 CPUs; measured on one freshness task: dbt start 57 s, BigQuery adapter import 42 s, failed partial parse + full reparse 163 s, the query itself ~5 s. Options, cheapest first:
+  - partial parse per target: Cosmos reuses `transform/target/partial_parse.msgpack` from local DuckDB runs, which dbt rejects for target `airflow` (other adapter/env) → full reparse in every task. Seed a per-DAG partial parse (e.g. `dbt parse --target airflow` in init) and check Cosmos picks it
+  - a BigQuery pool sized to the CPUs (e.g. 4) — less contention, maybe same throughput
+  - dbt's opt-in Rust parser (hint in task logs; `dbt-core-experimental-parser` is already installed): check flag name and package/BigQuery compatibility in the docs first
+  - ~~`LoadMode.DBT_MANIFEST`~~ done in PR 5.2 (was a bug, not only speed: D23). Remaining per-task cost: Python/Airflow start + `dbt` subprocess parse
+  - `ExecutionMode.WATCHER`: one `dbt build` (dbt threads) per run, Airflow tasks only mirror node status; fits DuckDB's single writer
+  - bake the project into the image instead of the bind mount (prod-like; loses live edit)
+  - measure before/after on the same backfill (2016-09..11)
 
 ## Session log
 - 2026-10-10 — Planning, stack chosen (D1–D7). Phase 1 setup: git, uv, deps installed (dbt-core 1.12.5, dbt-duckdb 1.11.0, dbt-bigquery 1.12.1, dlt 1.31.0, duckdb 1.5.6).
@@ -68,3 +78,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-12 — PR #13 merged; auto deploy failed as predicted on old prod `fct_order_items` (no `_loaded_at`); user ran CD with `full_refresh=true` → green, prod table MONTH-partitioned + clustered, 112,650 rows. Lesson: drop/migrate before merge, the deploy starts right away.
 - 2026-10-12 — PR 4.3: `snap_sellers`; demo change/delete/restore → correct versions; reload without changes = no versions. `dbt build` PASS 122, WARN 6 (128 nodes). Phase 4 done on merge.
 - 2026-10-12 — PR #14 merged → Phase 4 done. Phase 5 started (user: both warehouses → two DAGs from one factory, D22). C: full broke the image build; user moved Docker's disk to D:. Fixes found by running: Cosmos drops package-lock.yml (declared dbt_date), eager test selection (→ cautious + detached multi-parent tests), backfill ignores DAG max_active_runs (→ `--max-active-runs 1`). Backfill 2016-09..11: raw/fct_orders = CSV (4, 324, 0), fct_order_items 369 rows over 2 loads, snapshot 1 version/seller. ~30 s/task, ~25 min/month on DuckDB.
+- 2026-10-12 — PR #15 merged (prod deploy green). PR 5.2: CI parse job; BigQuery DAG run exposed endless retries (Airflow 3 re-parses the DAG per task; Cosmos dbt-ls cache unwritable from tasks → 2 uncached dbt ls per task, >3 min under load) → `DBT_MANIFEST`. BigQuery backfill 2016-09..10: 46/46 tasks per run, raw/fct_orders 4 + 324, fct_order_items 369 over 2 loads, snapshot 1 version/seller, prod `fct_orders` still 99,441; datasets dropped after (macro now also drops dlt's `_raw_staging`). UI task logs fixed (shared `[api] secret_key` + logs volume). Speed analysis → backlog.
