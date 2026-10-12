@@ -31,6 +31,7 @@ import csv
 import functools
 import os
 import re
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,6 +48,9 @@ KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
 STATE_KEY = "orders_loaded_until"  # last loaded purchase month, "YYYY-MM"
+
+# The BigQuery client suggests the Storage API for fast reads; dlt here only writes
+warnings.filterwarnings("ignore", message="Cannot create BigQuery Storage client")
 
 # Reference tables: dlt table name -> source file
 REFERENCE_TABLES = {

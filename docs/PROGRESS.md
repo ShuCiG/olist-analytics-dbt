@@ -1,7 +1,7 @@
 # Progress
 
 **Current phase:** 5 — Airflow + Cosmos ✅ (done on merge of PR 5.2)
-**Next step:** Phase 6 — Dashboard, or the Airflow speed-up from the backlog. Ask before starting.
+**Next step:** after PR `fix/ci-warnings` merges — Airflow speed-up (backlog): `ExecutionMode.WATCHER`, measure on backfill 2016-09..11.
 
 ## Phases
 
@@ -79,3 +79,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-12 — PR 4.3: `snap_sellers`; demo change/delete/restore → correct versions; reload without changes = no versions. `dbt build` PASS 122, WARN 6 (128 nodes). Phase 4 done on merge.
 - 2026-10-12 — PR #14 merged → Phase 4 done. Phase 5 started (user: both warehouses → two DAGs from one factory, D22). C: full broke the image build; user moved Docker's disk to D:. Fixes found by running: Cosmos drops package-lock.yml (declared dbt_date), eager test selection (→ cautious + detached multi-parent tests), backfill ignores DAG max_active_runs (→ `--max-active-runs 1`). Backfill 2016-09..11: raw/fct_orders = CSV (4, 324, 0), fct_order_items 369 rows over 2 loads, snapshot 1 version/seller. ~30 s/task, ~25 min/month on DuckDB.
 - 2026-10-12 — PR #15 merged (prod deploy green). PR 5.2: CI parse job; BigQuery DAG run exposed endless retries (Airflow 3 re-parses the DAG per task; Cosmos dbt-ls cache unwritable from tasks → 2 uncached dbt ls per task, >3 min under load) → `DBT_MANIFEST`. BigQuery backfill 2016-09..10: 46/46 tasks per run, raw/fct_orders 4 + 324, fct_order_items 369 over 2 loads, snapshot 1 version/seller, prod `fct_orders` still 99,441; datasets dropped after (macro now also drops dlt's `_raw_staging`). UI task logs fixed (shared `[api] secret_key` + logs volume). Speed analysis → backlog.
+- 2026-10-12 — PR #16 merged (Phase 5 done). PR `fix/ci-warnings`: prod deploy log cleaned up (D24), only 6 expected test WARNs + BigQuery numeric notice remain. Airflow analysis: tasks start from the host's (Windows) `partial_parse.msgpack` → dbt errors and fully reparses (~60 s); plan = WATCHER mode (one `dbt build` per run), DuckDB pool on the producer only.
