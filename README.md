@@ -122,7 +122,7 @@ erDiagram
 
 ## Testing & data quality
 
-**96 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
+**102 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
 
 **5 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
 payment pivot by type, delivery lateness rules (date vs timestamp comparison, undelivered orders),
@@ -159,7 +159,7 @@ uv run python ingestion/pipeline.py   # download Olist, load into data/olist.duc
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 19 models + 96 data tests + 5 unit tests
+uv run dbt build                      # seed + 19 models + snapshot + 102 data tests + 5 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 ```
 
@@ -172,6 +172,27 @@ uv run python ingestion/pipeline.py                                  # adds the 
 cd transform && uv run dbt source freshness                          # checks raw `_loaded_at`
 uv run dbt build        # after each chunk: fct_order_items merges only the new rows
 ```
+
+`snap_sellers` keeps SCD2 history of seller location (`check` strategy on zip / city / state, `hard_deletes: new_record`).
+Sellers never change in the dump, so prod holds one version each. To see versions locally:
+
+```bash
+# change a city and delete a seller in raw, then snapshot
+uv run python -c "import duckdb; c = duckdb.connect('data/olist.duckdb'); c.execute(\"update raw.sellers set seller_city = 'campinas' where seller_id = '0015a82c2db000af6aaaf3ae2ecb0532'\"); c.execute(\"delete from raw.sellers where seller_id = '001cca7ae9ae17fb1caed9dfb1094831'\")"
+cd transform && uv run dbt snapshot && cd ..
+uv run python ingestion/pipeline.py && cd transform && uv run dbt snapshot   # reload restores both
+```
+
+| seller | city | dbt_valid_from | dbt_valid_to | dbt_is_deleted |
+|---|---|---|---|---|
+| 0015a8… | santo andre | 08:28:05 | 08:28:53 | False |
+| 0015a8… | campinas | 08:28:53 | 08:29:23 | False |
+| 0015a8… | santo andre | 08:29:23 | *null* | False |
+| 001cca… | cariacica | 08:28:05 | 08:28:53 | False |
+| 001cca… | cariacica | 08:28:53 | 08:29:23 | True |
+| 001cca… | cariacica | 08:29:23 | *null* | False |
+
+A reload with no changes adds no versions (dlt metadata columns are not compared).
 
 BigQuery (needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*):
 
@@ -192,6 +213,7 @@ cd transform && uv run dbt build --target prod
 │   │   ├── intermediate/        # reusable rollups and dedup
 │   │   └── marts/               # star schema
 │   ├── seeds/                   # category translation
+│   ├── snapshots/               # snap_sellers (SCD2, YAML-defined)
 │   ├── tests/                   # singular tests
 │   └── macros/                  # generate_schema_name (dev/prod vs CI isolation)
 ├── .github/workflows/ci-cd.yml  # CI on PR (DuckDB + slim BigQuery), prod deploy + docs on merge
@@ -215,6 +237,6 @@ Locally, `uv run pre-commit install` enables the same lint and type check plus h
 - [x] **Phase 1 — MVP:** dlt ingestion, staging / intermediate / marts, data tests, CI/CD, docs on Pages
 - [x] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
 - [x] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets, CD on merge
-- [ ] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
+- [x] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [ ] **Phase 5 — Orchestration:** Airflow + Astronomer Cosmos (Docker)
 - [ ] **Phase 6 — Dashboard:** Streamlit over marts, dbt exposures

@@ -127,3 +127,12 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - Unit test of the incremental branch: `overrides.macros.is_incremental: true` + fixture for `this`. The `this` fixture uses `format: sql`: a dict fixture makes dbt introspect the existing table, which fails on a fresh CI database and lacks newly added columns. Fixtures don't render macros → plain `cast(... as timestamp)`.
 - Verified: DuckDB chunked run (2017-06 full → 2017-07 → rest → no-op) equals `--full-refresh` (112,650 rows, R$15,843,553.24); BigQuery full refresh + incremental run in scratch datasets, same totals.
 - Prod migration: the existing prod table (plain table, no `_loaded_at`, not partitioned) can't be merged into → one-off full refresh. CD got a `workflow_dispatch` input `full_refresh` for this and future rebuilds.
+
+## D21 · 2026-10-12 · Snapshot snap_sellers (SCD2)
+- YAML-defined snapshot (dbt ≥1.9, `snapshots/snap_sellers.yml`, `relation: source(...)`): no SQL file, reads the raw source. Snapshot sources, not models, so history doesn't change when transformation logic does.
+- `strategy: check` on `seller_zip_code_prefix`, `seller_city`, `seller_state`: the source has no `updated_at`. Not `check_cols: all` — `_loaded_at` / `_dlt_id` change on every load and would version every row each run.
+- `hard_deletes: new_record`: a seller missing from a load gets a closing version with `dbt_is_deleted = 'True'`; reappearing opens a new one.
+- Schema `snapshots` (`ci_pr_*_snapshots` in CI); `drop_ci_datasets` got the `_snapshots` suffix (would have leaked CI datasets).
+- Tests: `dbt_scd_id` unique/not_null, (`seller_id`, `dbt_valid_from`) unique, `seller_id` unique where `dbt_valid_to is null` (one open version).
+- The dump never changes sellers → prod has one version per seller. Mechanics shown by a local demo in the README (change + delete + restore → 3 versions each). `dim_sellers` stays current-state; nothing reads the snapshot yet.
+- Verified: DuckDB demo; BigQuery scratch dataset (build + re-snapshot = no new versions, cleanup drops `_snapshots`).
