@@ -36,6 +36,9 @@ PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
 VENV_BIN = Path("/opt/project-venv/bin")  # dbt + dlt, built from uv.lock
 DBT_EXECUTABLE = VENV_BIN / "dbt"
+# Built by `dbt parse` in airflow-init (and in CI). Rebuild after changing models:
+#   docker compose -f airflow/docker-compose.yml run --rm airflow-init
+DBT_MANIFEST = DBT_PROJECT_DIR / "target_airflow" / "manifest.json"
 GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
 
 # `--until <month>`: the `until` param if given, else the run's data interval.
@@ -124,6 +127,7 @@ def build_dag(wh: Warehouse) -> DAG:
             group_id="dbt",
             project_config=ProjectConfig(
                 DBT_PROJECT_DIR,
+                manifest_path=DBT_MANIFEST,
                 env_vars=wh.env,
                 # Packages are installed once by airflow-init, not per task
                 install_dbt_deps=False,
@@ -141,9 +145,11 @@ def build_dag(wh: Warehouse) -> DAG:
                 test_indirect_selection=TestIndirectSelection.CAUTIOUS,
             ),
             render_config=RenderConfig(
-                load_method=LoadMode.DBT_LS,
-                dbt_executable_path=DBT_EXECUTABLE,
-                invocation_mode=InvocationMode.SUBPROCESS,
+                # Graph from the manifest, not `dbt ls`: Airflow 3 re-parses the DAG
+                # file in every task, and Cosmos' dbt ls cache (Airflow Variables)
+                # can't be written from tasks, so each task ran 2 uncached dbt ls
+                # (minutes under load, past the import timeout: endless retries)
+                load_method=LoadMode.DBT_MANIFEST,
                 # One `dbt build --select <node>` task per node: model + its tests
                 test_behavior=TestBehavior.BUILD,
                 # ...and multi-parent tests (relationships) get their own task after

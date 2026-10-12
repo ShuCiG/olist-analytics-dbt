@@ -27,3 +27,15 @@ pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "standard"
+
+# airflow/ runs in the Docker image (Airflow + Cosmos aren't in this venv, by
+# design: dependency clash with dbt). Pylance still analyses open files there;
+# its imports can't resolve here. CI job `airflow DAGs parse` covers that code.
+[[tool.pyright.executionEnvironments]]
+root = "airflow"
+reportMissingImports = "none"
+# `task_a >> task_b` sets a dependency; untyped here, it looks like a no-op
+reportUnusedExpression = "none"
+
+[[tool.pyright.executionEnvironments]]
+root = "ingestion"

@@ -17,6 +17,7 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
+| Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: monthly DAG `dlt ingest → dbt` (one task per dbt node), backfills over the dump's history |
 | Code quality | sqlfluff (dbt templater) + pre-commit hooks |
 | CI/CD | GitHub Actions. PR: `sqlfluff lint` → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
 | Environment | uv, Python 3.12 |
@@ -203,10 +204,41 @@ uv run python ingestion/pipeline.py --destination bigquery
 cd transform && uv run dbt build --target prod
 ```
 
+## Orchestration (Airflow + Cosmos)
+
+Local Airflow 3 replays the dump month by month. Each DAG run loads one purchase month with dlt
+(`--until` = the run's data interval), then runs the dbt project as a Cosmos task group: one `dbt build`
+task per model / seed / snapshot (with its own tests), `dbt source freshness` per source, and a separate
+task for each multi-parent test (relationships) after all its parents.
+
+```mermaid
+flowchart LR
+    ingest[dlt_ingest<br/>one month] --> src[8 × source<br/>freshness]
+    ingest --> seed[seed] --> marts
+    src --> stg[8 × stg_*<br/>build] --> int[5 × int_*<br/>build] --> marts[6 × marts<br/>build]
+    src --> snap[snap_sellers<br/>snapshot]
+    stg --> rel[relationships<br/>tests]
+    marts --> rel
+```
+
+Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, writes serialized by a
+1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD). History via backfill:
+
+```bash
+docker compose -f airflow/docker-compose.yml up -d --build      # UI: http://localhost:8080
+docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
+  airflow backfill create --dag-id olist_elt_duckdb \
+  --from-date 2016-09-01 --to-date 2017-01-01 --max-active-runs 1
+```
+
+Details (BigQuery key, params, reset) in [airflow/README.md](airflow/README.md). CI builds the image and checks
+that both DAGs parse.
+
 ## Project structure
 
 ```
 ├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery raw, monthly chunks
+├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── transform/                   # dbt project
 │   ├── models/
 │   │   ├── staging/olist/       # 1:1 with sources: cast, rename
@@ -215,7 +247,7 @@ cd transform && uv run dbt build --target prod
 │   ├── seeds/                   # category translation
 │   ├── snapshots/               # snap_sellers (SCD2, YAML-defined)
 │   ├── tests/                   # singular tests
-│   └── macros/                  # generate_schema_name (dev/prod vs CI isolation)
+│   └── macros/                  # generate_schema_name, drop_isolated_datasets (CI / Airflow cleanup)
 ├── .github/workflows/ci-cd.yml  # CI on PR (DuckDB + slim BigQuery), prod deploy + docs on merge
 └── docs/                        # PROGRESS.md, DECISIONS.md (architecture decision log)
 ```
@@ -224,7 +256,7 @@ cd transform && uv run dbt build --target prod
 
 Feature branch → PR → CI must pass → squash merge → CD.
 
-- **PR:** `sqlfluff lint` + `pyright`, then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
+- **PR:** `sqlfluff lint` + `pyright` + Airflow DAG parse check (built image), then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
   only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
 - **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
@@ -238,5 +270,5 @@ Locally, `uv run pre-commit install` enables the same lint and type check plus h
 - [x] **Phase 2 — Quality:** dbt unit tests, model contracts, custom generic test, sqlfluff + pre-commit
 - [x] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets, CD on merge
 - [x] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
-- [ ] **Phase 5 — Orchestration:** Airflow + Astronomer Cosmos (Docker)
+- [x] **Phase 5 — Orchestration:** Airflow 3 + Astronomer Cosmos (Docker), monthly DAGs, backfills
 - [ ] **Phase 6 — Dashboard:** Streamlit over marts, dbt exposures
