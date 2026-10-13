@@ -1,8 +1,7 @@
 """Query layer: the same SQL runs on DuckDB (local) and BigQuery (prod marts).
 
-Backend comes from env `DASHBOARD_BACKEND` (`duckdb` default, or `bigquery`).
-On Streamlit Community Cloud, top-level secrets are exported as env vars, so the
-deployed app sets it in its secrets.
+Backend comes from `DASHBOARD_BACKEND` (`duckdb` default, or `bigquery`): an
+env var locally, a top-level secret on Streamlit Community Cloud.
 
 SQL in the pages sticks to what both engines accept (`extract`, `date '...'`
 literals, `count(distinct)`, plain joins), like the dbt models do.
@@ -16,8 +15,20 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-BACKEND = os.environ.get("DASHBOARD_BACKEND", "duckdb")
-GCP_PROJECT = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
+
+def _setting(name: str, default: str) -> str:
+    # Streamlit exports secrets to env vars only once st.secrets is first read,
+    # which is after this module is imported: read them directly
+    if name in os.environ:
+        return os.environ[name]
+    try:
+        return str(st.secrets.get(name, default))
+    except FileNotFoundError:  # no secrets.toml (local runs, CI)
+        return default
+
+
+BACKEND = _setting("DASHBOARD_BACKEND", "duckdb")
+GCP_PROJECT = _setting("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 # Same default and env var as transform/profiles.yml, resolved from the repo root
 DUCKDB_PATH = os.environ.get(
     "DBT_DUCKDB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "olist.duckdb")
@@ -69,7 +80,8 @@ def _to_plain_types(df: pd.DataFrame) -> pd.DataFrame:
 def query(sql: str) -> pd.DataFrame:
     """Run a query, cached for an hour (BigQuery bills per scan)."""
     if BACKEND == "bigquery":
-        df = _client().query(sql).to_dataframe()
+        # Results are chart-sized: plain REST, no BigQuery Storage API client
+        df = _client().query(sql).to_dataframe(create_bqstorage_client=False)
     else:
         import duckdb
 
