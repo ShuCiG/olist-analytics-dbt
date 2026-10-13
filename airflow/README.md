@@ -2,7 +2,8 @@
 
 Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
 simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
-when nothing arrived) → `dbt` task group rendered by
+when nothing arrived) → `dbt` task group → `report` (email, see below), where the
+dbt group is rendered by
 [Cosmos](https://github.com/astronomer/astronomer-cosmos) in watcher mode: one
 producer task runs `dbt source freshness` + a single `dbt build` for the whole
 project, and every node (model run / its tests, seed, snapshot, source) is a
@@ -20,7 +21,8 @@ cp airflow/.env.example airflow/.env      # optional: GCP_KEY_FILE for the BigQu
 docker compose -f airflow/docker-compose.yml up -d --build
 ```
 
-UI at http://localhost:8080 (no login: local only). DAGs start paused.
+UI at http://localhost:8080 (no login: local only), alert emails at
+http://localhost:8025 (Mailpit). DAGs start paused.
 
 ## Schedule: a simulated live feed
 
@@ -37,7 +39,7 @@ state, empty months such as 2016-11 are skipped):
 
 Once the dump is used up the runs stay green, dbt is skipped (no rebuild for no
 data, no BigQuery cost) and the order tables' `_loaded_at` stops moving: source
-freshness goes stale, which is what the alerts (PR 7.2) will report.
+freshness goes stale, which the `STALE` email reports (see below).
 
 Catch up faster with a manual run that loads up to a month at once (the `until`
 param always runs dbt):
@@ -49,6 +51,35 @@ docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
 
 Start the feed over: a manual run with `{"full_refresh": true}` drops the raw
 tables + dlt state and loads the first month (add `until` to load more).
+
+## Email alerts
+
+At most one email per run ([dags/olist_alerts.py](dags/olist_alerts.py)):
+
+| When | Subject | Sent by |
+|---|---|---|
+| any task failed | `[olist_elt_duckdb] FAILED: run <run_id>` + link to the run | DAG `on_failure_callback` (once per run, not per task) |
+| new orders loaded (or a manual `until` / `full_refresh` rebuild) | `OK: +800 orders, data up to 2017-01` + summary table | `report` task |
+| no new orders for `olist_stale_after_hours` (default 24, = source `warn_after`) | `STALE: no new orders for 25 h (data up to 2018-10)` | `report` task, then about once a day while stale |
+| nothing new, not stale yet | no email | |
+
+The summary comes from the feed status that `pipeline.py` prints as the ingest's
+last line (orders loaded, orders in raw, latest order, when orders last arrived).
+
+Settings (Admin → Variables in the UI, no restart):
+
+- `olist_alert_emails` — comma-separated recipients (default `data-team@olist.local`)
+- `olist_stale_after_hours` — stale threshold in hours (default 24)
+
+Transport: connection `smtp_default`, from env `AIRFLOW_CONN_SMTP_DEFAULT`. By
+default it points at **Mailpit** (service in docker-compose): it catches every
+email, nothing leaves the machine, inbox at http://localhost:8025. Real email:
+set `SMTP_CONN` in `airflow/.env` (Gmail example with an app password in
+[.env.example](.env.example)) and `up -d` again.
+
+Components share a Fernet key (`AIRFLOW__CORE__FERNET_KEY`): without it each
+container encrypts Variables with its own random key, and a Variable set in one
+reads as missing in the others (recipients silently fell back to the default).
 
 ## Failures and re-runs
 

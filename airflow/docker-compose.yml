@@ -1,7 +1,7 @@
 # Local Airflow 3 for the olist ELT DAGs. Not for production: LocalExecutor,
 # no login (all users admin), fixed local secrets.
 #   docker compose -f airflow/docker-compose.yml up -d --build
-#   UI: http://localhost:8080
+#   UI: http://localhost:8080, alert emails (Mailpit): http://localhost:8025
 # BigQuery DAG: set GCP_KEY_FILE in airflow/.env (see .env.example).
 
 x-airflow-common: &airflow-common
@@ -23,10 +23,19 @@ x-airflow-common: &airflow-common
     # Signs log requests from the UI to the scheduler's log server; unset = each
     # component picks a random key and the UI can't fetch task logs
     AIRFLOW__API__SECRET_KEY: local-dev-only-not-a-secret
+    # Encrypts Variables / Connections in the metadata DB. Unset = each component
+    # generates its own key, and a Variable set from one container reads as missing
+    # in the others ("Can't decrypt _val": alert recipients fell back to the
+    # default). Local-only value; override with FERNET_KEY in airflow/.env.
+    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-9_FbOjNrmDC1NRZOoqnl7B4DQT8bG5qiicB_aodzVO8=}
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
     # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
     # key, and the BigQuery DAG is not created.
     GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
+    # Alert emails (airflow/dags/olist_alerts.py). Default: local Mailpit, catches
+    # everything. Real SMTP: set SMTP_CONN in airflow/.env (see .env.example).
+    # Extras are truthy strings: leave a flag out rather than setting it to false.
+    AIRFLOW_CONN_SMTP_DEFAULT: ${SMTP_CONN:-smtp://mailpit:1025?disable_ssl=true&disable_tls=true&from_email=airflow%40olist.local}
   volumes:
     - ..:/opt/project
     - ${GCP_KEY_FILE:-./gcp-key.placeholder}:/opt/gcp/key.json:ro
@@ -39,6 +48,13 @@ x-airflow-common: &airflow-common
       condition: service_healthy
 
 services:
+  # Local SMTP sink for the alert emails: nothing leaves the machine
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - "8025:8025"
+    restart: always
+
   postgres:
     image: postgres:16
     environment:

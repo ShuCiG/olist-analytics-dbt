@@ -22,7 +22,7 @@ dashboard reads the prod marts.
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
-| Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node) |
+| Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads BigQuery prod marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
 | CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
@@ -269,14 +269,20 @@ DuckDB, ~19 → ~6–9 min on BigQuery**.
 flowchart LR
     ingest[dlt_ingest<br/>next month] --> gate{has_new_orders}
     gate -- yes --> producer[dbt_producer_watcher<br/>freshness + dbt build]
-    gate -. no: skip dbt .-> done((end))
+    gate -. no: skip dbt .-> report
     producer -. node results .-> sensors
+    sensors --> report[report<br/>email: OK / STALE]
     subgraph sensors[sensor tasks, same graph as dbt]
         direction LR
         src[8 × source] --> stg[8 × stg_*<br/>run + test] --> int[5 × int_*<br/>run + test] --> marts[6 × marts<br/>run + test]
         src --> snap[snap_sellers]
     end
 ```
+
+**Alerts:** at most one email per run — `FAILED` (DAG failure callback, link to the run), `OK: +800 orders,
+data up to 2017-01` with a summary, or `STALE: no new orders for 25 h` (about once a day). Recipients and the
+stale threshold are Airflow Variables; SMTP goes to a local Mailpit inbox (http://localhost:8025) unless a
+real server is set in `airflow/.env`.
 
 Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, dlt and the dbt producer
 serialized by a 1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD).
@@ -288,8 +294,9 @@ docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
   airflow dags trigger olist_elt_duckdb --conf '{"until": "2017-06"}'
 ```
 
-Details (BigQuery key, params, reset, re-running a failed month) in [airflow/README.md](airflow/README.md). CI
-builds the image and checks that both DAGs parse in watcher mode with only the writers in the DuckDB pool.
+Details (BigQuery key, params, alerts, reset, re-running a failed month) in [airflow/README.md](airflow/README.md).
+CI builds the image and checks that both DAGs parse in watcher mode with only the writers in the DuckDB pool,
+dbt gated by `has_new_orders` and the alerts wired.
 
 ## Project structure
 
@@ -331,4 +338,4 @@ Locally, `uv run pre-commit install` enables the same lint and type check plus h
 - [x] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [x] **Phase 5 — Orchestration:** Airflow 3 + Astronomer Cosmos (Docker), DAG factory for both warehouses, watcher mode
 - [x] **Phase 6 — Dashboard:** Streamlit over the marts (DuckDB / BigQuery), dbt exposure, public deploy
-- [ ] **Phase 7 — Live feed:** hourly replay of the dump in Airflow (done), email alerts, dashboard on the Airflow-fed marts
+- [ ] **Phase 7 — Live feed:** hourly replay of the dump in Airflow, email alerts (done), dashboard on the Airflow-fed marts
