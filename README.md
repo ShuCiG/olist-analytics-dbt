@@ -2,13 +2,18 @@
 
 [![CI/CD](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml)
 [![dbt docs](https://img.shields.io/badge/dbt_docs-lineage-FF694B?logo=dbt&logoColor=white)](https://shucig.github.io/olist-analytics-dbt/)
+[![Dashboard](https://img.shields.io/badge/dashboard-live-FF4B4B?logo=streamlit&logoColor=white)](https://olist-analytics-dbt.streamlit.app/)
 
 An end-to-end ELT project on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables). Raw data is loaded with **dlt** into **DuckDB** (local dev) and
 **BigQuery** (prod) and modeled with **dbt Core** into a tested star schema. Every pull request is built in CI on
-DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishes the dbt docs.
+DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishes the dbt docs; a Streamlit
+dashboard reads the prod marts.
 
-**📖 Live dbt docs with lineage graph:** https://shucig.github.io/olist-analytics-dbt/
+**📖 Live dbt docs with lineage graph:** https://shucig.github.io/olist-analytics-dbt/<br>
+**📊 Live dashboard (BigQuery prod):** https://olist-analytics-dbt.streamlit.app/
+
+[![Dashboard: delivery & reviews](docs/images/dashboard-delivery.png)](https://olist-analytics-dbt.streamlit.app/)
 
 ## Stack
 
@@ -18,6 +23,7 @@ DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishe
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: monthly DAG `dlt ingest → dbt` (watcher mode: one `dbt build` per run, one Airflow task per dbt node), backfills over the dump's history |
+| Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads BigQuery prod marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
 | CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
 | Environment | uv, Python 3.12 |
@@ -37,6 +43,7 @@ flowchart LR
         marts[marts<br/>star schema tables]
     end
     marts --> docs[dbt docs<br/>GitHub Pages]
+    marts --> dash[Streamlit dashboard<br/>dbt exposure]
 ```
 
 ## Lineage
@@ -217,7 +224,11 @@ cd transform && uv run dbt build --target prod
 `dashboard/` is a Streamlit app over the marts, declared in dbt as the exposure
 `olist_dashboard` (visible in the docs lineage graph; `dbt ls --select +exposure:olist_dashboard`
 lists the models it depends on). Three pages: sales overview, delivery & reviews, customers & sellers;
-a sidebar date filter applies to every query.
+a sidebar date filter applies to every query. Live: https://olist-analytics-dbt.streamlit.app/
+
+| Sales overview | Customers & sellers |
+|---|---|
+| ![Sales overview](docs/images/dashboard-overview.png) | ![Customers & sellers](docs/images/dashboard-customers.png) |
 
 ```bash
 uv run streamlit run dashboard/app.py                                   # DuckDB: data/olist.duckdb
@@ -315,4 +326,4 @@ Locally, `uv run pre-commit install` enables the same lint and type check plus h
 - [x] **Phase 3 — BigQuery:** prod/CI targets, slim CI (`state:modified+ --defer`) in ephemeral datasets, CD on merge
 - [x] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [x] **Phase 5 — Orchestration:** Airflow 3 + Astronomer Cosmos (Docker), monthly DAGs, backfills
-- [ ] **Phase 6 — Dashboard:** Streamlit over marts, dbt exposures
+- [x] **Phase 6 — Dashboard:** Streamlit over the marts (DuckDB / BigQuery), dbt exposure, public deploy

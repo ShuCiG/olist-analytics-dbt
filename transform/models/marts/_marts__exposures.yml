@@ -7,6 +7,7 @@ exposures:
     label: Olist analytics dashboard
     type: dashboard
     maturity: medium
+    url: https://olist-analytics-dbt.streamlit.app/
     description: >
       Streamlit app (`dashboard/`) with three pages: sales overview (orders,
       revenue, top categories, payment mix), delivery & reviews (late rate,
