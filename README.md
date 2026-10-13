@@ -284,7 +284,9 @@ summary naming each failed node), `OK: +800 orders, data up to 2017-01, 3 dbt wa
 the warn-level tests), or `STALE: no new orders for 25 h` (about once a day). Recipients and the stale threshold
 are Airflow Variables; SMTP goes to a local Mailpit inbox (http://localhost:8025) unless a real server is set in
 `airflow/.env`. Failed GitHub Actions runs (PR checks, prod deploy) are emailed too: job `notify-failure` sends
-the failed jobs, step and log excerpt to repo variable `ALERT_EMAILS`.
+the failed jobs, step and log excerpt to repo variable `ALERT_EMAILS`. Emails are styled HTML, and data-test
+findings read in business words ("278 customers — zip code missing from the geolocation reference, so maps leave
+them out ..."), taken from each warn test's `description` in the dbt yml.
 
 Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, dlt and the dbt producer
 serialized by a 1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD).

@@ -65,6 +65,13 @@ At most one email per run ([dags/olist_alerts.py](dags/olist_alerts.py)):
 
 The summary comes from the feed status that `pipeline.py` prints as the ingest's
 last line (orders loaded, orders in raw, latest order, when orders last arrived).
+Emails are styled HTML (status-colored header, details table, buttons;
+[alerting/email_html.py](../alerting/email_html.py), shared with the CI emails).
+Data-test findings are explained in business words: each warn test has a
+`description` (what is wrong, impact, what to do) and `meta.alert_unit` in its yml,
+and the email shows e.g. "278 customers — Customers whose zip code is missing from
+the geolocation reference ..." ([alerting/dbt_summary.py](../alerting/dbt_summary.py),
+descriptions from `target_airflow/manifest.json`: re-run `airflow-init` after editing them).
 
 Settings (Admin → Variables in the UI, no restart; `airflow-init` creates them with
 the defaults when missing and never overwrites them):

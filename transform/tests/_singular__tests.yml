@@ -1,0 +1,21 @@
+version: 2
+
+# Properties of the singular tests in this folder. Descriptions are written for
+# business readers: the alert emails quote them next to the failing row count.
+data_tests:
+  - name: assert_payments_match_order_amount
+    description: >-
+      Orders where the amount paid differs from items + freight by more than R$ 1.
+      Revenue from payments and revenue from order lines don't reconcile for them.
+      Mostly installment interest and vouchers (about 250 orders in the full data);
+      a jump means missing payments or wrong prices.
+    config:
+      meta: {alert_unit: orders}
+
+  - name: assert_order_items_sum_to_order_amount
+    description: >-
+      Orders whose line items don't add up to the order total in fct_orders. This
+      breaks the model itself (the two facts must reconcile exactly), so it fails the
+      build; check the latest change to fct_orders / fct_order_items.
+    config:
+      meta: {alert_unit: orders}

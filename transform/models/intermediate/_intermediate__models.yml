@@ -37,10 +37,16 @@ models:
         description: Days from purchase to delivery; null if not delivered.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
+              description: >-
+                Orders delivered before they were placed (negative delivery time). Average
+                delivery time and the late-delivery rate get distorted. Not seen in the
+                data so far; if it appears, the source's order or delivery timestamps are
+                wrong.
               arguments:
                 min_value: 0
               config:
                 severity: warn
+                meta: {alert_unit: orders}
 
   - name: int_order_reviews_deduplicated
     description: Latest review per order.

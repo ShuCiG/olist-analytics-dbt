@@ -108,11 +108,17 @@ models:
         description: Number of installments; 2 source rows have 0.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
+              description: >-
+                Payments recorded with an installment count outside 1-24 (the source has
+                0). Installment metrics (average installments, share of one-off payments)
+                are slightly off. Known entry error in 2 payments; a growing number points
+                to a checkout or payment-integration bug.
               arguments:
                 min_value: 1
                 max_value: 24
               config:
                 severity: warn
+                meta: {alert_unit: payments}
       - name: payment_value
         description: Amount of this payment, BRL.
         data_tests:
@@ -159,11 +165,17 @@ models:
         data_tests:
           - not_null
           - relationships:
+              description: >-
+                Customers whose zip code is missing from the geolocation reference. They
+                get no coordinates, so maps and region-level reports leave them out.
+                Known gap in the Olist source (278 customers); if it grows, the
+                geolocation reference is outdated.
               arguments:
                 to: ref('stg_olist__geolocation')
                 field: zip_code_prefix
               config:
                 severity: warn
+                meta: {alert_unit: customers}
 
   - name: stg_olist__products
     description: Products; category name in Portuguese (translated in dim_products).
