@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 6 — Dashboard ✅ (on PR 6.3 merge)
-**Next step:** all planned phases done. Pick from the backlog or a new idea with the user. Ask before starting.
+**Current phase:** 7 — Live feed + alerts (D28)
+**Next step:** PR 7.2 alerts (Mailpit + optional real SMTP, recipients in an Airflow Variable; failure / success summary / stale data). Ask before starting.
 
 ## Phases
 
@@ -52,6 +52,12 @@ Streamlit over marts, dbt exposures, README screenshots.
 - [x] PR 6.2: deploy prep (D27): SA `dashboard-reader` (Job User + Data Viewer on `marts`), `dashboard/requirements.txt`, settings from `st.secrets`; app live at https://olist-analytics-dbt.streamlit.app/ (deploys from `main` on push)
 - [x] PR 6.3: exposure `url`, README screenshots + live link
 
+### Phase 7 — Live feed + alerts
+User question: new data must flow on a schedule, up to the dashboard, with email reports (D28).
+- [x] PR 7.1: hourly replay — `pipeline.py --next` (next month that has orders), DAGs `@hourly` without `end_date`, `has_new_orders` short-circuit skips dbt once the dump is used up; CI parse check asserts the gate
+- [ ] PR 7.2: email alerts — Mailpit in Compose + optional real SMTP (`airflow/.env`), recipients in Variable `olist_alert_emails`; failure / success summary / stale data
+- [ ] PR 7.3: dashboard on `airflow_marts` (setting `MARTS_DATASET`, "data as of" caption); user grants `dashboard-reader` Data Viewer on `airflow_marts`
+
 ## Backlog (ideas, not scheduled)
 - **Airflow, further speed-up** (after watcher, D25): one dbt invocation in the producer (freshness is a second dbt start + parse, ~40–60 s); seed a per-target partial parse so the first run of a container doesn't reparse (Cosmos picks the host's `target/partial_parse.msgpack` otherwise); dbt's opt-in Rust parser (check BigQuery/package compatibility first).
 - **Airflow, prod-like image:** bake the project into the image instead of the bind mount (loses live edit).
@@ -83,3 +89,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-13 — Cleanup PR merged. Phase 6 started (user: both backends + public deploy, 3 pages). PR 6.1: Streamlit app + exposure; KPIs identical on DuckDB and BigQuery prod (99,092 orders / R$ 15.68M / 6.8 % late / 3.1 % repeat for 2017-01..2018-08); screenshots checked light + dark. Found by looking: Vega hid every other bar label, edge months (2016, Sep–Oct 2018) faked spikes → full-month default period.
 - 2026-10-13 — PR #20 merged (deploy green). PR 6.2: user created SA `dashboard-reader` (key `~/.gcp/dashboard-reader.json`); verified via AppTest secrets: all pages on BigQuery with the key from `st.secrets`, no ADC; marts readable, `raw` / writes Forbidden. Found: settings read at import missed secrets-as-env (Streamlit exports them lazily) → read `st.secrets` directly. Slim requirements checked in a clean venv.
 - 2026-10-13 — PR #21 merged. User authorized Streamlit Community Cloud on GitHub (reviewed its OAuth scopes: `public_repo` includes write; accepted, main is protected, revocable) and created the app from `main` (Python 3.12, secrets from the reader key; temp TOML deleted). Live app checked in a browser: 3 pages on BigQuery prod, KPIs = local. PR 6.3: README live link + badge + screenshots (`docs/images/`, taken on BigQuery), exposure `url`, dashboard in stack + architecture diagram. Phase 6 done on merge.
+- 2026-10-13 — PR #22 merged → Phase 6 done. Phase 7 planned with the user (D28: replay hourly, dashboard on `airflow_marts`, Mailpit + real SMTP). PR 7.1: `--next` + hourly DAGs. Found: the old `@monthly` DAG with `end_date` 2018-10 never ran by itself. Empty month 2016-11 would freeze a "next calendar month" cursor → next month *with orders*. Verified: the first scheduled run fired by itself on unpause (DuckDB: 2016-12, 1 order; BigQuery from empty: 2016-09, 4); manual `--next` 2016-10 (324); `until=2018-10` catch-up; exhausted run → `orders_loaded=0`, 52 dbt tasks skipped (42 s DuckDB / 77 s BigQuery). Both warehouses = prod: 99,441 orders / 112,650 items (3 incremental loads) / 96,096 customers. CI check mutation-tested. BigQuery DAG left unpaused (hourly runs now only reload reference tables, dbt skipped).

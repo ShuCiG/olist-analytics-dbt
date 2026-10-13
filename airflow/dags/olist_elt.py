@@ -1,4 +1,4 @@
-"""Olist ELT: dlt ingest of one purchase month, then the dbt project via Cosmos.
+"""Olist ELT: dlt ingest of the next purchase month, then the dbt project via Cosmos.
 
 One DAG per warehouse, built by the same factory:
 - `olist_elt_duckdb`   — file data/airflow.duckdb (apart from the dev file)
@@ -7,16 +7,18 @@ One DAG per warehouse, built by the same factory:
 
 Why two DAGs and not a `target` param: Cosmos renders the dbt graph with a fixed
 profile at parse time, and dlt keeps a separate load cursor per destination, so
-each warehouse needs its own run history (and backfills).
+each warehouse needs its own run history.
 
 dbt runs in Cosmos' watcher mode: one producer task runs a single `dbt build` for
 the whole project (one parse, dbt's own threads), and every node is a sensor task
 that mirrors its status from the producer's log. See the speed notes in
 airflow/README.md.
 
-Schedule: monthly over the dump's purchase months. A run for the interval starting
-2017-03-01 loads orders up to 2017-03 (`pipeline.py --until 2017-03`). History is
-replayed with a backfill, see airflow/README.md.
+Schedule: a simulated live feed (D28). Olist is a static 2016-2018 dump, so every
+hourly run loads the next purchase month that has orders (`pipeline.py --next`,
+cursor in dlt state): the whole history arrives in ~a day, then runs find nothing
+new and skip dbt. A manual run with the `until` param loads up to that month and
+always runs dbt (catch-up, recovery). See airflow/README.md.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from pathlib import Path
 
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.python import ShortCircuitOperator
 from airflow.sdk import DAG, Param
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import (
@@ -47,13 +50,8 @@ DBT_EXECUTABLE = VENV_BIN / "dbt"
 DBT_MANIFEST = DBT_PROJECT_DIR / "target_airflow" / "manifest.json"
 GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
 
-# `--until <month>`: the `until` param if given, else the run's data interval.
-# Neither (manual run without a logical date): no flag, load everything.
-UNTIL_FLAG = (
-    "{% set until = params.until or (data_interval_start.strftime('%Y-%m')"
-    " if data_interval_start else none) %}"
-    "{{ '--until ' ~ until if until else '' }}"
-)
+# Which orders to load: up to the `until` param if given, else the next month
+CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
 
 
 @dataclass(frozen=True)
@@ -72,6 +70,18 @@ def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
     order tables honestly stale, and their models must still run.
     """
     return []
+
+
+def has_new_orders(ti, params) -> bool:
+    """Skip dbt when the feed brought nothing (dump used up): no rebuild for no data.
+
+    Reads the ingest task's last stdout line (`orders_loaded=<n>`, its XCom). Manual
+    runs with `until` or `full_refresh` always build: re-running a month whose dbt
+    failed loads 0 new orders but still has to rebuild.
+    """
+    if params["until"] or params["full_refresh"]:
+        return True
+    return ti.xcom_pull(task_ids="dlt_ingest") != "orders_loaded=0"
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
@@ -101,14 +111,13 @@ if GCP_KEY.is_file() and GCP_KEY.stat().st_size > 0:
 def build_dag(wh: Warehouse) -> DAG:
     with DAG(
         dag_id=f"olist_elt_{wh.name}",
-        description=f"dlt monthly chunk → dbt build on {wh.name}",
-        # Purchase months in the dump: 2016-09 .. 2018-10
-        schedule="@monthly",
-        start_date=pendulum.datetime(2016, 9, 1, tz="UTC"),
-        end_date=pendulum.datetime(2018, 10, 1, tz="UTC"),
-        catchup=False,  # history is loaded on purpose, with a backfill
-        # dlt's cursor moves forward month by month: runs must not overlap.
-        # Backfills don't inherit this: pass `--max-active-runs 1` (airflow/README.md)
+        description=f"dlt next month → dbt build on {wh.name}",
+        # Simulated feed: one dump month per run (D28). A run takes ~6-9 min.
+        schedule="@hourly",
+        start_date=pendulum.datetime(2026, 10, 13, tz="UTC"),
+        # Missed hours are not replayed: each run takes "the next month" anyway
+        catchup=False,
+        # dlt's cursor moves forward month by month: runs must not overlap
         max_active_runs=1,
         # No retries: a watcher producer never reruns (attempt > 1 is skipped), and
         # retried node tasks run their own dbt command instead, outside the DuckDB
@@ -119,7 +128,7 @@ def build_dag(wh: Warehouse) -> DAG:
                 None,
                 type=["null", "string"],
                 pattern=r"^\d{4}-\d{2}$",
-                description="Load orders up to this month (YYYY-MM) instead of the run's month",
+                description="Load orders up to this month (YYYY-MM) instead of the next one",
             ),
             "full_refresh": Param(
                 False,
@@ -133,7 +142,7 @@ def build_dag(wh: Warehouse) -> DAG:
             task_id="dlt_ingest",
             bash_command=(
                 f"{VENV_BIN / 'python'} ingestion/pipeline.py {' '.join(wh.dlt_args)}"
-                f" {UNTIL_FLAG}"
+                f" {CHUNK_FLAG}"
                 " {{ '--full-refresh' if params.full_refresh else '' }}"
             ),
             cwd=str(PROJECT_DIR),
@@ -196,7 +205,12 @@ def build_dag(wh: Warehouse) -> DAG:
             operator_args={"full_refresh": "{{ params.full_refresh }}"},
         )
 
-        ingest >> dbt
+        new_orders = ShortCircuitOperator(
+            task_id="has_new_orders",
+            python_callable=has_new_orders,
+        )
+
+        ingest >> new_orders >> dbt
     return dag
 
 

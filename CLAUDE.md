@@ -16,7 +16,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 
 ## Layout
 - `ingestion/` — dlt pipeline: Olist CSV → DuckDB schema / BigQuery dataset `raw`, monthly chunks
-- `airflow/` — Airflow 3 + Cosmos (Docker Compose), DAGs `olist_elt_duckdb` / `olist_elt_bigquery`
+- `airflow/` — Airflow 3 + Cosmos (Docker Compose), DAGs `olist_elt_duckdb` / `olist_elt_bigquery`, hourly replay of the dump (`--next` month per run)
 - `transform/` — dbt project (staging → intermediate → marts)
 - `dashboard/` — Streamlit app over marts (`DASHBOARD_BACKEND` = duckdb | bigquery), dbt exposure `olist_dashboard`
 - `data/` — raw CSV + `olist.duckdb` (gitignored)

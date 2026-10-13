@@ -10,7 +10,9 @@ The category translation file is a dbt seed, not loaded here.
 Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dump):
 - Order tables (orders + their items, payments, reviews) load by purchase month,
   `merge` on primary keys. The last loaded month is kept in dlt state, so each run
-  loads only months after it, up to `--until YYYY-MM` (default: everything).
+  loads only months after it, up to `--until YYYY-MM` (default: everything), or
+  just the next month that has orders (`--next`: the scheduled Airflow "feed";
+  once the dump is used up it loads no orders).
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
@@ -19,11 +21,13 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
 Examples:
     python ingestion/pipeline.py --until 2017-06   # first chunk: up to June 2017
     python ingestion/pipeline.py --until 2017-07   # loads July 2017 only
+    python ingestion/pipeline.py --next            # loads August 2017 only
     python ingestion/pipeline.py                   # loads the rest
     python ingestion/pipeline.py --full-refresh    # drop tables + state, reload
 
 Airflow (airflow/dags/olist_elt.py) passes `--duckdb-path` / `--dataset` to keep its
-runs apart from local dev and prod.
+runs apart from local dev and prod. The last output line, `orders_loaded=<n>`, tells
+it whether there is anything new for dbt.
 """
 
 import argparse
@@ -108,7 +112,7 @@ def month_key(value: str) -> str:
 
 
 @dlt.source(name="olist")
-def olist_source(source_dir: Path, until: str | None = None):
+def olist_source(source_dir: Path, until: str | None = None, next_only: bool = False):
     loaded_at = datetime.now(UTC)
 
     for table_name, file_name in REFERENCE_TABLES.items():
@@ -129,13 +133,19 @@ def olist_source(source_dir: Path, until: str | None = None):
         in_chunk = pc.is_valid(purchased_at)
         if loaded_until:
             in_chunk &= purchased_at >= next_month(loaded_until)
-        if until:
-            in_chunk &= purchased_at < next_month(until)
         orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0]).filter(in_chunk)
+        # `--next`: the first month after the cursor that has orders. Not simply the
+        # next calendar month: the dump has empty months (2016-11), which would
+        # never move the cursor.
+        chunk_until = until
+        if next_only and orders.num_rows:
+            chunk_until = pc.min(orders["order_purchase_timestamp"]).as_py()[:7]
+        if chunk_until:
+            orders = orders.filter(purchased_at < next_month(chunk_until))
         if orders.num_rows:
             state[STATE_KEY] = pc.max(orders["order_purchase_timestamp"]).as_py()[:7]
         print(
-            f"Order chunk ({loaded_until or 'start'}, {until or 'end'}]: "
+            f"Order chunk ({loaded_until or 'start'}, {chunk_until or 'end'}]: "
             f"{orders.num_rows} orders, state now {state.get(STATE_KEY)}"
         )
         return orders["order_id"]
@@ -169,8 +179,12 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--destination", choices=["duckdb", "bigquery"], default="duckdb")
-    parser.add_argument(
+    chunk = parser.add_mutually_exclusive_group()
+    chunk.add_argument(
         "--until", type=month_key, help="load order months up to this one, YYYY-MM (default: all)"
+    )
+    chunk.add_argument(
+        "--next", action="store_true", help="load only the next month that has orders"
     )
     parser.add_argument(
         "--dataset", default="raw", help="target schema (DuckDB) / dataset (BigQuery)"
@@ -192,12 +206,17 @@ def main() -> None:
         destination=make_destination(args.destination, args.duckdb_path),
         dataset_name=args.dataset,
     )
-    source = olist_source(source_dir, until=args.until)
+    source = olist_source(source_dir, until=args.until, next_only=args.next)
     if args.full_refresh:
         load_info = pipeline.run(source, refresh="drop_sources")
     else:
         load_info = pipeline.run(source)
     print(load_info)
+    # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
+    trace = pipeline.last_trace
+    normalize_info = trace.last_normalize_info if trace else None
+    assert normalize_info is not None, "pipeline.run() finished without a normalize step"
+    print(f"orders_loaded={normalize_info.row_counts.get('orders', 0)}")
 
 
 if __name__ == "__main__":

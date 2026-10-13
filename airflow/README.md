@@ -1,7 +1,8 @@
 # Airflow + Cosmos
 
-Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT month by month:
-`dlt_ingest` (one purchase month) → `dbt` task group rendered by
+Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
+simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
+when nothing arrived) → `dbt` task group rendered by
 [Cosmos](https://github.com/astronomer/astronomer-cosmos) in watcher mode: one
 producer task runs `dbt source freshness` + a single `dbt build` for the whole
 project, and every node (model run / its tests, seed, snapshot, source) is a
@@ -21,29 +22,44 @@ docker compose -f airflow/docker-compose.yml up -d --build
 
 UI at http://localhost:8080 (no login: local only). DAGs start paused.
 
-## Backfill the history
+## Schedule: a simulated live feed
 
-The DAGs are `@monthly` from 2016-09 to 2018-10 with `catchup=False`: history is
-replayed on purpose, with a backfill. Each run loads its own month (dlt keeps
-the cursor), so runs must go one at a time:
+Olist is a static 2016-2018 dump, so "new data" is replayed (D28). The DAGs run
+`@hourly` (`catchup=False`, `max_active_runs=1`) and every run loads **the next
+purchase month that has orders** (`pipeline.py --next`; the cursor is in dlt
+state, empty months such as 2016-11 are skipped):
+
+| Run | Loads | dbt |
+|---|---|---|
+| 1st after unpausing an empty warehouse | 2016-09 (4 orders) | builds |
+| next ones | 2016-10, 2016-12, 2017-01, ... one month each | builds |
+| after 2018-10 (~25 runs, about a day) | nothing, `orders_loaded=0` | skipped by `has_new_orders` |
+
+Once the dump is used up the runs stay green, dbt is skipped (no rebuild for no
+data, no BigQuery cost) and the order tables' `_loaded_at` stops moving: source
+freshness goes stale, which is what the alerts (PR 7.2) will report.
+
+Catch up faster with a manual run that loads up to a month at once (the `until`
+param always runs dbt):
 
 ```bash
 docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
-  airflow backfill create --dag-id olist_elt_duckdb \
-  --from-date 2016-09-01 --to-date 2017-01-01 --max-active-runs 1
+  airflow dags trigger olist_elt_duckdb --conf '{"until": "2017-06"}'
 ```
 
-`--max-active-runs 1` is required: an Airflow 3 backfill has its own limit
-(default 10) and ignores the DAG's `max_active_runs=1`. Parallel months race on
-the dlt cursor and the Kaggle download cache.
+Start the feed over: a manual run with `{"full_refresh": true}` drops the raw
+tables + dlt state and loads the first month (add `until` to load more).
 
 ## Failures and re-runs
 
-Re-run a failed month with a **new** run, not with Clear (or a backfill with
-`--reprocess-behavior`, which reuses the run id):
+Mid-feed, a failed dbt step heals itself: the next hourly run loads the next month
+and builds everything, including the failed month's rows (the incremental model's
+`_loaded_at` cursor is still behind them). After the last month there is no run
+with new data, so re-run with a **new** manual run with `until`, not with Clear:
 
 ```bash
-docker compose -f airflow/docker-compose.yml exec airflow-scheduler \n  airflow dags trigger olist_elt_duckdb --conf '{"until": "2016-10"}'
+docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
+  airflow dags trigger olist_elt_duckdb --conf '{"until": "2018-10"}'
 ```
 
 Why: a Cosmos watcher producer never runs twice — on attempt 2+ it skips itself,
@@ -69,8 +85,10 @@ clear it: `docker compose -f airflow/docker-compose.yml exec airflow-scheduler r
 
 ## Params
 
-Params on a manual run: `until` (`YYYY-MM`, load up to that month at once) and
-`full_refresh` (drop raw tables + dlt state, rebuild incremental models).
+Params on a manual run: `until` (`YYYY-MM`, load up to that month at once instead
+of the next one; dbt always runs) and `full_refresh` (drop raw tables + dlt state,
+rebuild incremental models). A manual run without params behaves like a scheduled
+one.
 
 ## Design notes
 
