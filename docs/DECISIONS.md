@@ -174,3 +174,10 @@ Supersedes the CI part of D4 until BigQuery (phase 3).
 - dbt exposure `olist_dashboard` (type dashboard) on the 5 marts it reads → shown in docs lineage, selectable as `+exposure:olist_dashboard`.
 - Streamlit + Altair in uv group `dashboard`, installed by default (`default-groups`), so CI type-checks (pyright) and smoke-tests it: `AppTest` renders every page after `dbt build` on DuckDB.
 - Charts: Altair with a fixed two-color, CVD-checked palette (separate light/dark steps), tooltips on every mark, no dual axes (orders and revenue are two charts).
+
+## D27 · 2026-10-13 · Dashboard deploy: Streamlit Community Cloud, read-only service account
+- Free hosting that deploys from the GitHub repo (`main`, entrypoint `dashboard/app.py`). Rejected: Cloud Run (container, more setup, billing), a static export (loses the date filter).
+- Own service account `dashboard-reader`, not the `dbt-runner` key: *BigQuery Job User* on the project (run queries) + *BigQuery Data Viewer* on dataset `marts` only. Dataset-level, not table-level: `dbt build --target prod` re-creates the tables, which would drop table-level grants. Verified: reads marts; `raw` and writes to `marts` → Forbidden.
+- Key in the app's secrets as `[gcp_service_account]`; `DASHBOARD_BACKEND` as a top-level secret. Settings are read from env first, then `st.secrets` directly: Streamlit exports secrets to env only after `st.secrets` is first touched, i.e. after `warehouse.py` reads its settings at import.
+- `dashboard/requirements.txt` (pinned to uv.lock versions): Community Cloud looks next to the entrypoint first, so it installs Streamlit + BigQuery client only, not dbt / dlt / DuckDB. Checked in a clean venv against BigQuery.
+- Cost: chart-sized queries, 1 h cache, REST results (no Storage API client); the $1 budget alert stays the backstop.

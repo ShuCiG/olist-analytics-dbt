@@ -228,6 +228,20 @@ uv run pytest dashboard                                                 # every 
 The pages send plain SQL that both engines accept, so DuckDB and BigQuery give the same numbers
 (checked KPI by KPI). Results are cached for an hour, so BigQuery scans stay small.
 
+Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim
+`dashboard/requirements.txt`, not the dbt/dlt project). It reads prod as service account `dashboard-reader`:
+*BigQuery Job User* on the project + *BigQuery Data Viewer* on dataset `marts` only, so it cannot see `raw`
+or write anywhere. App secrets:
+
+```toml
+DASHBOARD_BACKEND = "bigquery"
+
+[gcp_service_account]   # fields of the service account's JSON key
+type = "service_account"
+project_id = "..."
+# ...
+```
+
 ## Orchestration (Airflow + Cosmos)
 
 Local Airflow 3 replays the dump month by month. Each DAG run loads one purchase month with dlt
