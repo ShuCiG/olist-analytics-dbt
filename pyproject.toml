@@ -12,17 +12,26 @@ dependencies = [
 ]
 
 [dependency-groups]
+dashboard = [
+    "altair>=6.3.0",
+    "streamlit>=1.65.0",
+]
 dev = [
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
     "pyright>=1.1.414",
+    "pytest>=9.1.1",
     "sqlfluff>=4.4.0",
     "sqlfluff-templater-dbt>=4.4.0",
 ]
 
+# `uv sync` installs the dashboard too (CI type-checks and smoke-tests it)
+[tool.uv]
+default-groups = ["dev", "dashboard"]
+
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion"]
+include = ["ingestion", "dashboard"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
@@ -39,3 +48,7 @@ reportUnusedExpression = "none"
 
 [[tool.pyright.executionEnvironments]]
 root = "ingestion"
+
+# Streamlit puts the entrypoint's folder on sys.path (`import warehouse`)
+[[tool.pyright.executionEnvironments]]
+root = "dashboard"

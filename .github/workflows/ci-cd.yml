@@ -135,6 +135,10 @@ jobs:
         working-directory: transform
         run: uv run dbt build
 
+      # Every dashboard page renders on the marts just built (headless AppTest)
+      - name: Dashboard smoke test
+        run: uv run pytest dashboard -q
+
   # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
   # Builds only modified models + children; unmodified parents are read from prod
   # (--defer to the manifest of the last successful deploy). Full build if none.

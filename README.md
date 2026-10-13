@@ -212,6 +212,22 @@ uv run python ingestion/pipeline.py --destination bigquery
 cd transform && uv run dbt build --target prod
 ```
 
+## Dashboard (Streamlit)
+
+`dashboard/` is a Streamlit app over the marts, declared in dbt as the exposure
+`olist_dashboard` (visible in the docs lineage graph; `dbt ls --select +exposure:olist_dashboard`
+lists the models it depends on). Three pages: sales overview, delivery & reviews, customers & sellers;
+a sidebar date filter applies to every query.
+
+```bash
+uv run streamlit run dashboard/app.py                                   # DuckDB: data/olist.duckdb
+DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
+uv run pytest dashboard                                                 # every page renders (also in CI)
+```
+
+The pages send plain SQL that both engines accept, so DuckDB and BigQuery give the same numbers
+(checked KPI by KPI). Results are cached for an hour, so BigQuery scans stay small.
+
 ## Orchestration (Airflow + Cosmos)
 
 Local Airflow 3 replays the dump month by month. Each DAG run loads one purchase month with dlt
@@ -251,6 +267,7 @@ builds the image and checks that both DAGs parse in watcher mode with only the w
 ```
 ├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery raw, monthly chunks
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
+├── dashboard/                   # Streamlit app over the marts (DuckDB / BigQuery), AppTest smoke test
 ├── transform/                   # dbt project
 │   ├── models/
 │   │   ├── staging/olist/       # 1:1 with sources: cast, rename

@@ -1,7 +1,7 @@
 # Progress
 
-**Current phase:** 5 — Airflow + Cosmos ✅; backlog item: Airflow speed-up (PR 5.3)
-**Next step:** after PR 5.3 merges — Phase 6 (Dashboard). Ask before starting.
+**Current phase:** 6 — Dashboard (PR 6.1 open)
+**Next step:** after PR 6.1 merges — PR 6.2: deploy to Streamlit Community Cloud (read-only SA, secrets; guide user step by step), then PR 6.3: README screenshots + live link.
 
 ## Phases
 
@@ -48,6 +48,9 @@ Docker Compose, DAG: dlt ingest → dbt build (Cosmos task group), backfill.
 
 ### Phase 6 — Dashboard
 Streamlit over marts, dbt exposures, README screenshots.
+- [ ] PR 6.1: Streamlit app `dashboard/` (3 pages, DuckDB/BigQuery backends, D26), exposure `olist_dashboard`, pyright + AppTest smoke test in CI
+- [ ] PR 6.2: deploy on Streamlit Community Cloud over BigQuery prod (read-only SA `dashboard-reader`, secrets), exposure `url`
+- [ ] PR 6.3: README screenshots + live link
 
 ## Backlog (ideas, not scheduled)
 - **Airflow, further speed-up** (after watcher, D25): one dbt invocation in the producer (freshness is a second dbt start + parse, ~40–60 s); seed a per-target partial parse so the first run of a container doesn't reparse (Cosmos picks the host's `target/partial_parse.msgpack` otherwise); dbt's opt-in Rust parser (check BigQuery/package compatibility first).
@@ -77,3 +80,4 @@ Streamlit over marts, dbt exposures, README screenshots.
 - 2026-10-12 — PR #16 merged (Phase 5 done). PR `fix/ci-warnings`: prod deploy log cleaned up (D24), only 6 expected test WARNs + BigQuery numeric notice remain. Airflow analysis: tasks start from the host's (Windows) `partial_parse.msgpack` → dbt errors and fully reparses (~60 s); plan = WATCHER mode (one `dbt build` per run), DuckDB pool on the producer only.
 - 2026-10-12 — PR #17 merged; deploy log clean (only 6 expected test WARNs + 3 numeric notices). PR 5.3 watcher mode: baseline on current code DuckDB 29.1 / 28.0 min (2016-09/10); watcher 5.6 / 5.7; BigQuery 8.9 / 6.1 (was 18.9). Found by running: no BUILD behavior in watcher, detached tests get no status, default freshness callback would skip models, producer skips on attempt 2+ → sensors fall back outside the DuckDB pool (lock errors) → retries=0 + re-run = new DAG run. Docker Desktop updated mid-session (29.8.2). Backups `*.bak-*` of airflow.duckdb / dlt state left in data/ and the dlt-pipelines volume for the user to delete.
 - 2026-10-12 — PR #18 merged (watcher). PR `chore/project-cleanup`: project-wide review — all model/seed/snapshot columns documented (was ~25 undocumented in staging/intermediate/seed), README (CI/CD row, money types per engine, snapshot in diagrams, structure), CLAUDE.md layout/CI/commands, overview doc block, airflow README re-run command, workflow whitespace, unused `analyses` path, backlog tidied. Verified: pre-commit all files, `dbt build` PASS 122 WARN 6, Airflow `full_refresh` param in watcher mode (dlt reload 328 orders, `dbt build --full-refresh`, 53/53, 6.1 min).
+- 2026-10-13 — Cleanup PR merged. Phase 6 started (user: both backends + public deploy, 3 pages). PR 6.1: Streamlit app + exposure; KPIs identical on DuckDB and BigQuery prod (99,092 orders / R$ 15.68M / 6.8 % late / 3.1 % repeat for 2017-01..2018-08); screenshots checked light + dark. Found by looking: Vega hid every other bar label, edge months (2016, Sep–Oct 2018) faked spikes → full-month default period.

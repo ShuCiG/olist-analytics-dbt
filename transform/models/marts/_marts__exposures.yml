@@ -1,0 +1,24 @@
+version: 2
+
+# Downstream consumers of the marts. In dbt docs they appear in the lineage
+# graph; `dbt ls --select +exposure:olist_dashboard` lists everything they need.
+exposures:
+  - name: olist_dashboard
+    label: Olist analytics dashboard
+    type: dashboard
+    maturity: medium
+    description: >
+      Streamlit app (`dashboard/`) with three pages: sales overview (orders,
+      revenue, top categories, payment mix), delivery & reviews (late rate,
+      days to deliver, review scores of late vs on-time orders, late rate by
+      state), customers & sellers (repeat rate, spend, customer states, seller
+      map, top sellers). Reads DuckDB locally and the BigQuery prod marts when
+      deployed.
+    owner:
+      name: Aliaksandr Letsko
+    depends_on:
+      - ref('fct_orders')
+      - ref('fct_order_items')
+      - ref('dim_customers')
+      - ref('dim_sellers')
+      - ref('dim_products')
