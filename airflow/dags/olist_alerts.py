@@ -8,18 +8,21 @@
   :8025); a real SMTP server goes in airflow/.env (`SMTP_CONN`, see .env.example).
 
 One email per run at most: failures come from the DAG's `on_failure_callback` (not
-per task: a failed producer fails ~50 sensors), the rest from the `report` task.
+per task: a dbt failure fails the producer and the failed node's sensors), with the
+failed task, its error and log tail; the rest from the `report` task.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from html import escape
+from pathlib import Path
 from urllib.parse import quote
 
+from airflow.configuration import conf
 from airflow.providers.smtp.hooks.smtp import SmtpHook
-from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.sdk import Variable
 
 RECIPIENTS_VAR = "olist_alert_emails"
@@ -27,22 +30,115 @@ DEFAULT_RECIPIENTS = "data-team@olist.local"  # caught by Mailpit
 STALE_AFTER_VAR = "olist_stale_after_hours"
 DEFAULT_STALE_AFTER_HOURS = 24
 UI_URL = "http://localhost:8080"
+LOG_TAIL_LINES = 15
+DBT_SUMMARY_LINES = 40
+PRODUCER = "dbt.dbt_producer_watcher"
+# Log records that are parsing / runner chatter, not the task's own output
+LOG_NOISE_LOGGERS = ("airflow.dag_processing", "cosmos.converter", "cosmos.airflow", "cosmos.dbt.graph")
+LOG_NOISE_EVENTS = ("::", "Worker startup parse complete", "Tmp dir root location", "Output:")
+ANSI = re.compile(r"\x1b\[[0-9;]*m")  # dbt colors its output
+DBT_TIME = re.compile(r"^\d{2}:\d{2}:\d{2}\s+")  # dbt's line prefix
 
 
-def failure_notifier() -> SmtpNotifier:
-    """DAG-level failure email. A new instance per DAG: notifiers render in place."""
-    run_url = f"{UI_URL}/dags/{{{{ dag.dag_id }}}}/runs/{{{{ dag_run.run_id | urlencode }}}}"
-    return SmtpNotifier(
-        to=f"{{{{ var.value.get('{RECIPIENTS_VAR}', '{DEFAULT_RECIPIENTS}') }}}}",
-        subject="[{{ dag.dag_id }}] FAILED: run {{ dag_run.run_id }}",
-        html_content=(
-            "<p>Run <b>{{ dag_run.run_id }}</b> of <b>{{ dag.dag_id }}</b> failed"
-            "{% if reason %}: {{ reason }}{% endif %}.</p>"
-            f'<p><a href="{run_url}">Open the run</a> to see which task failed and its log. '
-            "Re-run with a new manual run (with <code>until</code> after the last month), "
-            "not with Clear: see airflow/README.md.</p>"
-        ),
+def _task_log(dag_id: str, run_id: str, task_id: str, try_number: int) -> tuple[str, list[str]]:
+    """(exception, output lines before it) from a task's log file.
+
+    Logs are JSON lines in the shared logs volume, readable from the dag-processor
+    that runs the DAG callback.
+    """
+    path = (
+        Path(conf.get("logging", "base_log_folder"))
+        / f"dag_id={dag_id}"
+        / f"run_id={run_id}"
+        / f"task_id={task_id}"
+        / f"attempt={try_number}.log"
     )
+    if not path.is_file():
+        return f"(no log file at {path})", []
+    output: list[str] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if record.get("error_detail"):
+            detail = record["error_detail"][-1]
+            return f"{detail.get('exc_type')}: {detail.get('exc_value')}", output
+        event = ANSI.sub("", str(record.get("event", "")))
+        if (
+            not event.strip()
+            or event.startswith(LOG_NOISE_EVENTS)
+            or record.get("logger", "").startswith(LOG_NOISE_LOGGERS)
+        ):
+            continue
+        output.append(event[:300])
+    return "(no exception in the log)", output
+
+
+def _dbt_summary(output: list[str]) -> tuple[str, list[str]]:
+    """dbt's end-of-run block: every error / warning with its node, and the totals.
+
+    From `Completed with N error(s)` to `Done. PASS=...`, minus timestamps, blank
+    lines and `compiled code at` pointers.
+    """
+    start = max((i for i, line in enumerate(output) if "Completed with" in line), default=None)
+    if start is None:
+        return "", []
+    block: list[str] = []
+    done = ""
+    for line in output[start:]:
+        text = DBT_TIME.sub("", line).rstrip()
+        if text.startswith("Done. PASS="):
+            done = text
+            break
+        if text.strip() and "compiled code at" not in text:
+            block.append(text)
+    return done, block[:DBT_SUMMARY_LINES]
+
+
+def on_dag_failure(context) -> None:
+    """DAG-level failure email: what failed, the error and the relevant log lines.
+
+    `ti` is the task Airflow names as the cause (the callback's `last_ti`). For a dbt
+    task that is often a symptom (a test sensor downstream of the broken model), so
+    any dbt failure reports the producer's `dbt build` summary instead: it lists
+    every failed node with dbt's own message.
+    """
+    dag_id = context["dag"].dag_id
+    run_id = context["run_id"]
+    run_url = f"{UI_URL}/dags/{dag_id}/runs/{quote(run_id, safe='')}"
+    ti = context.get("ti")
+    rows: dict[str, object] = {"DAG": dag_id, "Run": run_id}
+    error, lines = "(unknown: no failed task in the callback context)", []
+    what = "?"
+    links = [f'<a href="{run_url}">Run in Airflow</a>']
+    if ti is not None:
+        rows["Failed task (as reported)"] = ti.task_id
+        rows["Attempt"] = ti.try_number
+        what = ti.task_id
+        log_task = PRODUCER if ti.task_id.startswith("dbt.") else ti.task_id
+        error, output = _task_log(dag_id, run_id, log_task, 1 if log_task == PRODUCER else ti.try_number)
+        lines = output[-LOG_TAIL_LINES:]
+        if log_task == PRODUCER:
+            done, summary = _dbt_summary(output)
+            if done:
+                what, error, lines = "dbt build", done, summary
+        links.insert(0, f'<a href="{run_url}/tasks/{log_task}">Log of {escape(log_task)}</a>')
+    params = {k: v for k, v in (context.get("params") or {}).items() if v not in (None, False)}
+    rows["Params"] = json.dumps(params) if params else "none (scheduled-style run)"
+    rows["Reason"] = context.get("reason")
+
+    note = (
+        f"<b>{escape(what)}</b> failed: <code>{escape(error)}</code>"
+        + (f"<pre>{escape(chr(10).join(lines))}</pre>" if lines else "")
+        + " · ".join(links)
+        + "<br>Re-run with a new manual run (with <code>until</code> after the last month),"
+        " not with Clear: see airflow/README.md."
+    )
+    errors = re.search(r"ERROR=\d+", error)
+    subject = f"[{dag_id}] FAILED: {what}{f' ({errors[0]})' if errors else ''} in run {run_id}"
+    _send(subject, rows, note)
+    print(f"email: FAILED {subject} | {error} | {len(lines)} log lines")
 
 
 def _send(subject: str, rows: dict[str, object], note: str) -> None:

@@ -46,7 +46,7 @@ from cosmos.constants import (
     TestBehavior,
     TestIndirectSelection,
 )
-from olist_alerts import failure_notifier, report
+from olist_alerts import on_dag_failure, report
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
@@ -131,7 +131,7 @@ def build_dag(wh: Warehouse) -> DAG:
         # pool (lock errors). Recover with a new run, not Clear (airflow/README.md).
         default_args={"retries": 0},
         # One email per failed run (not per task: a failed producer fails ~50 sensors)
-        on_failure_callback=failure_notifier(),
+        on_failure_callback=on_dag_failure,
         params={
             "until": Param(
                 None,
