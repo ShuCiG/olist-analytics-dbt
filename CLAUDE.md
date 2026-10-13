@@ -18,6 +18,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - `ingestion/` — dlt pipeline: Olist CSV → DuckDB schema / BigQuery dataset `raw`, monthly chunks
 - `airflow/` — Airflow 3 + Cosmos (Docker Compose), DAGs `olist_elt_duckdb` / `olist_elt_bigquery`
 - `transform/` — dbt project (staging → intermediate → marts)
+- `dashboard/` — Streamlit app over marts (`DASHBOARD_BACKEND` = duckdb | bigquery), dbt exposure `olist_dashboard`
 - `data/` — raw CSV + `olist.duckdb` (gitignored)
 - `docs/` — PROGRESS.md, DECISIONS.md
 
@@ -27,6 +28,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - Lint: `uv run sqlfluff lint transform/models transform/tests` (dbt templater, in-memory `lint` target, ~40s); `uv run sqlfluff fix` breaks Jinja-heavy files — review diff
 - Types: `uv run pyright` (config `[tool.pyright]` in pyproject.toml, shared with Pylance); must stay at 0 errors
 - Airflow: `docker compose -f airflow/docker-compose.yml up -d --build` (UI :8080); rerun `airflow-init` after model changes (manifest); see airflow/README.md
+- Dashboard: `uv run streamlit run dashboard/app.py`; smoke test `uv run pytest dashboard` (needs built marts)
 - Hooks: `uv run pre-commit install` once; runs whitespace/yaml/secrets checks, blocks commits to main, sqlfluff on changed SQL, pyright on Python changes
 
 ## Conventions

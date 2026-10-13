@@ -24,6 +24,7 @@ logs/
 *.json.key
 *service-account*.json
 gha-creds-*.json
+**/.streamlit/secrets.toml
 .env
 
 # IDE / OS
