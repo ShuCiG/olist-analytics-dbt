@@ -86,6 +86,14 @@ services:
         /opt/project-venv/bin/dbt parse --target-path target_airflow
         # DuckDB allows one writer: the DuckDB DAG's dbt tasks share one slot
         airflow pools set duckdb 1 "DuckDB single-writer lock"
+        # Alert settings, visible and editable in Admin → Variables. Only created
+        # when missing: re-running init keeps values changed in the UI.
+        airflow variables get olist_alert_emails >/dev/null 2>&1 \
+          || airflow variables set olist_alert_emails data-team@olist.local \
+               --description "Alert recipients, comma-separated"
+        airflow variables get olist_stale_after_hours >/dev/null 2>&1 \
+          || airflow variables set olist_stale_after_hours 24 \
+               --description "STALE email after this many hours without new orders"
 
   airflow-apiserver:
     <<: *airflow-common

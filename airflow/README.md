@@ -66,7 +66,8 @@ At most one email per run ([dags/olist_alerts.py](dags/olist_alerts.py)):
 The summary comes from the feed status that `pipeline.py` prints as the ingest's
 last line (orders loaded, orders in raw, latest order, when orders last arrived).
 
-Settings (Admin → Variables in the UI, no restart):
+Settings (Admin → Variables in the UI, no restart; `airflow-init` creates them with
+the defaults when missing and never overwrites them):
 
 - `olist_alert_emails` — comma-separated recipients (default `data-team@olist.local`)
 - `olist_stale_after_hours` — stale threshold in hours (default 24)
