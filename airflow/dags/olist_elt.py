@@ -19,18 +19,24 @@ hourly run loads the next purchase month that has orders (`pipeline.py --next`,
 cursor in dlt state): the whole history arrives in ~a day, then runs find nothing
 new and skip dbt. A manual run with the `until` param loads up to that month and
 always runs dbt (catch-up, recovery). See airflow/README.md.
+
+Alerts (olist_alerts.py): one email per run at most — failed run, fresh data, or
+stale data (no new orders for a day, repeated daily). Recipients in the Airflow
+Variable `olist_alert_emails`.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.providers.standard.operators.python import ShortCircuitOperator
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.sdk import DAG, Param
+from airflow.task.trigger_rule import TriggerRule
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import (
     ExecutionMode,
@@ -40,6 +46,7 @@ from cosmos.constants import (
     TestBehavior,
     TestIndirectSelection,
 )
+from olist_alerts import on_dag_failure, report
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
@@ -75,13 +82,13 @@ def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
 def has_new_orders(ti, params) -> bool:
     """Skip dbt when the feed brought nothing (dump used up): no rebuild for no data.
 
-    Reads the ingest task's last stdout line (`orders_loaded=<n>`, its XCom). Manual
-    runs with `until` or `full_refresh` always build: re-running a month whose dbt
-    failed loads 0 new orders but still has to rebuild.
+    Reads the feed status JSON that `pipeline.py` prints as the ingest's last line
+    (its XCom). Manual runs with `until` or `full_refresh` always build: re-running a
+    month whose dbt failed loads 0 new orders but still has to rebuild.
     """
     if params["until"] or params["full_refresh"]:
         return True
-    return ti.xcom_pull(task_ids="dlt_ingest") != "orders_loaded=0"
+    return json.loads(ti.xcom_pull(task_ids="dlt_ingest"))["orders_loaded"] > 0
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
@@ -123,6 +130,8 @@ def build_dag(wh: Warehouse) -> DAG:
         # retried node tasks run their own dbt command instead, outside the DuckDB
         # pool (lock errors). Recover with a new run, not Clear (airflow/README.md).
         default_args={"retries": 0},
+        # One email per failed run (not per task: a failed producer fails ~50 sensors)
+        on_failure_callback=on_dag_failure,
         params={
             "until": Param(
                 None,
@@ -208,9 +217,19 @@ def build_dag(wh: Warehouse) -> DAG:
         new_orders = ShortCircuitOperator(
             task_id="has_new_orders",
             python_callable=has_new_orders,
+            # Skip only what follows by trigger rules: `report` still runs
+            ignore_downstream_trigger_rules=False,
         )
 
-        ingest >> new_orders >> dbt
+        email_report = PythonOperator(
+            task_id="report",
+            python_callable=report,
+            op_kwargs={"warehouse": wh.name},
+            # After dbt succeeded or was skipped; a failed dbt fails the run instead
+            trigger_rule=TriggerRule.NONE_FAILED,
+        )
+
+        ingest >> new_orders >> dbt >> email_report
     return dag
 
 

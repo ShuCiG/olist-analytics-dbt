@@ -26,13 +26,15 @@ Examples:
     python ingestion/pipeline.py --full-refresh    # drop tables + state, reload
 
 Airflow (airflow/dags/olist_elt.py) passes `--duckdb-path` / `--dataset` to keep its
-runs apart from local dev and prod. The last output line, `orders_loaded=<n>`, tells
-it whether there is anything new for dbt.
+runs apart from local dev and prod. The last output line is the feed status as JSON
+(`orders_loaded`, `orders_total`, `last_order_at`, `last_loaded_at`): Airflow reads it
+to skip dbt when nothing is new and for the email report.
 """
 
 import argparse
 import csv
 import functools
+import json
 import os
 import re
 import warnings
@@ -164,6 +166,30 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         )
 
 
+def feed_status(pipeline: dlt.Pipeline) -> dict[str, object]:
+    """This run's order count + the raw orders table as it is now (after the load).
+
+    `last_loaded_at` only moves when a run brings orders (merge of 0 rows writes
+    nothing): the same signal as `dbt source freshness`.
+    """
+    trace = pipeline.last_trace
+    normalize_info = trace.last_normalize_info if trace else None
+    assert normalize_info is not None, "pipeline.run() finished without a normalize step"
+    with pipeline.sql_client() as client:
+        orders = client.make_qualified_table_name("orders")
+        rows = client.execute_sql(
+            f"select count(*), max(order_purchase_timestamp), max(_loaded_at) from {orders}"
+        )
+    assert rows, "no result from the orders status query"
+    total, last_order_at, last_loaded_at = rows[0]
+    return {
+        "orders_loaded": normalize_info.row_counts.get("orders", 0),
+        "orders_total": total,
+        "last_order_at": last_order_at,
+        "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
+    }
+
+
 def make_destination(name: str, duckdb_path: Path):
     if name == "bigquery":
         # No key given: dlt falls back to Application Default Credentials
@@ -213,10 +239,7 @@ def main() -> None:
         load_info = pipeline.run(source)
     print(load_info)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    trace = pipeline.last_trace
-    normalize_info = trace.last_normalize_info if trace else None
-    assert normalize_info is not None, "pipeline.run() finished without a normalize step"
-    print(f"orders_loaded={normalize_info.row_counts.get('orders', 0)}")
+    print(json.dumps(feed_status(pipeline)))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,9 @@
 Runs inside the Airflow image (see the `airflow-dags` job in ci-cd.yml). Fails on
 any import error, when an expected DAG is missing or has no dbt tasks, when the
 Cosmos watcher producer is missing, when dbt is not gated by `has_new_orders`
-(dlt_ingest -> has_new_orders -> producer: no rebuild once the feed is used up), or
+(dlt_ingest -> has_new_orders -> producer: no rebuild once the feed is used up),
+when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
+failure callback), or
 when the DuckDB pool holds anything but the writers (dlt + producer): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
@@ -13,12 +15,16 @@ import sys
 
 from airflow.dag_processing.dagbag import DagBag
 
+DAG_FOLDER = "/opt/project/airflow/dags"
+# Airflow puts the DAG folder on sys.path (the DAG imports olist_alerts from there)
+sys.path.insert(0, DAG_FOLDER)
+
 EXPECTED = {"olist_elt_duckdb", "olist_elt_bigquery"}
 PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
 DUCKDB_WRITERS = {"dlt_ingest", PRODUCER}
 
-bag = DagBag(dag_folder="/opt/project/airflow/dags")
+bag = DagBag(dag_folder=DAG_FOLDER)
 
 for path, error in bag.import_errors.items():
     print(f"Import error in {path}:\n{error}", file=sys.stderr)
@@ -42,6 +48,13 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
         or GATE not in dag.get_task(PRODUCER).upstream_task_ids
     ):
         print(f"{dag_id}: dbt is not gated by dlt_ingest -> {GATE}", file=sys.stderr)
+        missing.add(dag_id)
+    if (
+        "report" not in dag.task_ids
+        or dag.get_task("report").trigger_rule != "none_failed"
+        or not dag.on_failure_callback
+    ):
+        print(f"{dag_id}: alerts not wired (report task / failure callback)", file=sys.stderr)
         missing.add(dag_id)
     if dag_id == "olist_elt_duckdb":
         pooled = {t.task_id for t in dag.tasks if t.pool == "duckdb"}

@@ -208,18 +208,27 @@ models:
         description: Handed over to the logistics partner.
         data_type: timestamp
         data_tests:
-          # Source defect: 1,359 orders handed to the carrier before payment approval,
-          # 166 even before purchase.
           - is_not_before:
+              description: >-
+                Orders handed to the carrier before the payment was approved. The
+                approval-to-shipping time (seller handling KPI) is understated, even
+                negative, for them. Known in Olist (1,359 orders, approval likely recorded
+                late); a sharp rise means sellers ship unpaid orders or timestamps broke.
               arguments:
                 earlier_column: approved_at
               config:
                 severity: warn
+                meta: {alert_unit: orders}
           - is_not_before:
+              description: >-
+                Orders handed to the carrier before the customer placed them, which is
+                impossible. Shipping-time KPIs for these orders are wrong. Known source
+                defect (166 orders); report a rise to the source system owner.
               arguments:
                 earlier_column: purchased_at
               config:
                 severity: warn
+                meta: {alert_unit: orders}
       - name: delivered_to_customer_at
         description: Delivered to the customer.
         data_type: timestamp
@@ -227,12 +236,16 @@ models:
           - is_not_before:
               arguments:
                 earlier_column: purchased_at
-          # Source defect: 23 orders delivered before carrier pickup.
           - is_not_before:
+              description: >-
+                Orders delivered to the customer before the carrier picked them up, which
+                is impossible. Their carrier transit time is negative, so the average
+                transit time is understated. Known source defect (23 orders).
               arguments:
                 earlier_column: delivered_to_carrier_at
               config:
                 severity: warn
+                meta: {alert_unit: orders}
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
         data_type: date

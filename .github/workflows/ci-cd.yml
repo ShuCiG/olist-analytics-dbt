@@ -135,6 +135,18 @@ jobs:
         working-directory: transform
         run: uv run dbt build
 
+      # Test descriptions for the failure email (notify-failure); written even when
+      # the build fails, since dbt parses before it runs anything
+      - name: Upload manifest (for the failure email)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-manifest
+          path: transform/target/manifest.json
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
+
       # Every dashboard page renders on the marts just built (headless AppTest)
       - name: Dashboard smoke test
         run: uv run pytest dashboard -q
@@ -291,3 +303,34 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
+  # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
+  # GitHub's own notification only reaches the person who triggered the run.
+  notify-failure:
+    name: Email on failure
+    needs: [sqlfluff-lint, pyright, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs]
+    if: failure() && vars.ALERT_EMAILS != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # job list + logs of this run
+    steps:
+      - uses: actions/checkout@v7
+      # Optional: without it, data tests are listed by their dbt names only
+      - name: Download manifest (test descriptions)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name ci-manifest --dir ci-manifest
+      - name: Send email
+        env:
+          DBT_MANIFEST: ci-manifest/manifest.json
+          GH_TOKEN: ${{ github.token }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          # Via env, never inlined into the script: PR titles are user input
+          # Quoted: an unquoted ` #` starts a YAML comment and cut the expression
+          EVENT_TITLE: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('{0} on {1}', github.event_name, github.ref_name) }}"
+        run: python3 .github/scripts/notify_failure.py
