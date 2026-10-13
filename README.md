@@ -25,7 +25,7 @@ dashboard reads the prod marts.
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads BigQuery prod marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -279,10 +279,12 @@ flowchart LR
     end
 ```
 
-**Alerts:** at most one email per run — `FAILED` (DAG failure callback, link to the run), `OK: +800 orders,
-data up to 2017-01` with a summary, or `STALE: no new orders for 25 h` (about once a day). Recipients and the
-stale threshold are Airflow Variables; SMTP goes to a local Mailpit inbox (http://localhost:8025) unless a
-real server is set in `airflow/.env`.
+**Alerts:** at most one email per run — `FAILED` (DAG failure callback: the error and log tail; for dbt, dbt's
+summary naming each failed node), `OK: +800 orders, data up to 2017-01, 3 dbt warnings` (summary, dbt totals,
+the warn-level tests), or `STALE: no new orders for 25 h` (about once a day). Recipients and the stale threshold
+are Airflow Variables; SMTP goes to a local Mailpit inbox (http://localhost:8025) unless a real server is set in
+`airflow/.env`. Failed GitHub Actions runs (PR checks, prod deploy) are emailed too: job `notify-failure` sends
+the failed jobs, step and log excerpt to repo variable `ALERT_EMAILS`.
 
 Two DAGs from one factory: `olist_elt_duckdb` (own file `data/airflow.duckdb`, dlt and the dbt producer
 serialized by a 1-slot pool) and `olist_elt_bigquery` (isolated `airflow_*` datasets; prod belongs to CD).

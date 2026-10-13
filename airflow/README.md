@@ -59,7 +59,7 @@ At most one email per run ([dags/olist_alerts.py](dags/olist_alerts.py)):
 | When | Subject | Sent by |
 |---|---|---|
 | a task failed | `[olist_elt_duckdb] FAILED: dlt_ingest in run <run_id>` with the error and the task's last output lines; any dbt failure → `FAILED: dbt build (ERROR=1)` with dbt's end-of-run summary (each failed node + message, warnings); params, links to the log and the run | DAG `on_failure_callback` (once per run, not per task) |
-| new orders loaded (or a manual `until` / `full_refresh` rebuild) | `OK: +800 orders, data up to 2017-01` + summary table | `report` task |
+| new orders loaded (or a manual `until` / `full_refresh` rebuild) | `OK: +800 orders, data up to 2017-01, 3 dbt warnings` + summary table, dbt totals (`PASS=120 WARN=3 ...`) and each warn-level test with its row count | `report` task |
 | no new orders for `olist_stale_after_hours` (default 24, = source `warn_after`) | `STALE: no new orders for 25 h (data up to 2018-10)` | `report` task, then about once a day while stale |
 | nothing new, not stale yet | no email | |
 

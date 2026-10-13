@@ -12,7 +12,7 @@ Portfolio project: ELT on Olist e-commerce data with dbt. Owner is strong in SQL
 - One branch per task: `feat/…`, `fix/…`, `ci/…`, `docs/…`, `chore/…`. Commit + push to the branch.
 - Open PR with `gh pr create` (fill `.github/pull_request_template.md`). **User merges — Claude never merges.**
 - After user merges: `git switch main && git pull && git branch -D <branch> && git fetch -p` (`-D`: squash merge makes `-d` refuse).
-- CI (`.github/workflows/ci-cd.yml`) on every PR: sqlfluff + pyright + Airflow DAG parse, `dbt build` on DuckDB (fresh dlt ingest), slim CI on BigQuery. On merge to main: dlt → BigQuery, `dbt build --target prod`, dbt docs → GitHub Pages.
+- CI (`.github/workflows/ci-cd.yml`) on every PR: sqlfluff + pyright + Airflow DAG parse, `dbt build` on DuckDB (fresh dlt ingest), slim CI on BigQuery. On merge to main: dlt → BigQuery, `dbt build --target prod`, dbt docs → GitHub Pages. Failures → `notify-failure` job emails `vars.ALERT_EMAILS` (secret `SMTP_CONN`, script `.github/scripts/notify_failure.py`).
 
 ## Layout
 - `ingestion/` — dlt pipeline: Olist CSV → DuckDB schema / BigQuery dataset `raw`, monthly chunks

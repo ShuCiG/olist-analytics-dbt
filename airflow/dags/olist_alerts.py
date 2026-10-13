@@ -78,10 +78,14 @@ def _task_log(dag_id: str, run_id: str, task_id: str, try_number: int) -> tuple[
 def _dbt_summary(output: list[str]) -> tuple[str, list[str]]:
     """dbt's end-of-run block: every error / warning with its node, and the totals.
 
-    From `Completed with N error(s)` to `Done. PASS=...`, minus timestamps, blank
+    From `Completed with N error(s)` / `Completed successfully` to `Done. PASS=...`
+    (returned separately as the first value), minus timestamps, blank
     lines and `compiled code at` pointers.
     """
-    start = max((i for i, line in enumerate(output) if "Completed with" in line), default=None)
+    start = max(
+        (i for i, line in enumerate(output) if re.search(r"Completed (with|successfully)", line)),
+        default=None,
+    )
     if start is None:
         return "", []
     block: list[str] = []
@@ -162,6 +166,13 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
     """
     status = json.loads(ti.xcom_pull(task_ids="dlt_ingest"))
     dbt_built = bool(ti.xcom_pull(task_ids="has_new_orders"))
+    # dbt's totals + warnings from the producer's log of this run (same worker volume)
+    dbt_done, dbt_block = "", []
+    if dbt_built:
+        _, output = _task_log(dag_run.dag_id, dag_run.run_id, PRODUCER, 1)
+        dbt_done, dbt_block = _dbt_summary(output)
+    warnings = re.search(r"WARN=(\d+)", dbt_done)
+    n_warn = int(warnings[1]) if warnings else 0
     loaded = status["orders_loaded"]
 
     last_loaded_at = status["last_loaded_at"]
@@ -183,14 +194,19 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
         "Latest order (purchase time)": status["last_order_at"],
         "Last new orders loaded at (UTC)": last_loaded_at,
         "Hours since new orders": round(age_h, 1),
-        "dbt build": "success" if dbt_built else "skipped (nothing new)",
+        "dbt build": (dbt_done.removeprefix("Done. ") or "success") if dbt_built else "skipped (nothing new)",
     }
     prefix = f"[olist_elt_{warehouse}]"
     month = (status["last_order_at"] or "")[:7]
     if loaded or dbt_built:
         kind = "OK"
-        subject = f"{prefix} OK: +{loaded} orders, data up to {month}"
+        subject = f"{prefix} OK: +{loaded} orders, data up to {month}" + (
+            f", {n_warn} dbt warning{'s' if n_warn > 1 else ''}" if n_warn else ""
+        )
         note = "Fresh data loaded and the marts rebuilt."
+        if n_warn:
+            # Data-quality tests with severity warn: nothing fails, so this is where they show
+            note += f"<pre>{escape(chr(10).join(dbt_block))}</pre>"
         if stale:
             note += f" Note: no new orders for {age_h:.0f} h."
     elif remind:

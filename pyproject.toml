@@ -31,7 +31,7 @@ default-groups = ["dev", "dashboard"]
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard"]
+include = ["ingestion", "dashboard", ".github/scripts"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
