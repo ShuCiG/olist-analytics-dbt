@@ -14,6 +14,9 @@ reads those marts.
 **📖 Live dbt docs with lineage graph:** https://shucig.github.io/olist-analytics-dbt/<br>
 **📊 Live dashboard (BigQuery, fed hourly by Airflow):** https://olist-analytics-dbt.streamlit.app/
 
+Built with AI pair programming (Claude Code); the architecture, design decisions and code review are mine.
+The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
+
 [![Dashboard: delivery & reviews](docs/images/dashboard-delivery.png)](https://olist-analytics-dbt.streamlit.app/)
 
 ## Stack
@@ -329,7 +332,7 @@ dbt gated by `has_new_orders` and the alerts wired.
 │   ├── tests/                   # singular tests + generic test is_not_before
 │   └── macros/                  # to_money, generate_schema_name, drop_isolated_datasets (CI / Airflow cleanup)
 ├── .github/workflows/ci-cd.yml  # CI on PR (DuckDB + slim BigQuery), prod deploy + docs on merge
-└── docs/                        # PROGRESS.md, DECISIONS.md (architecture decision log)
+└── docs/                        # DECISIONS.md (architecture decision log), dashboard screenshots
 ```
 
 ## Development workflow
