@@ -18,11 +18,40 @@ sensor task that shows that node's result from the producer's log.
 
 ```bash
 cp airflow/.env.example airflow/.env      # optional: GCP_KEY_FILE for the BigQuery DAG
-docker compose -f airflow/docker-compose.yml up -d --build
+GIT_SHA=$(git rev-parse HEAD) docker compose -f airflow/docker-compose.yml up -d --build
 ```
 
 UI at http://localhost:8080 (no login: local only), alert emails at
 http://localhost:8025 (Mailpit). DAGs start paused.
+
+### Image: code baked in, or live edit
+
+The project code is **baked into the image** (prod-like): `airflow/Dockerfile` copies
+`transform/`, `ingestion/`, `alerting/` and the DAGs, runs `dbt deps` and `dbt parse`
+(the manifest Cosmos renders the DAGs from), and labels the image with its git commit
+(`org.opencontainers.image.revision`, env `OLIST_GIT_SHA`). Only `data/` is mounted. The
+running pipeline is therefore one known version of the code, not whatever the working
+tree holds right now; a code change means a rebuild (`up -d --build`). `.dockerignore`
+is an allowlist, so data, keys and `.env` never reach the image.
+
+Every merge to `main` publishes the image to GHCR after the prod deploy, tagged by commit
+and `latest` (CD job `publish-airflow-image`). Run a published version instead of
+building, or roll back to an older one:
+
+```bash
+export OLIST_AIRFLOW_IMAGE=ghcr.io/shucig/olist-airflow:<commit sha>
+docker compose -f airflow/docker-compose.yml pull airflow-init
+docker compose -f airflow/docker-compose.yml up -d
+```
+
+**Dev mode** mounts the repo over the baked code, so edits to DAGs, models and the
+pipeline are live; `airflow-init` then rebuilds dbt packages and the manifest from the
+working tree (re-run it after adding or removing models / tests):
+
+```bash
+docker compose -f airflow/docker-compose.yml -f airflow/docker-compose.dev.yml up -d --build
+docker compose -f airflow/docker-compose.yml -f airflow/docker-compose.dev.yml run --rm airflow-init
+```
 
 ## Schedule: a simulated live feed
 
@@ -71,7 +100,7 @@ Data-test findings are explained in business words: each warn test has a
 `description` (what is wrong, impact, what to do) and `meta.alert_unit` in its yml,
 and the email shows e.g. "278 customers — Customers whose zip code is missing from
 the geolocation reference ..." ([alerting/dbt_summary.py](../alerting/dbt_summary.py),
-descriptions from `target_airflow/manifest.json`: re-run `airflow-init` after editing them).
+descriptions from `target_airflow/manifest.json`, built into the image: rebuild it after editing them).
 
 Settings (Admin → Variables in the UI, no restart; `airflow-init` creates them with
 the defaults when missing and never overwrites them):
@@ -146,9 +175,8 @@ one.
   not detached (the producer reports tests per model, a detached test sensor gets
   no status); freshness never skips nodes (`no_freshness_skips`: warn-only, D18);
   unit tests excluded (CI checks them).
-- The repo is mounted at `/opt/project`: tasks always run the current models. The
-  DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
-  `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse); after adding/removing models
-  or tests, rebuild it: `docker compose -f airflow/docker-compose.yml run --rm airflow-init`.
-- `airflow-init` migrates the metadata DB, creates the `duckdb` pool, runs
-  `dbt deps` and `dbt parse` (the manifest).
+- The DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
+  `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse), built into the image; in dev
+  mode `airflow-init` rebuilds it from the mounted repo.
+- `airflow-init` migrates the metadata DB, creates the `duckdb` pool and the alert
+  Variables (dev mode: also `dbt deps` and `dbt parse`).

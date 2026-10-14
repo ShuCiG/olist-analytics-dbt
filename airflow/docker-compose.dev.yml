@@ -1,0 +1,16 @@
+# Dev mode: the repo is mounted over the code baked into the image, so edits to
+# DAGs, models and the pipeline are live (airflow-init rebuilds dbt packages and
+# the manifest from the working tree; re-run it after model changes).
+#   docker compose -f airflow/docker-compose.yml -f airflow/docker-compose.dev.yml up -d --build
+x-dev: &dev
+  environment:
+    OLIST_DEV_MOUNT: "1"
+  volumes:
+    - ..:/opt/project
+
+services:
+  airflow-init: *dev
+  airflow-apiserver: *dev
+  airflow-scheduler: *dev
+  airflow-dag-processor: *dev
+  airflow-triggerer: *dev
