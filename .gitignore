@@ -40,3 +40,6 @@ prod-state/
 # Local working notes (agent session state), not part of the project
 CLAUDE.md
 docs/PROGRESS.md
+
+# Saved emails
+*.eml

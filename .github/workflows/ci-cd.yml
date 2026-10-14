@@ -79,20 +79,19 @@ jobs:
           context: .
           file: airflow/Dockerfile
           tags: olist-airflow:ci
+          build-args: GIT_SHA=${{ github.sha }}
           load: true
           cache-from: type=gha,scope=airflow
           cache-to: type=gha,scope=airflow,mode=max
 
+      # The image as built: code, dbt packages and manifest baked in, nothing mounted
       - name: Parse DAGs
         run: |
           echo '{}' > "$RUNNER_TEMP/dummy-key.json"
-          chmod -R a+rwX .  # the image runs as uid 50000; dbt deps writes here
           docker run --rm \
-            -v "$PWD:/opt/project" \
             -v "$RUNNER_TEMP/dummy-key.json:/opt/gcp/key.json:ro" \
             -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
-            --entrypoint bash olist-airflow:ci \
-            -c 'cd /opt/project/transform && /opt/project-venv/bin/dbt deps && /opt/project-venv/bin/dbt parse --target-path target_airflow && python /opt/project/airflow/check_dags.py'
+            --entrypoint python olist-airflow:ci /opt/project/airflow/check_dags.py
 
   # Required check: gating it on pyright blocks merges with type errors
   dbt-build:
@@ -304,12 +303,65 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
+  # The Airflow image of this commit (code + dbt manifest baked in), published as
+  # ghcr.io/<owner>/olist-airflow:<sha> and :latest once prod is deployed, so the
+  # image matches prod. Same DAG parse check as in PR CI before pushing.
+  publish-airflow-image:
+    name: Publish Airflow image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: deploy-prod
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build Airflow image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: airflow/Dockerfile
+          tags: olist-airflow:release
+          build-args: GIT_SHA=${{ github.sha }}
+          load: true
+          cache-from: type=gha,scope=airflow
+          cache-to: type=gha,scope=airflow,mode=max
+
+      - name: Parse DAGs
+        run: |
+          echo '{}' > "$RUNNER_TEMP/dummy-key.json"
+          docker run --rm \
+            -v "$RUNNER_TEMP/dummy-key.json:/opt/gcp/key.json:ro" \
+            -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
+            --entrypoint python olist-airflow:release /opt/project/airflow/check_dags.py
+
+      - name: Push
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          image="ghcr.io/${OWNER,,}/olist-airflow"  # GHCR names are lowercase
+          for tag in "$GITHUB_SHA" latest; do
+            docker tag olist-airflow:release "$image:$tag"
+            docker push --quiet "$image:$tag"
+          done
+          echo "Published \`$image:$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
   # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
   # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
   # GitHub's own notification only reaches the person who triggered the run.
   notify-failure:
     name: Email on failure
-    needs: [sqlfluff-lint, pyright, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs]
+    needs: [sqlfluff-lint, pyright, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
     if: failure() && vars.ALERT_EMAILS != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5

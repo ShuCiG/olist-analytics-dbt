@@ -312,6 +312,10 @@ docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
   airflow dags trigger olist_elt_duckdb --conf '{"until": "2017-06"}'
 ```
 
+The image is prod-like: code, dbt packages and the dbt manifest are baked in and the image is labelled with its
+git commit; only `data/` is mounted. Every merge publishes it to GHCR (`ghcr.io/shucig/olist-airflow:<sha>`,
+`:latest`), so a version can be pulled or rolled back by tag. A dev compose override mounts the repo for live edits.
+
 Details (BigQuery key, params, alerts, reset, re-running a failed month) in [airflow/README.md](airflow/README.md).
 CI builds the image and checks that both DAGs parse in watcher mode with only the writers in the DuckDB pool,
 dbt gated by `has_new_orders` and the alerts wired.
@@ -343,7 +347,7 @@ Feature branch → PR → CI must pass → squash merge → CD.
   only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
 - **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
-  `manifest.json` stored as an artifact for slim CI.
+  `manifest.json` stored as an artifact for slim CI, Airflow image (code + manifest baked in) → GHCR.
 
 Locally, `uv run pre-commit install` enables the same lint and type check plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).

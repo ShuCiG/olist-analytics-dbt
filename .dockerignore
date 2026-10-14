@@ -1,0 +1,16 @@
+# Build context of airflow/Dockerfile (context = repo root). Allowlist: only the
+# code the pipeline runs goes into the image; never data, keys, .env or local state.
+*
+!pyproject.toml
+!uv.lock
+!ingestion/
+!alerting/
+!airflow/dags/
+!airflow/check_dags.py
+!transform/
+transform/target/
+transform/target_airflow/
+transform/dbt_packages/
+transform/logs/
+transform/.user.yml
+**/__pycache__/
