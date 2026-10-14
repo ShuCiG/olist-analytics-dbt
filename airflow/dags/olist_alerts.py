@@ -112,13 +112,26 @@ def on_dag_failure(context) -> None:
                 what, error = "dbt build", done
                 # Totals are already in the intro
                 body = dbt_summary.to_html("", block, dbt_summary.test_docs(DBT_MANIFEST))
+            if "ERROR=0" in done and ti.task_id != PRODUCER:
+                # dbt passed, Airflow failed the task: e.g. a sensor's stale executor
+                # event after a fast deferral, or a task killed on a restart
+                what = f"{ti.task_id} (dbt passed)"
+                error = f"dbt build passed ({done}); Airflow marked {ti.task_id} as failed"
+                body = (
+                    email_html.paragraph(
+                        "An Airflow-side failure, not a data one: every dbt model and"
+                        " test finished. See the task's log for why Airflow failed it."
+                    )
+                    + body
+                )
+                links.insert(0, (f"Log of {ti.task_id}", f"{run_url}/tasks/{ti.task_id}"))
         links.insert(0, (f"Log of {log_task}", f"{run_url}/tasks/{log_task}"))
     params = {k: v for k, v in (context.get("params") or {}).items() if v not in (None, False)}
     rows["Params"] = json.dumps(params) if params else "none (scheduled-style run)"
     rows["Reason"] = context.get("reason")
 
     errors = re.search(r"ERROR=\d+", error)
-    count = f" ({errors[0]})" if errors else ""
+    count = f" ({errors[0]})" if errors and errors[0] != "ERROR=0" else ""
     title = f"{what} failed{count}"
     intro = (
         f"Run <b>{escape(run_id)}</b> of <b>{escape(dag_id)}</b> stopped at "
