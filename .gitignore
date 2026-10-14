@@ -36,3 +36,7 @@ Thumbs.db
 # Slim CI state (prod manifest)
 prod-state/
 .prod-state/
+
+# Local working notes (agent session state), not part of the project
+CLAUDE.md
+docs/PROGRESS.md
