@@ -114,7 +114,18 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
-    command: scheduler
+    # Tasks talk to the API server (Execution API) from their first second: queued
+    # before it is up, they die in "Pre Execute" with no log. depends_on can't
+    # guard this: when Docker itself restarts, the daemon brings `restart: always`
+    # containers back without compose, so the wait lives in the command.
+    command:
+      - bash
+      - -c
+      - |
+        until curl -sf http://airflow-apiserver:8080/api/v2/version >/dev/null; do
+          echo "waiting for airflow-apiserver"; sleep 3
+        done
+        exec airflow scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
       interval: 30s
@@ -126,6 +137,9 @@ services:
       <<: *airflow-depends-on
       airflow-init:
         condition: service_completed_successfully
+      # Mostly for ordering on `up`; the wait loop above is what actually guards
+      airflow-apiserver:
+        condition: service_started
 
   airflow-dag-processor:
     <<: *airflow-common
