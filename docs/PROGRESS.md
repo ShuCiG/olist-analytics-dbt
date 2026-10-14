@@ -1,16 +1,16 @@
 # Progress
 
-**Current phase:** 7 — Live feed + alerts (D28)
-**Next step:** PR 7.3 merged → user adds Streamlit Cloud secret `MARTS_DATASET = "airflow_marts"`, check the live app; decide whether to restart the BigQuery feed (`full_refresh`) so the dashboard visibly grows hourly. Then Phase 7 done.
+**Current phase:** 7 — Live feed + alerts (D28) ✅ (all phases of the plan done)
+**Next step:** none planned. Ideas in Backlog; ask the user what's next.
 
 ## Handoff (state on 2026-10-14)
 - **main** = PR #26 merged (`d0fe27b`), prod deploy green.
 - **Airflow stack** running locally (`docker compose -f airflow/docker-compose.yml ...`), both DAGs **unpaused**, `@hourly`:
   - `olist_elt_duckdb`: feed restarted by a test `full_refresh` at 13:00 UTC → replays one month per hour (OK email each hour, ~25 runs), then STALE ~daily.
-  - `olist_elt_bigquery`: dump used up (all 99,441 orders in `airflow_raw` / `airflow_marts`); hourly runs skip dbt; STALE email ~daily once 24 h without new orders.
+  - `olist_elt_bigquery`: feed restarted with `full_refresh` on 2026-10-14 08:54 UTC (user choice, so the live dashboard visibly grows) → one month per hour, ~25 runs, then STALE ~daily.
 - **Email**: `airflow/.env` has `SMTP_CONN` (user's Gmail app password) → real emails to Variable `olist_alert_emails` = letsko@gmail.com; Mailpit (:8025) only gets mail when `SMTP_CONN` is unset. `olist_stale_after_hours` = 24. After changing test descriptions in yml: rerun `airflow-init` (manifest).
 - **GitHub**: secret `SMTP_CONN` + variable `ALERT_EMAILS` set; job `notify-failure` emails failed runs. Verified: real runner email (logs were missing → fixed to REST), styled version sent locally against a real failed run. Manifest artifact (business descriptions in CI emails) verified on a runner 2026-10-14. CI failure tests: throwaway branch + draft PR only (memory: feedback-ci-failure-tests).
-- **PR 7.3**: dashboard reads `MARTS_DATASET` (default `marts`); `dashboard-reader` has READER on `airflow_marts`. After merge: Streamlit Cloud secret `MARTS_DATASET = "airflow_marts"` (old code ignores it, so order doesn't matter).
+- **Dashboard** (live app) reads `airflow_marts` (Streamlit secret `MARTS_DATASET`); `dashboard-reader` has READER on `marts` + `airflow_marts`. Secret changes need **Reboot app** (settings read at import).
 
 ## Phases
 
@@ -61,7 +61,7 @@ Streamlit over marts, dbt exposures, README screenshots.
 - [x] PR 6.2: deploy prep (D27): SA `dashboard-reader` (Job User + Data Viewer on `marts`), `dashboard/requirements.txt`, settings from `st.secrets`; app live at https://olist-analytics-dbt.streamlit.app/ (deploys from `main` on push)
 - [x] PR 6.3: exposure `url`, README screenshots + live link
 
-### Phase 7 — Live feed + alerts
+### Phase 7 — Live feed + alerts ✅
 User question: new data must flow on a schedule, up to the dashboard, with email reports (D28).
 - [x] PR 7.1: hourly replay — `pipeline.py --next` (next month that has orders), DAGs `@hourly` without `end_date`, `has_new_orders` short-circuit skips dbt once the dump is used up; CI parse check asserts the gate
 - [x] PR 7.2: email alerts (D29) — `report` task (OK / STALE, ~daily) + DAG failure callback, Mailpit in Compose + optional real SMTP (`SMTP_CONN`), Variables `olist_alert_emails` / `olist_stale_after_hours`; pipeline prints feed status JSON; shared Fernet key
@@ -69,7 +69,7 @@ User question: new data must flow on a schedule, up to the dashboard, with email
 - [x] PR 7.2 (cont. 2): styled HTML emails (`alerting/email_html.py`), warn tests explained in business words (test `description` + `meta.alert_unit`, `alerting/dbt_summary.py`), shared by Airflow and CI
 - [x] Verify CI failure email with manifest artifact on a throwaway branch (draft PR #27, closed)
 - [x] PR 7.3: dashboard on `airflow_marts` (setting `MARTS_DATASET`, "data as of" caption); user granted `dashboard-reader` READER on `airflow_marts`
-- [ ] Streamlit Cloud secret `MARTS_DATASET` + live check (after merge)
+- [x] Streamlit Cloud secret `MARTS_DATASET` + live check (after merge): sidebar shows "BigQuery (hourly Airflow feed)"
 
 ## Backlog (ideas, not scheduled)
 - **Airflow, further speed-up** (after watcher, D25): one dbt invocation in the producer (freshness is a second dbt start + parse, ~40–60 s); seed a per-target partial parse so the first run of a container doesn't reparse (Cosmos picks the host's `target/partial_parse.msgpack` otherwise); dbt's opt-in Rust parser (check BigQuery/package compatibility first).
@@ -107,3 +107,4 @@ User question: new data must flow on a schedule, up to the dashboard, with email
 - 2026-10-13 — PR #24 merged (deploy green). Incident: a TEMP-broken model commit for the CI email test was pushed to the PR branch while the user merged; `git revert -q` failed (no such flag), but the merge was at the commit before → main safe; stray remote branch deleted. Rule saved: CI failure tests on a throwaway branch only. Styled CI email sent locally from main against failed run 38424621404. Handoff section written.
 - 2026-10-14 — Docker restarted after a night off → two false FAILED emails. (1) Scheduler caught up the missed 17:00 run before the API server was up: `dlt_ingest` died in "Pre Execute", no log (task SDK can't reach the Execution API). Fix: scheduler command waits for `airflow-apiserver` (`depends_on` doesn't help: on a Docker restart the daemon restarts `restart: always` containers without compose); verified: apiserver stopped → scheduler loops "waiting", starts ~45 s after the apiserver. (2) `dbt.dim_date.test` (watcher sensor) marked failed while dbt passed (PASS=119 ERROR=0): Airflow 3.3 race — the trigger fired 5 s after deferral, the TI was already running again when the scheduler (slow after the restart) processed the stale "success" from the deferring process → "state changed externally" → FAILED. Airflow guards only the SCHEDULED case. Race left as is (non-deferrable sensors take executor slots; retries run their own dbt outside the DuckDB pool). The email said "dbt build failed (ERROR=0)" → now, when dbt's summary has ERROR=0 and the failed task is a sensor, it says "<task> (dbt passed)", explains it's Airflow-side and links the task's log; checked in Mailpit on the real failed run.
 - 2026-10-14 — PR #26 merged. CI failure email verified on a real runner (throwaway draft PR #27, severity of `assert_payments_match_order_amount` forced to error): `ci-manifest` downloaded, email shows "249 orders" + the business description; PR closed, branch deleted. PR 7.3: `MARTS_DATASET` setting, sidebar "data as of <latest order>, loaded <max _loaded_at> UTC" + source label. Found: on a short feed (data up to 2016-12) the default period clipped to start > end → page broke (smoke test fails without the fix, passes with it, on a trimmed DuckDB copy). User ran the grant script (auto mode blocks permission grants): reader reads `airflow_marts` (3 pages pass), `airflow_raw` / `airflow_staging` Forbidden.
+- 2026-10-14 — PR #28 merged. Main CI failed on a GitHub outage (`dbt build` timed out resolving actions in Set up job); rerun of failed jobs → deploy green. Our `notify-failure` was skipped in that run (0 steps); on a throwaway branch (workflow_dispatch, same job shape as push) it emailed both for a failing dbt test and for a Set up job failure (unresolvable action) → outage artifact, workflow unchanged. User set the Streamlit secret; the app kept "BigQuery (prod)" until **Reboot app** (settings read at import) → now "BigQuery (hourly Airflow feed)". BigQuery feed restarted (`full_refresh`, user choice): 55/55 tasks, ~11 min, `airflow_marts` = 4 orders up to 2016-09-15. Phase 7 done.
