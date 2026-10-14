@@ -39,6 +39,10 @@ x-airflow-common: &airflow-common
     # >30 s (the default limit) while the PC was busy building an image, which
     # failed a whole run with "DagBag import timeout".
     AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
+    # Task -> API server calls time out after 5 s by default and are retried. A
+    # retried XCom push is not idempotent: when both DAGs start at :00 a push took
+    # 6.2 s, the retry hit "Unique constraint violation" (409) and failed the task.
+    AIRFLOW__WORKERS__EXECUTION_API_TIMEOUT: "30"
     # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
     # key, and the BigQuery DAG is not created.
     GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
