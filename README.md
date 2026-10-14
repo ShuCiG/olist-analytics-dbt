@@ -262,6 +262,9 @@ project_id = "..."
 # ...
 ```
 
+Settings are read once, when the app process starts: after editing the secrets, **Reboot app** in the
+Streamlit Cloud workspace (saving them alone keeps the old values).
+
 ## Orchestration (Airflow + Cosmos)
 
 Local Airflow 3 replays the dump as a live feed: an **hourly** DAG run loads the next purchase month with
