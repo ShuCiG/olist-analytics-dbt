@@ -35,6 +35,10 @@ def heading(text: str) -> str:
     )
 
 
+def paragraph(text: str) -> str:
+    return f'<p style="margin:12px 0;font:14px/1.5 {FONT};color:{TEXT}">{escape(text)}</p>'
+
+
 def findings(items: list[tuple[str, str, str]], status: str) -> str:
     """Cards: (amount badge, description, small caption) per data-test finding."""
     accent, bg, _ = STATUS[status]
