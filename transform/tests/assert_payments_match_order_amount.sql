@@ -1,4 +1,4 @@
-{{ config(severity='warn') }}
+{{ config(severity='error') }}
 -- Known data quality issue: ~250 orders where paid amount differs from items + freight
 -- by more than 1 BRL (installment interest, vouchers). Surfaced as a warning, not hidden.
 select
