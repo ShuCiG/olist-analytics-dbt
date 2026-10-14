@@ -7,11 +7,12 @@
 An end-to-end ELT project on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables). Raw data is loaded with **dlt** into **DuckDB** (local dev) and
 **BigQuery** (prod) and modeled with **dbt Core** into a tested star schema. Every pull request is built in CI on
-DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishes the dbt docs; a Streamlit
-dashboard reads the prod marts.
+DuckDB and, slim, on BigQuery. Every merge deploys to BigQuery prod and publishes the dbt docs. A local
+Airflow replays the dump hourly as a live feed into its own BigQuery datasets, and a Streamlit dashboard
+reads those marts.
 
 **📖 Live dbt docs with lineage graph:** https://shucig.github.io/olist-analytics-dbt/<br>
-**📊 Live dashboard (BigQuery prod):** https://olist-analytics-dbt.streamlit.app/
+**📊 Live dashboard (BigQuery, fed hourly by Airflow):** https://olist-analytics-dbt.streamlit.app/
 
 [![Dashboard: delivery & reviews](docs/images/dashboard-delivery.png)](https://olist-analytics-dbt.streamlit.app/)
 
@@ -23,7 +24,7 @@ dashboard reads the prod marts.
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
-| Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads BigQuery prod marts with a read-only service account; declared as a dbt exposure |
+| Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads the Airflow-fed BigQuery marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
 | CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
@@ -225,7 +226,8 @@ cd transform && uv run dbt build --target prod
 `dashboard/` is a Streamlit app over the marts, declared in dbt as the exposure
 `olist_dashboard` (visible in the docs lineage graph; `dbt ls --select +exposure:olist_dashboard`
 lists the models it depends on). Three pages: sales overview, delivery & reviews, customers & sellers;
-a sidebar date filter applies to every query. Live: https://olist-analytics-dbt.streamlit.app/
+a sidebar date filter applies to every query; the sidebar shows the latest order and when it was loaded.
+Live: https://olist-analytics-dbt.streamlit.app/
 
 | Sales overview | Customers & sellers |
 |---|---|
@@ -234,6 +236,7 @@ a sidebar date filter applies to every query. Live: https://olist-analytics-dbt.
 ```bash
 uv run streamlit run dashboard/app.py                                   # DuckDB: data/olist.duckdb
 DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
+DASHBOARD_BACKEND=bigquery MARTS_DATASET=airflow_marts uv run streamlit run dashboard/app.py  # Airflow-fed marts
 uv run pytest dashboard                                                 # every page renders (also in CI)
 ```
 
@@ -241,12 +244,17 @@ The pages send plain SQL that both engines accept, so DuckDB and BigQuery give t
 (checked KPI by KPI). Results are cached for an hour, so BigQuery scans stay small.
 
 Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim
-`dashboard/requirements.txt`, not the dbt/dlt project). It reads prod as service account `dashboard-reader`:
-*BigQuery Job User* on the project + *BigQuery Data Viewer* on dataset `marts` only, so it cannot see `raw`
-or write anywhere. App secrets:
+`dashboard/requirements.txt`, not the dbt/dlt project). It reads dataset `airflow_marts`, which the local
+Airflow's BigQuery DAG refreshes every hour (see [Orchestration](#orchestration-airflow--cosmos)); prod
+`marts` is still built by CD on every merge, and the dashboard can point at either (`MARTS_DATASET`). Since
+that Airflow runs on a PC, the data stops moving while the PC is off; the sidebar date and the stale-data
+email show it. Access is service account `dashboard-reader`: *BigQuery Job User* on the project +
+*BigQuery Data Viewer* on datasets `marts` and `airflow_marts` only, so it cannot see raw data or write
+anywhere. App secrets:
 
 ```toml
 DASHBOARD_BACKEND = "bigquery"
+MARTS_DATASET = "airflow_marts"   # default "marts" (prod)
 
 [gcp_service_account]   # fields of the service account's JSON key
 type = "service_account"
@@ -342,4 +350,4 @@ Locally, `uv run pre-commit install` enables the same lint and type check plus h
 - [x] **Phase 4 — Incremental:** month-by-month loads, incremental fact, SCD2 snapshot, source freshness
 - [x] **Phase 5 — Orchestration:** Airflow 3 + Astronomer Cosmos (Docker), DAG factory for both warehouses, watcher mode
 - [x] **Phase 6 — Dashboard:** Streamlit over the marts (DuckDB / BigQuery), dbt exposure, public deploy
-- [ ] **Phase 7 — Live feed:** hourly replay of the dump in Airflow, email alerts (done), dashboard on the Airflow-fed marts
+- [x] **Phase 7 — Live feed:** hourly replay of the dump in Airflow, email alerts, dashboard on the Airflow-fed marts

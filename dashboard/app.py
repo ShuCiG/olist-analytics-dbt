@@ -15,7 +15,8 @@ page = st.navigation(
 )
 
 lo, hi = warehouse.date_bounds()
-default = (max(lo, warehouse.DEFAULT_PERIOD[0]), min(hi, warehouse.DEFAULT_PERIOD[1]))
+default = warehouse.default_period(lo, hi)
+loaded = warehouse.last_load()
 with st.sidebar:
     picked = st.date_input(
         "Purchase date",
@@ -30,8 +31,10 @@ with st.sidebar:
         st.session_state["period"] = picked
     st.session_state.setdefault("period", default)
     st.caption(
-        f"Data: dbt marts on **{'BigQuery (prod)' if warehouse.BACKEND == 'bigquery' else 'DuckDB (local)'}**, "
-        "cached 1 h. Brazilian e-commerce orders by Olist, 2016–2018. "
+        f"Data as of **{hi}** (latest order)"
+        + (f", loaded {loaded} UTC" if loaded else "")
+        + f". dbt marts on **{warehouse.source_label()}**, cached 1 h. "
+        "Brazilian e-commerce orders by Olist, 2016–2018. "
         "[Code](https://github.com/ShuCiG/olist-analytics-dbt) · "
         "[dbt docs](https://shucig.github.io/olist-analytics-dbt/)"
     )

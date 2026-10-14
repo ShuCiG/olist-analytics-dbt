@@ -1,7 +1,9 @@
 """Query layer: the same SQL runs on DuckDB (local) and BigQuery (prod marts).
 
-Backend comes from `DASHBOARD_BACKEND` (`duckdb` default, or `bigquery`): an
-env var locally, a top-level secret on Streamlit Community Cloud.
+Backend comes from `DASHBOARD_BACKEND` (`duckdb` default, or `bigquery`), the
+marts schema / dataset from `MARTS_DATASET` (`marts` default; `airflow_marts` =
+the marts fed hourly by the local Airflow replay): env vars locally, top-level
+secrets on Streamlit Community Cloud.
 
 SQL in the pages sticks to what both engines accept (`extract`, `date '...'`
 literals, `count(distinct)`, plain joins), like the dbt models do.
@@ -29,6 +31,7 @@ def _setting(name: str, default: str) -> str:
 
 BACKEND = _setting("DASHBOARD_BACKEND", "duckdb")
 GCP_PROJECT = _setting("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
+MARTS_DATASET = _setting("MARTS_DATASET", "marts")
 # Same default and env var as transform/profiles.yml, resolved from the repo root
 DUCKDB_PATH = os.environ.get(
     "DBT_DUCKDB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "olist.duckdb")
@@ -43,10 +46,19 @@ LOST_STATUSES = ("canceled", "unavailable")
 
 
 def table(name: str) -> str:
-    """Fully qualified mart relation (dbt puts marts in schema/dataset `marts`)."""
+    """Fully qualified mart relation (schema / dataset `MARTS_DATASET`)."""
     if BACKEND == "bigquery":
-        return f"`{GCP_PROJECT}.marts.{name}`"
-    return f"marts.{name}"
+        return f"`{GCP_PROJECT}.{MARTS_DATASET}.{name}`"
+    return f"{MARTS_DATASET}.{name}"
+
+
+def source_label() -> str:
+    """Where the numbers come from, for the sidebar caption."""
+    if BACKEND != "bigquery":
+        return "DuckDB (local)"
+    if MARTS_DATASET == "marts":
+        return "BigQuery (prod)"
+    return "BigQuery (hourly Airflow feed)"
 
 
 def _bigquery_client():
@@ -99,6 +111,19 @@ def date_bounds() -> tuple[dt.date, dt.date]:
         from {table('fct_orders')}
     """)
     return dt.date.fromisoformat(df["lo"].iloc[0]), dt.date.fromisoformat(df["hi"].iloc[0])
+
+
+def default_period(lo: dt.date, hi: dt.date) -> tuple[dt.date, dt.date]:
+    """DEFAULT_PERIOD clipped to the data; all of it while the feed is still short."""
+    start, end = max(lo, DEFAULT_PERIOD[0]), min(hi, DEFAULT_PERIOD[1])
+    return (start, end) if start <= end else (lo, hi)
+
+
+def last_load() -> str | None:
+    """When the newest order lines were loaded (`_loaded_at`, UTC), minute precision."""
+    df = query(f"select cast(max(_loaded_at) as string) as ts from {table('fct_order_items')}")
+    ts = df["ts"].iloc[0]
+    return None if ts is None or pd.isna(ts) else str(ts)[:16]
 
 
 def period() -> tuple[dt.date, dt.date]:
