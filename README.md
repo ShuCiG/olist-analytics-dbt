@@ -28,8 +28,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads the Airflow-fed BigQuery marts with a read-only service account; declared as a dbt exposure |
-| Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks, [dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator) (project structure + governance rules) |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
+| Code quality | sqlfluff (dbt templater), pyright, pytest, pre-commit hooks, [dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator) (project structure + governance rules) |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + `pytest` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -146,6 +146,12 @@ payment pivot by type, delivery lateness rules (date vs timestamp comparison, un
 `dim_customers` lifetime value (canceled orders excluded) and location (latest order, deterministic tie-break),
 and the incremental filter of `fct_order_items` (`is_incremental()` overridden, `this` as a fixture).
 
+**Python tests** (`pytest`, [tests/](tests/), no warehouse or download needed) cover the code around dbt:
+the dlt pipeline end to end on a tiny fake dump in a temp DuckDB (month cursor, `--next` skipping empty months,
+used-up dump, `--until`, re-runs, `--full-refresh`, the feed-status JSON Airflow reads), the parser of dbt's
+end-of-run summary, and the alert decisions (OK / STALE / no email, the daily reminder window, which log a
+failure email quotes) on fake Airflow task logs. The Streamlit pages have a separate smoke test on built marts.
+
 Known defects in the source data are **surfaced as `warn` tests, not hidden**:
 
 | Finding | Handling |
@@ -204,6 +210,7 @@ cd transform
 uv run dbt deps
 uv run dbt build                      # seed + 21 models + snapshot + 108 data tests + 5 unit tests
 uv run dbt docs generate && uv run dbt docs serve
+cd .. && uv run pytest                # Python tests (pipeline, alert logic)
 ```
 
 Simulate data arriving month by month (the dump is static; dlt state remembers the last loaded month):
@@ -347,6 +354,8 @@ dbt gated by `has_new_orders` and the alerts wired.
 
 ```
 ├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery raw, monthly chunks
+├── alerting/                    # alert emails (Airflow + CI): dbt summary parser, decisions, HTML layout
+├── tests/                       # pytest: pipeline, dbt summary, alert decisions
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── dashboard/                   # Streamlit app over the marts (DuckDB / BigQuery), AppTest smoke test
 ├── transform/                   # dbt project
@@ -366,13 +375,13 @@ dbt gated by `has_new_orders` and the alerts wired.
 
 Feature branch → PR → CI must pass → squash merge → CD.
 
-- **PR:** `sqlfluff lint` + `pyright` + Airflow DAG parse check (built image), then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
+- **PR:** `sqlfluff lint` + `pyright` + `pytest` + Airflow DAG parse check (built image), then in parallel a full `dbt build` on DuckDB (fresh dlt ingest) and slim CI on BigQuery:
   only modified models and their children are built, in datasets `ci_pr_<N>_<run_id>_*`; unmodified parents are read
   from prod (`--defer` to the manifest of the last deploy). The datasets are dropped after the run.
 - **Merge to `main`:** dlt → BigQuery `raw` (new months only), `dbt source freshness`, `dbt build --target prod`, dbt docs (generated from prod) → GitHub Pages,
   `manifest.json` stored as an artifact for slim CI, Airflow image (code + manifest baked in) → GHCR.
 
-Locally, `uv run pre-commit install` enables the same lint and type check plus hygiene hooks before every commit.
+Locally, `uv run pre-commit install` enables the same lint, type check and Python tests plus hygiene hooks before every commit.
 `main` is protected. Design decisions are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Roadmap

@@ -83,7 +83,10 @@ tables + dlt state and loads the first month (add `until` to load more).
 
 ## Email alerts
 
-At most one email per run ([dags/olist_alerts.py](dags/olist_alerts.py)):
+At most one email per run. [dags/olist_alerts.py](dags/olist_alerts.py) is the
+Airflow side (callback, `report` task, Variables, SMTP); what an email says is decided
+in [alerting/airflow_emails.py](../alerting/airflow_emails.py), which has no Airflow
+imports and is unit-tested (`uv run pytest`, [tests/](../tests/)):
 
 | When | Subject | Sent by |
 |---|---|---|
