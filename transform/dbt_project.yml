@@ -11,6 +11,12 @@ snapshot-paths: ["snapshots"]
 
 clean-targets: ["target", "dbt_packages"]
 
+flags:
+  # Future dbt default: a package's ref() looks in the package first, then in the
+  # root project. dbt_project_evaluator's ref to its exceptions seed then finds
+  # ours (its own copy is disabled below) without a cycle warning per rule.
+  require_ref_searches_node_package_before_root: true
+
 models:
   olist:
     staging:
@@ -22,10 +28,31 @@ models:
     marts:
       +materialized: table
       +schema: marts
+      # Consumed outside the project (dashboard, other teams): groups and access in models/_groups.yml
+      +access: public
+  # Project linter, off by default: CI runs it as its own step with
+  # DBT_PROJECT_EVALUATOR=true (D32). Off, its nodes stay out of every build,
+  # Airflow's manifest and the warn-test list of the alert emails.
+  dbt_project_evaluator:
+    +enabled: &evaluator_enabled "{{ (env_var('DBT_PROJECT_EVALUATOR', 'false') | lower == 'true') | as_bool }}"
+    +schema: project_evaluator
+
+data_tests:
+  dbt_project_evaluator:
+    # Findings fail the step; known exceptions live in seeds/dbt_project_evaluator_exceptions.csv
+    +severity: error
 
 seeds:
+  dbt_project_evaluator:
+    # Replaced by this project's seeds/dbt_project_evaluator_exceptions.csv
+    dbt_project_evaluator_exceptions:
+      +enabled: false
   olist:
     +schema: seeds
+    # Evaluator findings accepted on purpose, with the reason (described by the package's yml)
+    dbt_project_evaluator_exceptions:
+      +enabled: *evaluator_enabled
+      +schema: project_evaluator
     product_category_name_translation:
       # Macros (dbt.type_string) aren't available here, `target` is
       +column_types:

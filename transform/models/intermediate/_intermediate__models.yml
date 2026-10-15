@@ -3,6 +3,9 @@ version: 2
 models:
   - name: int_payments_pivoted_to_orders
     description: Payments pivoted to one row per order, amount per payment type.
+    # Protected, not private: dim_customers (group parties) sums payments per person
+    config:
+      group: orders
     columns:
       - name: order_id
         description: "{{ doc('order_id') }}"
@@ -16,6 +19,9 @@ models:
 
   - name: int_order_items_aggregated_to_orders
     description: Order items aggregated to one row per order.
+    config:
+      group: orders
+      access: private
     columns:
       - name: order_id
         description: "{{ doc('order_id') }}"
@@ -29,6 +35,9 @@ models:
 
   - name: int_orders_delivery_metrics
     description: Delivery timing metrics per order. Null durations for undelivered orders.
+    config:
+      group: orders
+      access: private
     columns:
       - name: order_id
         description: "{{ doc('order_id') }}"
@@ -50,6 +59,9 @@ models:
 
   - name: int_order_reviews_deduplicated
     description: Latest review per order.
+    config:
+      group: orders
+      access: private
     columns:
       - name: order_id
         description: "{{ doc('order_id') }}"
@@ -57,7 +69,47 @@ models:
 
   - name: int_zip_codes_located
     description: One centroid (avg lat/lng) per zip code prefix.
+    config:
+      group: parties
+      access: private
     columns:
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }}"
         data_tests: [unique, not_null]
+
+  - name: int_orders_joined_to_customers
+    description: >
+      One row per order with the person (`customer_unique_id`) and the delivery
+      location of that order. The single join of orders to customers for the marts.
+    # Protected: read by both groups (fct_* in orders, dim_customers in parties)
+    config:
+      group: orders
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Per-order customer key of the source.
+      - name: customer_unique_id
+        description: "{{ doc('customer_unique_id') }}"
+        data_tests: [not_null]
+      - name: zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }} Delivery address of the order."
+      - name: city
+        description: Customer city of the order.
+      - name: state
+        description: Two-letter state code of the order.
+      - name: order_status
+        description: "{{ doc('order_status') }}"
+      - name: purchased_at
+        description: Purchase timestamp.
+      - name: approved_at
+        description: Payment approval timestamp.
+      - name: delivered_to_carrier_at
+        description: Handed over to the logistics partner.
+      - name: delivered_to_customer_at
+        description: Delivered to the customer.
+      - name: estimated_delivery_date
+        description: Delivery date promised to the customer at purchase.
+      - name: _loaded_at
+        description: "{{ doc('loaded_at') }} Of the order row."

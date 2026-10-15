@@ -4,9 +4,9 @@
 select
     order_id,
     order_amount,
-    payment_value
+    paid_amount
 from {{ ref('fct_orders') }}
 where
     payments_count > 0
     and items_count > 0
-    and abs(payment_value - order_amount) > 1
+    and abs(paid_amount - order_amount) > 1

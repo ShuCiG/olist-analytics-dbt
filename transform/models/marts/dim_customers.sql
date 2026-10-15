@@ -1,11 +1,7 @@
 -- Grain: one row per person (customer_unique_id). Olist issues a new
 -- customer_id per order, so location is taken from the person's latest order.
-with customers as (
-    select * from {{ ref('stg_olist__customers') }}
-),
-
-orders as (
-    select * from {{ ref('stg_olist__orders') }}
+with orders as (
+    select * from {{ ref('int_orders_joined_to_customers') }}
 ),
 
 payments as (
@@ -18,20 +14,18 @@ zip_codes as (
 
 customer_orders as (
     select
-        customers.customer_unique_id,
-        customers.zip_code_prefix,
-        customers.city,
-        customers.state,
-        orders.order_id,
-        orders.order_status,
-        orders.purchased_at,
+        customer_unique_id,
+        zip_code_prefix,
+        city,
+        state,
+        order_id,
+        order_status,
+        purchased_at,
         row_number() over (
-            partition by customers.customer_unique_id
-            order by orders.purchased_at desc, orders.order_id asc
+            partition by customer_unique_id
+            order by purchased_at desc, order_id asc
         ) as recency_rank
-    from customers
-    inner join orders
-        on customers.customer_id = orders.customer_id
+    from orders
 ),
 
 order_stats as (

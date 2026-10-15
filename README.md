@@ -28,8 +28,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads the Airflow-fed BigQuery marts with a read-only service account; declared as a dbt exposure |
-| Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
+| Code quality | sqlfluff (dbt templater), pyright, pre-commit hooks, [dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator) (project structure + governance rules) |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -42,8 +42,7 @@ flowchart LR
         raw --> snapshots[snapshots<br/>SCD2 sellers]
         seed[seed:<br/>category translation] --> marts
         staging[staging<br/>8 views: typed, renamed] --> intermediate
-        intermediate[intermediate<br/>5 views: rollups, dedup] --> marts
-        staging --> marts
+        intermediate[intermediate<br/>6 views: joins, rollups, dedup] --> marts
         marts[marts<br/>star schema tables]
     end
     marts --> docs[dbt docs<br/>GitHub Pages]
@@ -77,6 +76,7 @@ flowchart LR
     int_delivery[int_orders_delivery_metrics]:::int
     int_reviews[int_order_reviews_deduplicated]:::int
     int_zip[int_zip_codes_located]:::int
+    int_oc[int_orders_joined_to_customers]:::int
 
     fct_orders:::mart
     fct_order_items:::mart
@@ -90,20 +90,19 @@ flowchart LR
     stg_orders --> int_delivery
     stg_reviews --> int_reviews
     stg_geo --> int_zip
+    stg_orders --> int_oc
+    stg_customers --> int_oc
 
-    stg_orders --> fct_orders
-    stg_customers --> fct_orders
+    int_oc --> fct_orders
     int_items --> fct_orders
     int_pay --> fct_orders
     int_delivery --> fct_orders
     int_reviews --> fct_orders
 
     stg_items --> fct_order_items
-    stg_orders --> fct_order_items
-    stg_customers --> fct_order_items
+    int_oc --> fct_order_items
 
-    stg_customers --> dim_customers
-    stg_orders --> dim_customers
+    int_oc --> dim_customers
     int_pay --> dim_customers
     int_zip --> dim_customers
 
@@ -131,7 +130,7 @@ erDiagram
 
 | Model | Grain | Notes |
 |---|---|---|
-| `fct_orders` | order | item, payment, delivery and review measures |
+| `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`), v1 deprecated (`fct_orders_v1`) |
 | `fct_order_items` | order line | reconciles exactly with `fct_orders.order_amount` (singular test) |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location comes from the latest order. Includes LTV and repeat flag |
 | `dim_products` | product | category translated to English, fallback `unknown` |
@@ -140,7 +139,7 @@ erDiagram
 
 ## Testing & data quality
 
-**102 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
+**108 data tests** run on every PR (`dbt build`): primary/foreign keys, accepted values, ranges, composite keys, a row-count parity test, 2 singular tests and a custom generic test `is_not_before` (timestamp chronology).
 
 **5 unit tests** (dbt ≥1.8 `unit_tests:`) check transformation logic on hand-made fixtures, independent of the data:
 payment pivot by type, delivery lateness rules (date vs timestamp comparison, undelivered orders),
@@ -169,6 +168,30 @@ returns anything else. Money columns are cast explicitly by the `to_money()` mac
 parameterized types in `CAST`. Shared column descriptions live in doc blocks (`models/_docs.md`) and are
 reused across models.
 
+## Governance
+
+Set up the way a mart would be shared across teams (dbt Mesh), even in a one-repo project:
+
+- **Groups and access** (`models/_groups.yml`): every intermediate and mart model belongs to a domain
+  group, `orders` or `parties` (customers and sellers). Marts are `public` and carry enforced contracts;
+  intermediate models used inside one group are `private` (a `ref` from another group fails at parse
+  time); shared ones stay `protected`.
+- **Model versions**: `fct_orders` v2 renamed `payment_value` to `paid_amount`, a breaking change for
+  consumers. v1 stays available until its `deprecation_date` as a projection of v2 (one copy of the logic).
+  `ref('fct_orders')` resolves to the latest version, which keeps the unsuffixed table name (`alias`);
+  a consumer pins the old shape with `ref('fct_orders', v=1)` or the table `fct_orders_v1`.
+- **[dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator)** runs as a CI check on every PR (off in
+  all other runs): naming and folder conventions, DAG shape (fan-out, rejoins, root models),
+  documentation and primary-key test coverage, public models without contracts, exposures that read
+  non-public models. Its first run made the refactor that added `int_orders_joined_to_customers` (three
+  marts each joined orders to customers); the two accepted findings are listed with their reasons in
+  `seeds/dbt_project_evaluator_exceptions.csv`.
+
+```bash
+cd transform
+DBT_PROJECT_EVALUATOR=true uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
+```
+
 ## How to run
 
 Requirements: [uv](https://docs.astral.sh/uv/). Kaggle credentials are not needed.
@@ -179,7 +202,7 @@ uv run python ingestion/pipeline.py   # download Olist, load into data/olist.duc
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 19 models + snapshot + 102 data tests + 5 unit tests
+uv run dbt build                      # seed + 21 models + snapshot + 108 data tests + 5 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 ```
 

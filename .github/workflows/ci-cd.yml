@@ -60,6 +60,36 @@ jobs:
       - name: pyright
         run: uv run pyright
 
+  # dbt_project_evaluator: project structure rules (naming, DAG shape, docs and test
+  # coverage, governance: public marts need contracts, exposures only read public
+  # models). Reads dbt's graph, not data, so an empty DuckDB file is enough. Off in
+  # every other run (D32); accepted findings: seeds/dbt_project_evaluator_exceptions.csv
+  dbt-project-evaluator:
+    name: dbt project evaluator
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DBT_PROJECT_EVALUATOR: "true"
+      DBT_DUCKDB_PATH: evaluator.duckdb  # relative to transform/, fresh on the runner
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt build (evaluator models + rule tests)
+        working-directory: transform
+        run: uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
+
   # Airflow image builds, `dbt parse` writes the manifest Cosmos renders from, and
   # both DAGs parse (check_dags.py). No DB or warehouse needed. A dummy key makes
   # the BigQuery DAG render; parsing never authenticates.
@@ -361,7 +391,7 @@ jobs:
   # GitHub's own notification only reaches the person who triggered the run.
   notify-failure:
     name: Email on failure
-    needs: [sqlfluff-lint, pyright, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
+    needs: [sqlfluff-lint, pyright, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
     if: failure() && vars.ALERT_EMAILS != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5

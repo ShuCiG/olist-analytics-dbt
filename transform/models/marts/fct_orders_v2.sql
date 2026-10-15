@@ -1,10 +1,7 @@
--- Grain: one row per order.
+-- Grain: one row per order. Version 2 (latest): `payment_value` renamed to
+-- `paid_amount`, like the other money columns. v1 is built from this model.
 with orders as (
-    select * from {{ ref('stg_olist__orders') }}
-),
-
-customers as (
-    select * from {{ ref('stg_olist__customers') }}
+    select * from {{ ref('int_orders_joined_to_customers') }}
 ),
 
 items as (
@@ -26,7 +23,7 @@ reviews as (
 final as (
     select
         orders.order_id,
-        customers.customer_unique_id,
+        orders.customer_unique_id,
         orders.order_status,
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,
@@ -42,7 +39,7 @@ final as (
         {{ to_money('coalesce(items.order_amount, 0)') }} as order_amount,
 
         coalesce(payments.payments_count, 0) as payments_count,
-        {{ to_money('coalesce(payments.total_payment_value, 0)') }} as payment_value,
+        {{ to_money('coalesce(payments.total_payment_value, 0)') }} as paid_amount,
         payments.max_installments,
         {{ to_money('coalesce(payments.credit_card_amount, 0)') }} as credit_card_amount,
         {{ to_money('coalesce(payments.boleto_amount, 0)') }} as boleto_amount,
@@ -58,8 +55,6 @@ final as (
         reviews.review_score,
         reviews.review_id is not null as has_review
     from orders
-    inner join customers
-        on orders.customer_id = customers.customer_id
     left join items
         on orders.order_id = items.order_id
     left join payments
