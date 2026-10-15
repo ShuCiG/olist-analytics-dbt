@@ -30,3 +30,11 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      # Python unit tests (tests/, ~45 s) when the code they cover changes
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        files: ^(ingestion|alerting|tests|airflow/dags)/.*\.py$
+        pass_filenames: false

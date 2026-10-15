@@ -29,9 +29,15 @@ dev = [
 [tool.uv]
 default-groups = ["dev", "dashboard"]
 
+# Python unit tests (tests/): `uv run pytest`. The dashboard smoke test needs built
+# marts and runs separately (`uv run pytest dashboard`)
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting
+
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard", "alerting", ".github/scripts"]
+include = ["ingestion", "dashboard", "alerting", "tests", ".github/scripts"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

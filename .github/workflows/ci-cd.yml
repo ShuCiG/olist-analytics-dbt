@@ -60,6 +60,25 @@ jobs:
       - name: pyright
         run: uv run pyright
 
+  # Python unit tests (tests/): dlt chunk cursor on a fake dump, dbt summary parsing,
+  # alert email decisions. No warehouse or Kaggle download needed
+  python-tests:
+    name: python tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: pytest
+        run: uv run pytest -q
+
   # dbt_project_evaluator: project structure rules (naming, DAG shape, docs and test
   # coverage, governance: public marts need contracts, exposures only read public
   # models). Reads dbt's graph, not data, so an empty DuckDB file is enough. Off in
@@ -123,10 +142,11 @@ jobs:
             -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
             --entrypoint python olist-airflow:ci /opt/project/airflow/check_dags.py
 
-  # Required check: gating it on pyright blocks merges with type errors
+  # Required check: gating it on pyright and the Python tests blocks merges with
+  # type errors or failing tests
   dbt-build:
     name: dbt build
-    needs: [sqlfluff-lint, pyright]
+    needs: [sqlfluff-lint, pyright, python-tests]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -391,7 +411,7 @@ jobs:
   # GitHub's own notification only reaches the person who triggered the run.
   notify-failure:
     name: Email on failure
-    needs: [sqlfluff-lint, pyright, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
+    needs: [sqlfluff-lint, pyright, python-tests, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
     if: failure() && vars.ALERT_EMAILS != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
