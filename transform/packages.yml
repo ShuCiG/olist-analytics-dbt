@@ -8,3 +8,7 @@ packages:
   # package-lock.yml, and dbt then checks packages.yml against dbt_packages/.
   - package: godatadriven/dbt_date
     version: [">=0.21.0", "<1.0.0"]
+  # Lints the project's structure (naming, docs/test coverage, DAG shape, governance).
+  # Disabled unless DBT_PROJECT_EVALUATOR=true (dbt_project.yml): CI runs it as its own step.
+  - package: dbt-labs/dbt_project_evaluator
+    version: [">=1.0.0", "<2.0.0"]

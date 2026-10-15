@@ -1,0 +1,15 @@
+version: 2
+
+# Ownership by business domain (D33). A model's group owns it; `access` says who
+# may ref it: private = its own group only, protected = this project (default),
+# public = anyone, incl. other dbt projects (dbt Mesh). Marts are public and carry
+# contracts; intermediate models used by one group are private to it.
+groups:
+  - name: orders
+    description: Orders, line items, payments, deliveries, reviews, products, calendar.
+    owner:
+      name: Aliaksandr Letsko
+  - name: parties
+    description: The people on both sides of an order, customers and sellers, located by zip code.
+    owner:
+      name: Aliaksandr Letsko

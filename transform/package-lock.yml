@@ -8,4 +8,7 @@ packages:
   - name: dbt_date
     package: godatadriven/dbt_date
     version: 0.21.0
-sha1_hash: a6bef089344b718e6651a17711695877d1714eca
+  - name: dbt_project_evaluator
+    package: dbt-labs/dbt_project_evaluator
+    version: 1.4.1
+sha1_hash: abb8447f3e40c58bdbb65500ca094310f91bede3

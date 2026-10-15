@@ -6,9 +6,11 @@ dlt loads the raw CSV files in monthly chunks, dbt builds staging → intermedia
 These docs are generated from the BigQuery prod build; the same project runs on DuckDB locally and in CI,
 and month by month in Airflow (Cosmos).
 
-- **Facts:** `fct_orders` (one row per order), `fct_order_items` (one row per line item)
+- **Facts:** `fct_orders` (one row per order; versioned, v1 deprecated), `fct_order_items` (one row per line item)
 - **Dimensions:** `dim_customers`, `dim_sellers`, `dim_products`, `dim_date`
 - Mart models have enforced **contracts**: column names and types are checked on every build.
+- **Groups** `orders` and `parties` own the models; marts are `public`, intermediate models `private`
+  to their group or `protected` when both groups use them.
 
 Source code and data-quality notes: [github.com/ShuCiG/olist-analytics-dbt](https://github.com/ShuCiG/olist-analytics-dbt)
 {% enddocs %}
@@ -35,7 +37,7 @@ Calendar date of the purchase; joins to `dim_date.date_day`.
 Items price + freight, in BRL. What the order costs according to its line items.
 {% enddocs %}
 
-{% docs payment_value %}
+{% docs paid_amount %}
 Total actually paid across all payments of the order, in BRL. Can differ from `order_amount`
 (installment interest, vouchers); differences above 1 BRL are flagged by a warn test.
 {% enddocs %}

@@ -22,11 +22,7 @@ with order_items as (
 ),
 
 orders as (
-    select * from {{ ref('stg_olist__orders') }}
-),
-
-customers as (
-    select * from {{ ref('stg_olist__customers') }}
+    select * from {{ ref('int_orders_joined_to_customers') }}
 ),
 
 final as (
@@ -36,7 +32,7 @@ final as (
         order_items.order_item_number,
         order_items.product_id,
         order_items.seller_id,
-        customers.customer_unique_id,
+        orders.customer_unique_id,
         orders.order_status,
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,
@@ -48,8 +44,6 @@ final as (
     from order_items
     inner join orders
         on order_items.order_id = orders.order_id
-    inner join customers
-        on orders.customer_id = customers.customer_id
     {% if is_incremental() %}
         -- >= not >: rows of the last run are re-merged (idempotent) rather than missed
         where
