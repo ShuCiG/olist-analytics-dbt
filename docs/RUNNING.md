@@ -1,0 +1,162 @@
+# Running the project
+
+Everything runs locally on DuckDB with no account or key; BigQuery and Airflow are optional.
+Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it), Docker for Airflow.
+
+- [Local build (DuckDB)](#local-build-duckdb)
+- [Data arriving month by month](#data-arriving-month-by-month)
+- [SCD2 snapshot demo](#scd2-snapshot-demo)
+- [Data product checks](#data-product-checks)
+- [Semantic layer queries](#semantic-layer-queries)
+- [Project evaluator](#project-evaluator)
+- [Dashboard](#dashboard)
+- [BigQuery](#bigquery)
+- [Airflow](#airflow)
+- [Development hooks](#development-hooks)
+
+## Local build (DuckDB)
+
+```bash
+uv sync                               # Python 3.12 + dependencies
+uv run python ingestion/pipeline.py   # download Olist (Kaggle, no token needed), load data/olist.duckdb schema raw
+
+cd transform
+uv run dbt deps
+uv run dbt build                      # seed + 21 models + snapshot + 108 data tests + 5 unit tests
+uv run dbt docs generate && uv run dbt docs serve
+cd ..
+uv run pytest                         # Python tests: pipeline, dbt summary parser, alert decisions (no data needed)
+uv run pytest data-product dashboard  # data product checks, dashboard tests (need the built marts)
+```
+
+## Data arriving month by month
+
+The dump is static; dlt state remembers the last loaded month, so loads can be replayed in chunks:
+
+```bash
+uv run python ingestion/pipeline.py --full-refresh --until 2017-06   # orders up to June 2017
+uv run python ingestion/pipeline.py --until 2017-07                  # adds July 2017 only
+uv run python ingestion/pipeline.py --next                           # adds the next month with orders
+uv run python ingestion/pipeline.py                                  # adds the rest; re-run = no-op
+cd transform && uv run dbt source freshness                          # checks raw `_loaded_at`
+uv run dbt build        # after each chunk: fct_order_items merges only the new rows
+```
+
+## SCD2 snapshot demo
+
+`snap_sellers` keeps the history of seller location (`check` strategy on zip / city / state,
+`hard_deletes: new_record`). Sellers never change in the dump, so prod holds one version each. To see versions:
+
+```bash
+# change a city and delete a seller in raw, then snapshot
+uv run python -c "import duckdb; c = duckdb.connect('data/olist.duckdb'); c.execute(\"update raw.sellers set seller_city = 'campinas' where seller_id = '0015a82c2db000af6aaaf3ae2ecb0532'\"); c.execute(\"delete from raw.sellers where seller_id = '001cca7ae9ae17fb1caed9dfb1094831'\")"
+cd transform && uv run dbt snapshot && cd ..
+uv run python ingestion/pipeline.py && cd transform && uv run dbt snapshot   # reload restores both
+```
+
+| seller | city | dbt_valid_from | dbt_valid_to | dbt_is_deleted |
+|---|---|---|---|---|
+| 0015a8… | santo andre | 08:28:05 | 08:28:53 | False |
+| 0015a8… | campinas | 08:28:53 | 08:29:23 | False |
+| 0015a8… | santo andre | 08:29:23 | *null* | False |
+| 001cca… | cariacica | 08:28:05 | 08:28:53 | False |
+| 001cca… | cariacica | 08:28:53 | 08:29:23 | True |
+| 001cca… | cariacica | 08:29:23 | *null* | False |
+
+A reload with no changes adds no versions (dlt metadata columns are not compared).
+
+## Data product checks
+
+```bash
+uv run datacontract test data-product/contracts/olist-raw.odcs.yaml --server local    # input contract on raw
+uv run datacontract test data-product/contracts/olist-marts.odcs.yaml --server local  # output contract on marts
+# --server prod / live: BigQuery datasets marts / airflow_marts (needs BigQuery Read Session User)
+uv run python data-product/check_compatibility.py origin/main   # versioning rule, as on a PR
+uv run python data-product/build_site.py site/data-product      # product page + contract catalog
+```
+
+On Windows set `PYTHONUTF8=1` (the CLI prints emoji the console code page can't encode).
+
+## Semantic layer queries
+
+```bash
+cd transform
+uv run dbt parse     # writes target/semantic_manifest.json
+uv run mf list metrics
+uv run mf query --metrics revenue,average_order_value --group-by metric_time__month --start-time 2018-01-01
+uv run mf query --saved-query late_delivery_by_state --order -delivered_orders
+uv run mf query --metrics revenue --group-by metric_time__year --explain   # show the generated SQL
+uv run mf validate-configs                                                  # every metric queried on the warehouse
+DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics orders   # BigQuery prod
+```
+
+`mf` has no `--target` flag: `profiles.yml` takes the default target from `DBT_TARGET`.
+
+## Project evaluator
+
+dbt_project_evaluator is off in normal runs (its ~50 nodes stay out of builds and Airflow); CI turns it on:
+
+```bash
+cd transform
+DBT_PROJECT_EVALUATOR=true uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
+```
+
+## Dashboard
+
+```bash
+uv run streamlit run dashboard/app.py                                   # DuckDB: data/olist.duckdb
+DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
+DASHBOARD_BACKEND=bigquery MARTS_DATASET=airflow_marts uv run streamlit run dashboard/app.py  # Airflow-fed marts
+uv run pytest dashboard                                                 # pages render, KPIs = metrics, SQL = agreement
+```
+
+Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim
+`dashboard/requirements.txt`, not the dbt/dlt project). Access is service account `dashboard-reader`:
+*BigQuery Job User* on the project + *BigQuery Data Viewer* on datasets `marts` and `airflow_marts` only.
+App secrets:
+
+```toml
+DASHBOARD_BACKEND = "bigquery"
+MARTS_DATASET = "airflow_marts"   # default "marts" (prod)
+
+[gcp_service_account]   # fields of the service account's JSON key
+type = "service_account"
+project_id = "..."
+# ...
+```
+
+Settings are read once, when the app process starts: after editing the secrets, **Reboot app** in the
+Streamlit Cloud workspace (saving them alone keeps the old values).
+
+## BigQuery
+
+Needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*
+(+ *BigQuery Read Session User* for `datacontract test` on BigQuery):
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json   # Application Default Credentials
+export GCP_PROJECT_ID=<your-project>
+uv run python ingestion/pipeline.py --destination bigquery
+cd transform && uv run dbt build --target prod
+```
+
+## Airflow
+
+```bash
+docker compose -f airflow/docker-compose.yml up -d --build      # UI: http://localhost:8080, Mailpit: :8025
+docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
+  airflow dags trigger olist_elt_duckdb --conf '{"until": "2017-06"}'   # catch up to a month at once
+```
+
+Or run a published image instead of building: `OLIST_AIRFLOW_IMAGE=ghcr.io/shucig/olist-airflow:<sha>` in
+`airflow/.env`. BigQuery key, DAG params, alert settings, reset and re-running a failed month:
+[airflow/README.md](../airflow/README.md).
+
+## Development hooks
+
+```bash
+uv run pre-commit install   # whitespace / YAML / secrets checks, no commits to main,
+                            # sqlfluff on changed SQL, pyright + pytest on Python changes
+uv run sqlfluff lint transform/models transform/tests
+uv run pyright
+```

@@ -142,6 +142,7 @@ Product Owner <b>{e(owner['name'])}</b> · support: <a href="{e(support['url'])}
 
 
 def build(out: Path) -> None:
+    out = out.resolve()  # the catalog runs from data-product/, not from the caller's directory
     out.mkdir(parents=True, exist_ok=True)
     build_catalog(out)
     contract_paths = sorted((PRODUCT_DIR / "contracts").glob("*.odcs.yaml"))

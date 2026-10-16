@@ -255,9 +255,13 @@ def test_contract_versioning_rule(old: str, new: str, changed: bool, breaking: b
     assert (check.verdict(old, new, changed, breaking) is None) == ok
 
 
-def test_product_page_builds(tmp_path: Path, product: dict[str, Any], agreements: list[dict[str, Any]]) -> None:
-    out = tmp_path / "data-product"
-    load_script("build_site").build(out)
+def test_product_page_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, product: dict[str, Any], agreements: list[dict[str, Any]]
+) -> None:
+    # A relative output path, as CD passes it (_site/data-product)
+    monkeypatch.chdir(tmp_path)
+    load_script("build_site").build(Path("_site/data-product"))
+    out = tmp_path / "_site" / "data-product"
     page = (out / "index.html").read_text(encoding="utf-8")
     assert product["name"] in page
     for agreement in agreements:
