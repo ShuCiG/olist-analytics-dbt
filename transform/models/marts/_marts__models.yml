@@ -17,9 +17,14 @@ models:
     config:
       group: orders
       access: protected
+    # Day-grain time spine of the semantic layer (_marts__semantic_models.yml):
+    # MetricFlow joins to it for time grains and cumulative / offset metrics
+    time_spine:
+      standard_granularity_column: date_day
     columns:
       - name: date_day
         description: Primary key.
+        granularity: day
         data_tests: [unique, not_null]
 
   - name: dim_customers

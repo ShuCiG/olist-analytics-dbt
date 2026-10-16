@@ -26,10 +26,11 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
+| Semantic layer | dbt Semantic Layer / MetricFlow: business metrics defined once in YAML, queried with `mf` on DuckDB and BigQuery; dashboard KPIs tested against them |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads the Airflow-fed BigQuery marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pytest, pre-commit hooks, [dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator) (project structure + governance rules) |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + `pytest` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + `pytest` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB (+ semantic layer validation, dashboard tests) + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -150,7 +151,8 @@ and the incremental filter of `fct_order_items` (`is_incremental()` overridden, 
 the dlt pipeline end to end on a tiny fake dump in a temp DuckDB (month cursor, `--next` skipping empty months,
 used-up dump, `--until`, re-runs, `--full-refresh`, the feed-status JSON Airflow reads), the parser of dbt's
 end-of-run summary, and the alert decisions (OK / STALE / no email, the daily reminder window, which log a
-failure email quotes) on fake Airflow task logs. The Streamlit pages have a separate smoke test on built marts.
+failure email quotes) on fake Airflow task logs. The Streamlit pages have separate tests on built marts: every page
+renders, and its KPI tiles equal the [semantic layer](#semantic-layer-metricflow) metrics.
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**:
 
@@ -197,6 +199,42 @@ Set up the way a mart would be shared across teams (dbt Mesh), even in a one-rep
 cd transform
 DBT_PROJECT_EVALUATOR=true uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
 ```
+
+## Semantic layer (MetricFlow)
+
+Business metrics are defined once, in [`_marts__semantic_models.yml`](transform/models/marts/_marts__semantic_models.yml),
+on top of the marts. **Semantic models** describe `fct_orders` and `dim_customers`: entities (join keys: `order`,
+`customer`), dimensions (status, delivery flags, customer state) and measures (counts, sums, averages).
+**Metrics** are built on the measures: simple ones with filters (`revenue` = items + freight of orders not canceled
+or unavailable), ratios (`average_order_value`, `late_delivery_rate`, `repeat_customer_rate`). `dim_date` is the
+time spine. MetricFlow writes the SQL for the current target, joins included: `late_delivery_rate` by
+`customer__state` joins orders to customers by itself.
+
+| Metric | Definition |
+|---|---|
+| `orders`, `sold_orders` | orders placed; of them, not canceled or unavailable |
+| `revenue` | items + freight of sold orders, BRL |
+| `average_order_value` | revenue / sold orders |
+| `customers`, `revenue_per_customer` | people who ordered in the period; revenue / them |
+| `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
+| `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |
+| `new_customers`, `repeat_customers`, `repeat_customer_rate` | people by first order (cohort); of them, who ordered again; the share |
+
+```bash
+cd transform
+uv run dbt parse     # writes target/semantic_manifest.json
+uv run mf list metrics
+uv run mf query --metrics revenue,average_order_value --group-by metric_time__month --start-time 2018-01-01
+uv run mf query --saved-query late_delivery_by_state --order -delivered_orders
+uv run mf query --metrics revenue --group-by metric_time__year --explain   # show the generated SQL
+DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics orders   # BigQuery prod
+```
+
+The dashboard keeps its own SQL (it runs on Streamlit Cloud without dbt), and a test holds both sides together:
+[`dashboard/tests/test_metrics.py`](dashboard/tests/test_metrics.py) computes every KPI tile and asks `mf query`
+for the matching metric on the same data and period; CI runs it after `dbt build`, next to
+`mf validate-configs` (every dimension, measure and metric queried against the warehouse). Same numbers on DuckDB
+and BigQuery prod (99,441 orders, R$ 15,735,527.03 revenue, 6.77 % late, 3.12 % repeat customers).
 
 ## How to run
 
@@ -270,7 +308,7 @@ Live: https://olist-analytics-dbt.streamlit.app/
 uv run streamlit run dashboard/app.py                                   # DuckDB: data/olist.duckdb
 DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
 DASHBOARD_BACKEND=bigquery MARTS_DATASET=airflow_marts uv run streamlit run dashboard/app.py  # Airflow-fed marts
-uv run pytest dashboard                                                 # every page renders (also in CI)
+uv run pytest dashboard                                                 # pages render, KPIs = metrics (also in CI)
 ```
 
 The pages send plain SQL that both engines accept, so DuckDB and BigQuery give the same numbers
@@ -357,12 +395,12 @@ dbt gated by `has_new_orders` and the alerts wired.
 ├── alerting/                    # alert emails (Airflow + CI): dbt summary parser, decisions, HTML layout
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
-├── dashboard/                   # Streamlit app over the marts (DuckDB / BigQuery), AppTest smoke test
+├── dashboard/                   # Streamlit app over the marts (DuckDB / BigQuery), AppTest + KPI tests
 ├── transform/                   # dbt project
 │   ├── models/
 │   │   ├── staging/olist/       # 1:1 with sources: cast, rename
 │   │   ├── intermediate/        # reusable rollups and dedup
-│   │   └── marts/               # star schema
+│   │   └── marts/               # star schema + semantic models and metrics (MetricFlow)
 │   ├── seeds/                   # category translation
 │   ├── snapshots/               # snap_sellers (SCD2, YAML-defined)
 │   ├── tests/                   # singular tests + generic test is_not_before

@@ -2,7 +2,8 @@ import altair as alt
 import streamlit as st
 
 import charts
-from warehouse import monthly, period_filter, query, table
+import kpis
+from warehouse import monthly, period, period_filter, query, table
 
 st.title("Delivery & reviews")
 st.caption(
@@ -12,15 +13,7 @@ st.caption(
 
 delivered = f"is_delivered and {period_filter()}"
 
-kpi = query(f"""
-    select
-        count(*) as orders,
-        avg(days_to_deliver) as avg_days,
-        avg(case when is_delivered_late then 1.0 else 0.0 end) as late_rate,
-        avg(review_score) as avg_score
-    from {table('fct_orders')}
-    where {delivered}
-""").iloc[0]
+kpi = kpis.delivery(period())
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Delivered orders", f"{kpi.orders:,.0f}", border=True)

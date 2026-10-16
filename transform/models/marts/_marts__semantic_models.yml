@@ -1,0 +1,250 @@
+version: 2
+
+# dbt Semantic Layer (MetricFlow, D35). Business metrics are defined once, here;
+# `mf query` turns a metric + dimensions into SQL for the current target (DuckDB
+# or BigQuery), joins included. The dashboard keeps its own SQL, and its KPIs are
+# checked against these definitions (dashboard/tests/test_metrics.py).
+#
+# A semantic model describes one mart: entities (join keys), dimensions (group /
+# filter by) and measures (aggregations). Metrics are built on measures. The
+# time spine is dim_date (`time_spine` in _marts__models.yml).
+#
+#   cd transform && uv run dbt parse && uv run mf query --metrics revenue --group-by metric_time__month
+
+semantic_models:
+  - name: orders
+    description: One row per order (fct_orders). Time axis = purchase date.
+    model: ref('fct_orders')
+    config:
+      group: orders
+    defaults:
+      agg_time_dimension: purchase_date
+    entities:
+      - name: order
+        type: primary
+        expr: order_id
+      # Joins to the `customers` semantic model: `customer__state` etc. for order metrics
+      - name: customer
+        type: foreign
+        expr: customer_unique_id
+    dimensions:
+      - name: purchase_date
+        type: time
+        type_params:
+          time_granularity: day
+      - name: order_status
+        type: categorical
+      - name: is_delivered
+        type: categorical
+      - name: is_delivered_late
+        type: categorical
+    measures:
+      - name: order_count
+        description: Number of orders.
+        agg: count
+        expr: order_id
+      - name: buyer_count
+        description: Distinct people (`customer_unique_id`) who placed orders.
+        agg: count_distinct
+        expr: customer_unique_id
+      - name: order_amount
+        description: Items + freight, BRL.
+        agg: sum
+      - name: days_to_deliver
+        description: Days from purchase to delivery (null if not delivered).
+        agg: average
+      - name: review_score
+        description: Latest review score, 1–5 (null if no review).
+        agg: average
+
+  - name: customers
+    description: >
+      One row per person (dim_customers). Time axis = first order, so customer
+      metrics by month are acquisition cohorts.
+    model: ref('dim_customers')
+    config:
+      group: parties
+    defaults:
+      agg_time_dimension: first_order_at
+    entities:
+      - name: customer
+        type: primary
+        expr: customer_unique_id
+    dimensions:
+      - name: first_order_at
+        type: time
+        type_params:
+          time_granularity: day
+      - name: state
+        type: categorical
+        description: State of the person's latest order.
+      - name: is_repeat_customer
+        type: categorical
+    measures:
+      - name: customer_count
+        description: Number of people.
+        agg: count
+        expr: customer_unique_id
+
+metrics:
+  # Sales. Revenue leaves out orders that never became a sale (as the dashboard does).
+  - name: orders
+    label: Orders
+    description: Orders placed, any status.
+    type: simple
+    type_params:
+      measure: order_count
+    config:
+      group: orders
+
+  - name: sold_orders
+    label: Sold orders
+    description: Orders not canceled or unavailable.
+    type: simple
+    type_params:
+      measure: order_count
+    filter: &sold_filter |
+      {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+    config:
+      group: orders
+
+  - name: revenue
+    label: Revenue, BRL
+    description: Items + freight of sold orders (not canceled or unavailable).
+    type: simple
+    type_params:
+      measure: order_amount
+    filter: *sold_filter
+    config:
+      group: orders
+
+  - name: average_order_value
+    label: Average order value, BRL
+    description: Revenue per sold order.
+    type: ratio
+    type_params:
+      numerator: revenue
+      denominator: sold_orders
+    config:
+      group: orders
+
+  - name: customers
+    label: Customers
+    description: Distinct people who ordered in the period.
+    type: simple
+    type_params:
+      measure: buyer_count
+    config:
+      group: orders
+
+  - name: revenue_per_customer
+    label: Revenue per customer, BRL
+    description: Revenue / customers who ordered in the period.
+    type: ratio
+    type_params:
+      numerator: revenue
+      denominator: customers
+    config:
+      group: orders
+
+  # Delivery & reviews
+  - name: delivered_orders
+    label: Delivered orders
+    description: Orders with a delivery timestamp.
+    type: simple
+    type_params:
+      measure: order_count
+    filter: |
+      {{ Dimension('order__is_delivered') }} = true
+    config:
+      group: orders
+
+  - name: late_deliveries
+    label: Late deliveries
+    description: Orders delivered after the date promised at purchase.
+    type: simple
+    type_params:
+      measure: order_count
+    filter: |
+      {{ Dimension('order__is_delivered_late') }} = true
+    config:
+      group: orders
+
+  - name: late_delivery_rate
+    label: Late delivery rate
+    description: Share of delivered orders that arrived after the promised date.
+    type: ratio
+    type_params:
+      numerator: late_deliveries
+      denominator: delivered_orders
+    config:
+      group: orders
+
+  - name: avg_days_to_deliver
+    label: Avg days to deliver
+    description: Purchase to delivery, days; delivered orders only (null otherwise).
+    type: simple
+    type_params:
+      measure: days_to_deliver
+    config:
+      group: orders
+
+  - name: avg_review_score
+    label: Avg review score
+    description: Average latest review score, 1–5, of reviewed orders.
+    type: simple
+    type_params:
+      measure: review_score
+    config:
+      group: orders
+
+  # Customers, by first order (acquisition cohort)
+  - name: new_customers
+    label: New customers
+    description: People whose first order falls in the period.
+    type: simple
+    type_params:
+      measure: customer_count
+    config:
+      group: parties
+
+  - name: repeat_customers
+    label: Repeat customers
+    description: New customers of the period who ordered more than once (ever).
+    type: simple
+    type_params:
+      measure: customer_count
+    filter: |
+      {{ Dimension('customer__is_repeat_customer') }} = true
+    config:
+      group: parties
+
+  - name: repeat_customer_rate
+    label: Repeat customer rate
+    description: Share of new customers who came back for another order. Without a time filter = all customers.
+    type: ratio
+    type_params:
+      numerator: repeat_customers
+      denominator: new_customers
+    config:
+      group: parties
+
+# Named queries over the metrics: `mf query --saved-query <name>`
+saved_queries:
+  - name: sales_by_month
+    description: Monthly sales KPIs (Sales overview page).
+    query_params:
+      metrics: [orders, revenue, average_order_value, customers]
+      group_by:
+        - TimeDimension('metric_time', 'month')
+    config:
+      group: orders
+
+  - name: late_delivery_by_state
+    description: Late deliveries by the customer's state (Delivery page), via the order → customer join.
+    query_params:
+      metrics: [delivered_orders, late_delivery_rate, avg_days_to_deliver]
+      group_by:
+        - Dimension('customer__state')
+    config:
+      group: orders

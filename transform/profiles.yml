@@ -1,5 +1,7 @@
 olist:
-  target: dev
+  # Default target; DBT_TARGET picks another one for tools without a --target flag
+  # (MetricFlow's `mf`: DBT_TARGET=prod uv run mf query ...)
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
     dev:
       type: duckdb
