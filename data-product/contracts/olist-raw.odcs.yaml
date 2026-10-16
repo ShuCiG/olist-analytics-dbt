@@ -6,7 +6,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-raw
 name: Olist raw e-commerce data
-version: 1.0.0
+version: 1.0.1
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -26,7 +26,7 @@ tags: [olist, raw, source]
 team:
   name: olist-analytics
   members:
-    - username: ShuCiG
+    - username: aliaksandr.letsko
       name: Aliaksandr Letsko
       role: Product Owner
 
