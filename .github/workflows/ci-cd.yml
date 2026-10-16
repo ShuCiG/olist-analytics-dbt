@@ -171,6 +171,10 @@ jobs:
       - name: Ingest raw data (dlt → DuckDB)
         run: uv run python ingestion/pipeline.py
 
+      # Data product (D36): the source must meet the input contract before dbt runs
+      - name: Input data contract (raw)
+        run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server local
+
       - name: dbt deps
         working-directory: transform
         run: uv run dbt deps
@@ -195,6 +199,15 @@ jobs:
           retention-days: 3
           overwrite: true
           if-no-files-found: ignore
+
+      # Data product (D36): the marts keep the output contract's promises (schema,
+      # keys, relationships, quality, freshness), and the descriptor, contracts and
+      # dbt project agree with each other
+      - name: Output data contract (marts)
+        run: uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server local
+
+      - name: Data product checks
+        run: uv run pytest data-product -q
 
       # Semantic layer (D35): every entity, dimension, measure and metric queries
       # the marts just built

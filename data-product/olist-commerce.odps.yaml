@@ -1,0 +1,89 @@
+# The Olist commerce data product, described in the Open Data Product Standard
+# (ODPS v1.1, Bitol / Linux Foundation): what it is, who owns it, what it takes in
+# (input ports) and what it offers (output ports), each port bound to a versioned
+# data contract (contracts/*.odcs.yaml, ODCS). Validated against the ODPS JSON
+# schema and cross-checked with the contracts and the dbt project in CI
+# (tests/test_data_product.py in this folder).
+apiVersion: v1.1.0
+kind: DataProduct
+id: olist-commerce
+name: Olist commerce analytics
+version: 1.0.0
+status: active
+domain: commerce
+type: aggregate
+description:
+  purpose: >-
+    Trusted, tested analytics data on the orders of Olist, a Brazilian marketplace: sales,
+    delivery performance, reviews and customers, as a star schema and as metric definitions.
+  limitations: >-
+    Public dump 2016-09 to 2018-10, replayed one month per hour by a local Airflow, so the live
+    data stops moving while that machine is off. People are pseudonymized by the source.
+  usage: >-
+    Read the marts through the `marts` port (BigQuery dataset marts, or airflow_marts for the
+    hourly feed) and take KPI definitions from the `metrics` port. Raw tables are internal.
+tags: [e-commerce, analytics, olist]
+
+team:
+  name: olist-analytics
+  members:
+    - username: ShuCiG
+      name: Aliaksandr Letsko
+      role: Product Owner
+      description: Owns the product's roadmap, contracts and support; owner of the dbt groups.
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+    description: Questions, bugs, change requests.
+
+inputPorts:
+  - name: olist-raw
+    contractId: olist-raw
+    version: 1.0.0
+    customProperties:
+      - property: loader
+        value: dlt (ingestion/pipeline.py), Kaggle dataset olistbr/brazilian-ecommerce
+
+outputPorts:
+  - name: marts
+    type: tables
+    description: Star schema in BigQuery (prod and hourly live feed) and DuckDB (local).
+    contractId: olist-marts
+    version: 1.0.0
+    inputContracts:
+      - id: olist-raw
+        version: 1.0.0
+    customProperties:
+      - property: implementation
+        value: dbt public models with enforced contracts (transform/models/marts)
+  - name: metrics
+    type: semantic-layer
+    description: >-
+      Business metrics (revenue, average order value, late delivery rate, repeat customer
+      rate, ...) defined once in the dbt Semantic Layer, queried with MetricFlow on either
+      warehouse.
+    inputContracts:
+      - id: olist-marts
+        version: 1.0.0
+    authoritativeDefinitions:
+      - type: implementation
+        url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__semantic_models.yml
+
+managementPorts:
+  - name: docs
+    content: discoverability
+    type: topic
+    url: https://shucig.github.io/olist-analytics-dbt/
+    description: dbt docs with lineage, column definitions and tests.
+  - name: alerts
+    content: observability
+    type: topic
+    description: >-
+      Email on every failed CI/CD job and Airflow run, plus a daily OK / stale-data report
+      of the live feed.
+
+customProperties:
+  - property: dbtGroups
+    value: [orders, parties]

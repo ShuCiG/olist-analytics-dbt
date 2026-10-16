@@ -17,6 +17,7 @@ dashboard = [
     "streamlit>=1.65.0",
 ]
 dev = [
+    "datacontract-cli[bigquery,duckdb]>=1.2.6",
     "dbt-metricflow>=0.15.0",
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
@@ -38,7 +39,7 @@ pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard", "alerting", "tests", ".github/scripts"]
+include = ["ingestion", "dashboard", "alerting", "tests", "data-product", ".github/scripts"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

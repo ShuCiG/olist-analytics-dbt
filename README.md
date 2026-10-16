@@ -26,11 +26,12 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 | Ingestion (EL) | [dlt](https://dlthub.com/) — Kaggle CSV → DuckDB `raw` schema or BigQuery `raw` dataset; order tables arrive in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (`prod` / `ci` targets, EU) — same models, identical test results |
 | Transformation (T) | dbt Core 1.12 + dbt-duckdb, `dbt_utils`, `dbt_expectations`, `dbt_date` |
+| Data product | Descriptor in the Open Data Product Standard (owner, input / output ports) + ODCS data contracts per port, enforced in CI with `datacontract-cli` |
 | Semantic layer | dbt Semantic Layer / MetricFlow: business metrics defined once in YAML, queried with `mf` on DuckDB and BigQuery; dashboard KPIs tested against them |
 | Orchestration | Airflow 3 + [Astronomer Cosmos](https://github.com/astronomer/astronomer-cosmos) in Docker Compose: hourly DAG `dlt ingest → dbt` replaying the dump as a live feed, one month per run (watcher mode: one `dbt build` per run, one Airflow task per dbt node); email alerts (failed / fresh / stale) via SMTP, Mailpit locally |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, reads the Airflow-fed BigQuery marts with a read-only service account; declared as a dbt exposure |
 | Code quality | sqlfluff (dbt templater), pyright, pytest, pre-commit hooks, [dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator) (project structure + governance rules) |
-| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + `pytest` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB (+ semantic layer validation, dashboard tests) + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
+| CI/CD | GitHub Actions. PR: `sqlfluff lint` + `pyright` + `pytest` + dbt project evaluator + Airflow DAG parse → full `dbt build` on DuckDB (+ data contract tests, semantic layer validation, dashboard tests) + slim CI on BigQuery (`state:modified+ --defer` to prod) in per-run datasets. Merge: dlt → BigQuery, `dbt build --target prod`, docs → GitHub Pages. Any failure → email with the failed step and log excerpt (`ALERT_EMAILS`) |
 | Environment | uv, Python 3.12 |
 
 ## Architecture
@@ -198,6 +199,29 @@ Set up the way a mart would be shared across teams (dbt Mesh), even in a one-rep
 ```bash
 cd transform
 DBT_PROJECT_EVALUATOR=true uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
+```
+
+## Data product
+
+The project is packaged as one data product, [`olist-commerce`](data-product/olist-commerce.odps.yaml)
+([ODPS](https://bitol-io.github.io/open-data-product-standard/) v1.1): a Product Owner, a support channel, what it is
+for and its limits, an **input port** (the raw Olist tables) and **output ports** (the star schema, the metrics).
+Each data port is bound to a versioned [ODCS](https://bitol-io.github.io/open-data-contract-standard/) data contract:
+
+- [`olist-raw`](data-product/contracts/olist-raw.odcs.yaml): what the product expects from its source (tables, keys,
+  allowed values, freshness);
+- [`olist-marts`](data-product/contracts/olist-marts.odcs.yaml): what it promises to consumers (five marts column for
+  column, keys and foreign keys, value rules, freshness SLA, classification of person-related columns), on three
+  servers: local DuckDB, BigQuery prod, BigQuery live feed.
+
+dbt is the implementation, the contract is the promise, and CI holds them together: the input contract is tested
+right after the ingest, the output contract after `dbt build` (`datacontract ci`, ~370 checks on the data), and
+`pytest data-product` checks that the descriptor is valid ODPS, its ports pin existing contract versions, and the
+contract matches the public dbt models column for column. Changing a mart without changing its contract fails the PR.
+
+```bash
+uv run datacontract test data-product/contracts/olist-marts.odcs.yaml --server local   # or prod / live (BigQuery)
+uv run pytest data-product
 ```
 
 ## Semantic layer (MetricFlow)
@@ -395,6 +419,7 @@ dbt gated by `has_new_orders` and the alerts wired.
 ├── alerting/                    # alert emails (Airflow + CI): dbt summary parser, decisions, HTML layout
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
+├── data-product/                # ODPS descriptor, ODCS contracts (input / output), their tests
 ├── dashboard/                   # Streamlit app over the marts (DuckDB / BigQuery), AppTest + KPI tests
 ├── transform/                   # dbt project
 │   ├── models/

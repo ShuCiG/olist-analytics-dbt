@@ -1,0 +1,327 @@
+# Input contract of the Olist commerce data product (../olist-commerce.odps.yaml):
+# what the product expects from its source, the Olist public dataset as dlt lands
+# it (ingestion/pipeline.py). Checked on the warehouse with `datacontract test`
+# after every CI ingest; a broken expectation stops the PR before dbt runs.
+apiVersion: v3.1.0
+kind: DataContract
+id: olist-raw
+name: Olist raw e-commerce data
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    Raw orders, items, payments, reviews, customers, products, sellers and zip-code
+    geolocation of Olist, a Brazilian marketplace, as the input of the commerce data product.
+  limitations: >-
+    Static public dump (Kaggle olistbr/brazilian-ecommerce, 2016-09 to 2018-10), replayed one
+    month per hourly run. Every source column is a string; typing, deduplication and fixes of
+    known defects happen in dbt staging. People are pseudonymized by Olist.
+  usage: >-
+    Read by dbt staging models only (transform/models/staging/olist). Nothing else may depend
+    on raw tables: consumers use the product's output ports.
+tags: [olist, raw, source]
+
+team:
+  name: olist-analytics
+  members:
+    - username: ShuCiG
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: raw
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: >-
+      Loaded by CD on every merge to main (new months only): a release snapshot, not a feed,
+      so the freshness SLA holds on `live`, not here.
+    project: olist-analytics-dbt-472315
+    dataset: raw
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Hourly replay by the local Airflow, feeds the dashboard.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_raw
+
+slaProperties:
+  - property: frequency
+    value: 1
+    unit: h
+    description: One more month of orders per hourly run, until the dump is used up.
+  # Checked by `datacontract test` (CI: fresh ingest; live: the hourly feed); mirrors the
+  # warn-level dbt source freshness
+  - property: freshness
+    value: 1
+    unit: d
+    element: orders._loaded_at
+
+schema:
+  - name: orders
+    physicalName: orders
+    physicalType: table
+    description: One row per order. `customer_id` is generated per order.
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: customer_id
+        logicalType: string
+        required: true
+      - name: order_status
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
+            mustBe: 0
+      - name: order_purchase_timestamp
+        logicalType: string
+        required: true
+      - name: order_approved_at
+        logicalType: string
+      - name: order_delivered_carrier_date
+        logicalType: string
+      - name: order_delivered_customer_date
+        logicalType: string
+      - name: order_estimated_delivery_date
+        logicalType: string
+      - &loaded_at
+        name: _loaded_at
+        logicalType: timestamp
+        required: true
+        description: UTC time of the dlt run that wrote the row.
+    quality:
+      - &not_empty_rule
+        type: library
+        metric: rowCount
+        mustBeGreaterThan: 0
+
+  - name: order_items
+    physicalName: order_items
+    physicalType: table
+    description: One row per item of an order; `order_item_id` is the line number.
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - name: order_item_id
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+      - name: product_id
+        logicalType: string
+        required: true
+      - name: seller_id
+        logicalType: string
+        required: true
+      - name: shipping_limit_date
+        logicalType: string
+      - name: price
+        logicalType: string
+        required: true
+      - name: freight_value
+        logicalType: string
+        required: true
+      - *loaded_at
+    quality:
+      - *not_empty_rule
+      - type: library
+        metric: duplicateValues
+        arguments:
+          properties: [order_id, order_item_id]
+        mustBe: 0
+
+  - name: order_payments
+    physicalName: order_payments
+    physicalType: table
+    description: One row per payment of an order; an order can be split across payment methods.
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - name: payment_sequential
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+      - name: payment_type
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [credit_card, boleto, voucher, debit_card, not_defined]
+            mustBe: 0
+      - name: payment_installments
+        logicalType: string
+      - name: payment_value
+        logicalType: string
+        required: true
+      - *loaded_at
+    quality:
+      - *not_empty_rule
+      - type: library
+        metric: duplicateValues
+        arguments:
+          properties: [order_id, payment_sequential]
+        mustBe: 0
+
+  - name: order_reviews
+    physicalName: order_reviews
+    physicalType: table
+    description: >-
+      Customer reviews. `review_id` alone is NOT unique (known source defect); the key is
+      (`review_id`, `order_id`), and dbt keeps the latest review per order.
+    properties:
+      - name: review_id
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+      - name: review_score
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: ["1", "2", "3", "4", "5"]
+            mustBe: 0
+      - name: review_comment_title
+        logicalType: string
+      - name: review_comment_message
+        logicalType: string
+      - name: review_creation_date
+        logicalType: string
+      - name: review_answer_timestamp
+        logicalType: string
+      - *loaded_at
+    quality:
+      - *not_empty_rule
+      - type: library
+        metric: duplicateValues
+        arguments:
+          properties: [review_id, order_id]
+        mustBe: 0
+
+  - name: customers
+    physicalName: customers
+    physicalType: table
+    description: One row per order-level `customer_id`; `customer_unique_id` identifies the person.
+    properties:
+      - name: customer_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: customer_unique_id
+        logicalType: string
+        required: true
+        classification: restricted
+      - name: customer_zip_code_prefix
+        logicalType: string
+        classification: restricted
+      - name: customer_city
+        logicalType: string
+        classification: restricted
+      - name: customer_state
+        logicalType: string
+      - *loaded_at
+    quality: [*not_empty_rule]
+
+  - name: products
+    physicalName: products
+    physicalType: table
+    description: Product catalogue with Portuguese category names (column names keep the source's typos).
+    properties:
+      - name: product_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: product_category_name
+        logicalType: string
+      - name: product_name_lenght
+        logicalType: string
+      - name: product_description_lenght
+        logicalType: string
+      - name: product_photos_qty
+        logicalType: string
+      - name: product_weight_g
+        logicalType: string
+      - name: product_length_cm
+        logicalType: string
+      - name: product_height_cm
+        logicalType: string
+      - name: product_width_cm
+        logicalType: string
+      - *loaded_at
+    quality: [*not_empty_rule]
+
+  - name: sellers
+    physicalName: sellers
+    physicalType: table
+    description: Marketplace sellers.
+    properties:
+      - name: seller_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: seller_zip_code_prefix
+        logicalType: string
+      - name: seller_city
+        logicalType: string
+      - name: seller_state
+        logicalType: string
+      - *loaded_at
+    quality: [*not_empty_rule]
+
+  - name: geolocation
+    physicalName: geolocation
+    physicalType: table
+    description: Many lat/lng points per zip-code prefix (~1M rows, ~19k prefixes); no key.
+    properties:
+      - name: geolocation_zip_code_prefix
+        logicalType: string
+        required: true
+      - name: geolocation_lat
+        logicalType: string
+        required: true
+      - name: geolocation_lng
+        logicalType: string
+        required: true
+      - name: geolocation_city
+        logicalType: string
+      - name: geolocation_state
+        logicalType: string
+      - *loaded_at
+    quality: [*not_empty_rule]
