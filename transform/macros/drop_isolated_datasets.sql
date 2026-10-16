@@ -12,7 +12,7 @@
     {% if target.name not in allowed %}
         {{ exceptions.raise_compiler_error("drop_isolated_datasets runs only on targets " ~ allowed ~ ", got '" ~ target.name ~ "'") }}
     {% endif %}
-    {% set suffixes = ['', '_raw', '_raw_staging', '_staging', '_intermediate', '_marts', '_seeds', '_snapshots'] %}
+    {% set suffixes = ['', '_raw', '_raw_staging', '_staging', '_intermediate', '_marts', '_seeds', '_snapshots', '_elementary'] %}
     {% for suffix in suffixes %}
         {% set relation = api.Relation.create(database=target.database, schema=target.schema ~ suffix) %}
         {% do log("Dropping " ~ relation.database ~ "." ~ relation.schema, info=true) %}

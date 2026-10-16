@@ -13,6 +13,7 @@ transform/target/
 transform/target_airflow/
 transform/dbt_packages/
 transform/logs/
+transform/edr_target/
 transform/.user.yml
 logs/
 

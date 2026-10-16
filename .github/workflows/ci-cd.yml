@@ -192,9 +192,15 @@ jobs:
         working-directory: transform
         run: uv run dbt source freshness
 
+      # Elementary's tables first (D38): in a fresh warehouse its schema-change tests
+      # on sources would start before dbt creates them. The build then skips them.
+      - name: dbt run (Elementary tables)
+        working-directory: transform
+        run: uv run dbt run --select package:elementary
+
       - name: dbt build (models + tests)
         working-directory: transform
-        run: uv run dbt build
+        run: uv run dbt build --exclude package:elementary
 
       # Test descriptions for the failure email (notify-failure); written even when
       # the build fails, since dbt parses before it runs anything
@@ -278,13 +284,18 @@ jobs:
             echo "::notice::No prod manifest found, running a full build"
           fi
 
+      # Per-run datasets start empty: Elementary's tables first, as in `dbt build`
+      - name: dbt run (Elementary tables, target ci)
+        working-directory: transform
+        run: uv run dbt run --target ci --select package:elementary
+
       - name: dbt build (target ci)
         working-directory: transform
         run: |
           if [ "$SLIM_CI" = true ]; then
-            uv run dbt build --target ci --select state:modified+ --defer --state ../prod-state
+            uv run dbt build --target ci --select state:modified+ --exclude package:elementary --defer --state ../prod-state
           else
-            uv run dbt build --target ci
+            uv run dbt build --target ci --exclude package:elementary
           fi
 
       - name: Drop CI datasets
@@ -336,11 +347,16 @@ jobs:
         working-directory: transform
         run: uv run dbt source freshness --target prod
 
+      # Never with --full-refresh: the tables hold the run and test history (D38)
+      - name: dbt run (Elementary tables, target prod)
+        working-directory: transform
+        run: uv run dbt run --target prod --select package:elementary
+
       - name: dbt build (target prod)
         working-directory: transform
         env:
           FULL_REFRESH: ${{ inputs.full_refresh && '--full-refresh' || '' }}
-        run: uv run dbt build --target prod --exclude-resource-type unit_test $FULL_REFRESH
+        run: uv run dbt build --target prod --exclude-resource-type unit_test --exclude package:elementary $FULL_REFRESH
 
       - name: dbt docs generate
         working-directory: transform
@@ -362,6 +378,22 @@ jobs:
           cp transform/target/static_index.html _site/index.html
           # Data product page + contract catalog at /data-product/ (D37)
           uv run python data-product/build_site.py _site/data-product
+
+      # Observability report at /elementary/ (D38): test and run history, anomaly
+      # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
+      # own uvx env, pinned to the project's dbt versions (it would downgrade
+      # networkx in uv.lock); it does not create the output folder.
+      - name: Elementary report
+        working-directory: transform
+        run: |
+          mkdir -p "$RUNNER_TEMP/edr" "$GITHUB_WORKSPACE/_site/elementary"
+          printf 'anonymous_usage_tracking: false\n' > "$RUNNER_TEMP/edr/config.yml"
+          uvx --python 3.12 --from "elementary-data[bigquery]==0.26.1" \
+            --with dbt-core==1.12.5 --with dbt-bigquery==1.12.1 \
+            edr report --profiles-dir . --profile-target prod \
+            --config-dir "$RUNNER_TEMP/edr" --target-path "$RUNNER_TEMP/edr" \
+            --file-path "$GITHUB_WORKSPACE/_site/elementary/index.html" \
+            --env prod --days-back 30 --open-browser false
 
       - name: Upload docs artifact
         uses: actions/upload-pages-artifact@v5

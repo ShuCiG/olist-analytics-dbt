@@ -3,6 +3,7 @@
 [![CI/CD](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml)
 [![dbt docs](https://img.shields.io/badge/dbt_docs-lineage-FF694B?logo=dbt&logoColor=white)](https://shucig.github.io/olist-analytics-dbt/)
 [![Data product](https://img.shields.io/badge/data_product-contracts-2F6FDE)](https://shucig.github.io/olist-analytics-dbt/data-product/)
+[![Observability](https://img.shields.io/badge/observability-Elementary-6C47FF)](https://shucig.github.io/olist-analytics-dbt/elementary/)
 [![Dashboard](https://img.shields.io/badge/dashboard-live-FF4B4B?logo=streamlit&logoColor=white)](https://olist-analytics-dbt.streamlit.app/)
 
 End-to-end analytics engineering on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
@@ -16,6 +17,7 @@ it hourly as a live feed, and a **Streamlit** dashboard reads the result.
 | 📊 **Dashboard** (BigQuery, fed hourly by Airflow) | https://olist-analytics-dbt.streamlit.app/ |
 | 📖 **dbt docs** (lineage, columns, tests) | https://shucig.github.io/olist-analytics-dbt/ |
 | 📦 **Data product page** (ports, contracts, consumers) | https://shucig.github.io/olist-analytics-dbt/data-product/ |
+| 🔭 **Observability report** (test history, anomalies) | https://shucig.github.io/olist-analytics-dbt/elementary/ |
 
 Built with AI pair programming (Claude Code); the architecture, design decisions and code review are mine.
 The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
@@ -38,8 +40,11 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 108 data tests, 5 unit tests, enforced model contracts, 62 Python tests; known
+- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 62 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
+- **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
+  and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
+  → [Observability](#data-observability)
 - **Governance.** Domain groups with public / protected / private access, a versioned model with a deprecation
   date, and dbt_project_evaluator as a CI gate. → [Governance](#governance)
 
@@ -50,6 +55,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   (merge, partitioning, clustering), seeds, macros and `adapter.dispatch`, Jinja, doc blocks, exposures
 - **Data quality:** dbt data tests and unit tests, custom generic tests, dbt_expectations, model contracts, source
   freshness, data contracts (ODCS, datacontract-cli), sqlfluff
+- **Data observability:** Elementary (volume / freshness / column anomaly detection, schema change monitoring, run and
+  test history, `edr report`)
 - **Data products and governance:** Open Data Product Standard, data usage agreements, contract versioning and
   breaking-change detection, dbt groups / access / model versions, dbt_project_evaluator, PII classification
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
@@ -224,11 +231,12 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **108 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, chronology (custom generic test `is_not_before`), 2 singular tests | every `dbt build` |
+| **107 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, chronology (custom generic test `is_not_before`), 2 singular tests | every `dbt build` |
 | **5 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
+| **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **62 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
@@ -248,6 +256,26 @@ that the alert emails quote:
 | 23 orders delivered to the customer before carrier pickup | `is_not_before`, `severity: warn` |
 
 </details>
+
+## Data observability
+
+Tests answer "is this build right?"; [Elementary](https://github.com/elementary-data/elementary) adds "is today's data
+normal?". Its dbt package stores every run's results and metrics in an `elementary` schema, and its tests compare
+each day with the days before it:
+
+| Test | On | Flags |
+|---|---|---|
+| `volume_anomalies` | `fct_orders`, `fct_order_items` | a day with unusually many or few orders / items |
+| `freshness_anomalies` | `fct_orders` | an unusually long gap between orders |
+| `column_anomalies` (average) | `fct_orders.paid_amount`, `review_score` | a day whose average paid amount or review score jumps |
+| `schema_changes` | the 8 raw sources | columns added, removed or retyped since the previous run |
+
+Each day is compared with the same weekday in the 14 weeks before. All are warn tests with business descriptions,
+so findings reach the alert emails like the other warnings. The data is from 2016–2018, so the tests' clock is
+the last order in the data, not today; in the Airflow replay it moves forward month by month, as a live feed's
+would. Replaying up to November 2017 flags Black Friday (1,176 orders against ~216 on that weekday) and the days
+after it. The [report](https://shucig.github.io/olist-analytics-dbt/elementary/) (Elementary's `edr` CLI, built from
+prod on every deploy) shows the test history and the metric charts behind each anomaly.
 
 ## Governance
 
@@ -298,7 +326,8 @@ on BigQuery**. Two DAGs from one factory: DuckDB and BigQuery (own `airflow_*` d
 ```mermaid
 flowchart LR
     ingest[dlt_ingest<br/>next month] --> gate{has_new_orders}
-    gate -- yes --> producer[dbt producer<br/>freshness + dbt build]
+    gate -- yes --> elem[elementary_tables<br/>history tables]
+    elem --> producer[dbt producer<br/>freshness + dbt build]
     gate -. no: skip dbt .-> report
     producer -. node results .-> sensors[one sensor task<br/>per dbt node]
     sensors --> report[report<br/>email: OK / STALE]
@@ -317,8 +346,8 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | On every pull request | On every merge to `main` |
 |---|---|
 | sqlfluff, pyright, pytest, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
-| full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` |
-| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page → GitHub Pages; manifest kept for slim CI |
+| full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first) |
+| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 `main` is protected; every change goes through a PR. The same lint, type check and tests run locally as pre-commit hooks.
@@ -368,7 +397,6 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 
 ## Next
 
-- Data observability with Elementary: test and run history, volume and freshness anomalies on the live feed
 - Terraform for the GCP setup (datasets, service accounts, IAM grants), imported without recreating anything
 - Drop `fct_orders` v1 after its deprecation date (2026-12-31)
 

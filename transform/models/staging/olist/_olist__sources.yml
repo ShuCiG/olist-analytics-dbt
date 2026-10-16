@@ -19,17 +19,35 @@ sources:
     tables:
       - name: orders
         description: One row per order. `customer_id` is generated per order.
+        # Observability (Elementary, D38): the table's columns vs the previous run.
+        # The input contract checks the agreed schema; this flags any drift over time.
+        data_tests: &schema_changes
+          - elementary.schema_changes:
+              description: >-
+                The source table's columns changed since the previous run (column added,
+                removed or retyped). Staging may break or silently drop data; check with
+                the source owner and update the input contract.
+              config:
+                severity: warn
+                meta: {alert_unit: column changes}
       - name: order_items
         description: One row per item within an order (`order_item_id` is the line number).
+        data_tests: *schema_changes
       - name: order_payments
         description: One row per payment of an order; an order can be split across payment methods.
+        data_tests: *schema_changes
       - name: order_reviews
         description: Customer reviews. `review_id` is NOT unique; (`review_id`, `order_id`) is.
+        data_tests: *schema_changes
       - name: customers
         description: One row per order-level `customer_id`; `customer_unique_id` identifies the person.
+        data_tests: *schema_changes
       - name: products
         description: Product catalogue with Portuguese category names.
+        data_tests: *schema_changes
       - name: sellers
         description: Marketplace sellers.
+        data_tests: *schema_changes
       - name: geolocation
         description: Many lat/lng points per zip code prefix (~1M rows, ~19k prefixes).
+        data_tests: *schema_changes

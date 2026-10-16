@@ -3,7 +3,8 @@
 Runs inside the Airflow image (see the `airflow-dags` job in ci-cd.yml). Fails on
 any import error, when an expected DAG is missing or has no dbt tasks, when the
 Cosmos watcher producer is missing, when dbt is not gated by `has_new_orders`
-(dlt_ingest -> has_new_orders -> producer: no rebuild once the feed is used up),
+(dlt_ingest -> has_new_orders -> elementary_tables -> producer: no rebuild once the
+feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
 failure callback), or
 when the DuckDB pool holds anything but the writers (dlt + producer): a sensor in
@@ -22,7 +23,8 @@ sys.path.insert(0, DAG_FOLDER)
 EXPECTED = {"olist_elt_duckdb", "olist_elt_bigquery"}
 PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
-DUCKDB_WRITERS = {"dlt_ingest", PRODUCER}
+ELEMENTARY = "elementary_tables"
+DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER}
 
 bag = DagBag(dag_folder=DAG_FOLDER)
 
@@ -43,11 +45,15 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
     if PRODUCER not in dag.task_ids:
         print(f"{dag_id} has no {PRODUCER} (not in watcher mode?)", file=sys.stderr)
         missing.add(dag_id)
-    elif GATE not in dag.task_ids or (
+    elif not {GATE, ELEMENTARY} <= set(dag.task_ids) or (
         dag.get_task(GATE).upstream_task_ids != {"dlt_ingest"}
-        or GATE not in dag.get_task(PRODUCER).upstream_task_ids
+        or dag.get_task(ELEMENTARY).upstream_task_ids != {GATE}
+        or ELEMENTARY not in dag.get_task(PRODUCER).upstream_task_ids
     ):
-        print(f"{dag_id}: dbt is not gated by dlt_ingest -> {GATE}", file=sys.stderr)
+        print(
+            f"{dag_id}: dbt is not gated by dlt_ingest -> {GATE} -> {ELEMENTARY}",
+            file=sys.stderr,
+        )
         missing.add(dag_id)
     if (
         "report" not in dag.task_ids
