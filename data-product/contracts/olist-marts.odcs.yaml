@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.0.0
+version: 1.0.1
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -28,7 +28,7 @@ tags: [olist, marts, star-schema]
 team:
   name: olist-analytics
   members:
-    - username: ShuCiG
+    - username: aliaksandr.letsko
       name: Aliaksandr Letsko
       role: Product Owner
 

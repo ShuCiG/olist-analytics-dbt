@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # Streamlit-style imports
 
@@ -82,24 +83,40 @@ def period() -> kpis.Period:
     return warehouse.default_period(*warehouse.date_bounds())
 
 
+# KPI tile (kpis.py column) → metric, per page
+SALES = {
+    "orders": "orders",
+    "customers": "customers",
+    "revenue": "revenue",
+    "avg_order_value": "average_order_value",
+}
+DELIVERY = {
+    "orders": "delivered_orders",
+    "avg_days": "avg_days_to_deliver",
+    "late_rate": "late_delivery_rate",
+    "avg_score": "avg_review_score",
+}
+CUSTOMERS = {"customers": "customers", "avg_spend": "revenue_per_customer"}
+REPEAT = {"customers": "new_customers", "repeat_rate": "repeat_customer_rate"}
+
+
+def test_usage_agreement_lists_these_metrics() -> None:
+    # The dashboard's consumer manifest declares the metrics it depends on
+    path = Path(__file__).resolve().parents[2] / "data-product" / "consumers" / "olist-dashboard.yaml"
+    with path.open(encoding="utf-8") as f:
+        declared = yaml.safe_load(f)["metrics"]["names"]
+    compared = {m for pairs in (SALES, DELIVERY, CUSTOMERS, REPEAT) for m in pairs.values()}
+    assert sorted(declared) == sorted(compared)
+
+
 def test_sales_kpis(tmp_path: Path, period: kpis.Period) -> None:
-    pairs = {
-        "orders": "orders",
-        "customers": "customers",
-        "revenue": "revenue",
-        "avg_order_value": "average_order_value",
-    }
+    pairs = SALES
     metrics = mf_query(tmp_path, list(pairs.values()), *period_args(period))
     assert_same(kpis.sales(period), metrics, pairs)
 
 
 def test_delivery_kpis(tmp_path: Path, period: kpis.Period) -> None:
-    pairs = {
-        "orders": "delivered_orders",
-        "avg_days": "avg_days_to_deliver",
-        "late_rate": "late_delivery_rate",
-        "avg_score": "avg_review_score",
-    }
+    pairs = DELIVERY
     # The page covers delivered orders only; late_delivery_rate and
     # delivered_orders are defined that way, the two averages need the filter
     delivered = "{{ Dimension('order__is_delivered') }} = true"
@@ -108,7 +125,7 @@ def test_delivery_kpis(tmp_path: Path, period: kpis.Period) -> None:
 
 
 def test_customer_kpis(tmp_path: Path, period: kpis.Period) -> None:
-    pairs = {"customers": "customers", "avg_spend": "revenue_per_customer"}
+    pairs = CUSTOMERS
     metrics = mf_query(tmp_path, list(pairs.values()), *period_args(period))
     assert_same(kpis.customers(period), metrics, pairs)
 
@@ -116,6 +133,6 @@ def test_customer_kpis(tmp_path: Path, period: kpis.Period) -> None:
 def test_repeat_rate_over_all_data(tmp_path: Path) -> None:
     # The page counts repeat orders within the picked period; the metric is by
     # first order (cohort). Over all the data both are "ordered more than once".
-    pairs = {"customers": "new_customers", "repeat_rate": "repeat_customer_rate"}
+    pairs = REPEAT
     metrics = mf_query(tmp_path, list(pairs.values()))
     assert_same(kpis.customers(warehouse.date_bounds()), metrics, pairs)

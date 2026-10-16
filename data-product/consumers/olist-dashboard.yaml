@@ -1,0 +1,87 @@
+# Data usage agreement: the Streamlit dashboard as a consumer of the Olist commerce
+# data product. Who consumes, why, through which output port and contract version,
+# and exactly which columns and metrics it relies on. Bitol's standards describe the
+# provider side only; the fields follow the "data usage agreement" of the Data
+# Contract Specification. Checked in CI:
+# - dashboard/tests/test_consumer.py: the dashboard's SQL reads exactly `uses`,
+# - data-product/tests/test_data_product.py: port, contract version, dbt exposure
+#   and metrics exist, and the contract still promises every used column.
+kind: DataUsageAgreement
+id: olist-dashboard
+name: Olist analytics dashboard
+status: active
+startDate: "2026-10-13"
+purpose: >-
+  Public demo dashboard: sales, delivery performance, reviews, customers and sellers, read
+  hourly from the live feed. Shown to anyone with the link; no row-level personal data on screen
+  (customers are counted, never listed).
+
+consumer:
+  name: Streamlit dashboard (dashboard/)
+  owner: Aliaksandr Letsko
+  url: https://olist-analytics-dbt.streamlit.app/
+  dbtExposure: olist_dashboard
+
+provider:
+  dataProduct: olist-commerce
+  outputPort: marts
+  contractId: olist-marts
+  # Compatible versions: same major. A breaking contract change bumps the major
+  # version (data-product/check_compatibility.py) and fails this agreement until
+  # the dashboard is updated and the agreement renewed.
+  contractVersion: 1.0.0
+  server: live
+  role: dashboard-reader
+
+# Columns read, per table. Taken from the dashboard's SQL and kept equal to it by the test.
+uses:
+  fct_orders:
+    - customer_unique_id
+    - order_status
+    - purchase_date
+    - order_amount
+    - credit_card_amount
+    - boleto_amount
+    - voucher_amount
+    - debit_card_amount
+    - days_to_deliver
+    - is_delivered
+    - is_delivered_late
+    - review_score
+    - has_review
+  fct_order_items:
+    - order_id
+    - product_id
+    - seller_id
+    - order_status
+    - purchase_date
+    - item_amount
+    - _loaded_at
+  dim_customers:
+    - customer_unique_id
+    - state
+  dim_products:
+    - product_id
+    - category_name
+  dim_sellers:
+    - seller_id
+    - city
+    - state
+    - latitude
+    - longitude
+
+# KPI tiles that must equal these semantic-layer metrics (dashboard/tests/test_metrics.py)
+metrics:
+  outputPort: metrics
+  names:
+    - orders
+    - customers
+    - revenue
+    - average_order_value
+    - revenue_per_customer
+    - delivered_orders
+    - late_delivery_rate
+    - avg_days_to_deliver
+    - avg_review_score
+    - new_customers
+    - repeat_customer_rate
