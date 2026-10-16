@@ -59,8 +59,10 @@ GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
 
 # Which orders to load: up to the `until` param if given, else the next month
 CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
-# Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders
-AS_OF = "{{ ti.xcom_pull(task_ids='has_new_orders', key='as_of') }}"
+# Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders.
+# `or ''`: a missing XCom renders as the string "None", which dbt can't parse as a
+# time (seen on a run started by the previous image); empty = the wall clock.
+AS_OF = "{{ ti.xcom_pull(task_ids='has_new_orders', key='as_of') or '' }}"
 
 
 @dataclass(frozen=True)
