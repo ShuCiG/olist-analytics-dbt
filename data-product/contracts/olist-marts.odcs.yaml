@@ -1,0 +1,369 @@
+# Output contract of the Olist commerce data product (../olist-commerce.odps.yaml):
+# what the product promises to its consumers. dbt builds the tables (public marts
+# with enforced dbt contracts); this file is the interface they must keep:
+# - CI checks that the dbt models match it, column for column (../tests/test_data_product.py),
+# - `datacontract test` checks the promises on the data after every CI build.
+# Column meaning lives in the dbt docs (authoritativeDefinitions), not repeated here.
+apiVersion: v3.1.0
+kind: DataContract
+id: olist-marts
+name: Olist commerce star schema
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    Orders, order lines, customers, sellers and products of the Olist marketplace as a star
+    schema for analytics: sales, delivery performance, reviews, customer behaviour.
+  limitations: >-
+    Orders 2016-09 to 2018-10 (public dump, replayed hourly). Money in BRL. A customer is a
+    person (`customer_unique_id`), pseudonymized by Olist; location is the zip-code prefix
+    centroid. Known source defects are kept and flagged by dbt warn tests, not removed.
+  usage: >-
+    Join facts to dimensions on the declared keys. Revenue excludes canceled and unavailable
+    orders; use the product's metrics port for KPI definitions instead of re-deriving them.
+tags: [olist, marts, star-schema]
+
+team:
+  name: olist-analytics
+  members:
+    - username: ShuCiG
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+roles:
+  - role: dashboard-reader
+    access: read
+    description: >-
+      Service account of the dashboard: BigQuery Data Viewer on datasets marts and
+      airflow_marts only.
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: marts
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: >-
+      Built by CD on every merge to main: a release snapshot, not a feed, so the freshness
+      SLA holds on `live`, not here.
+    project: olist-analytics-dbt-472315
+    dataset: marts
+    schema: marts  # for `{schema}` in SQL rules (BigQuery needs dataset-qualified names)
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Built every hour by the local Airflow replay; the dashboard reads it.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_marts
+    schema: airflow_marts  # for `{schema}` in SQL rules (BigQuery needs dataset-qualified names)
+
+slaProperties:
+  - property: frequency
+    value: 1
+    unit: h
+    description: Live server; refreshed by every hourly Airflow run that loads new orders.
+  - property: freshness
+    value: 1
+    unit: d
+    element: fct_order_items._loaded_at
+
+schema:
+  - name: fct_orders
+    physicalName: fct_orders
+    physicalType: table
+    description: One row per order. dbt model fct_orders, version 2 (latest).
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_orders.v2
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: customer_unique_id
+        logicalType: string
+        required: true
+        classification: restricted
+        relationships:
+          - type: foreignKey
+            to: dim_customers.customer_unique_id
+      - name: order_status
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
+            mustBe: 0
+      - name: purchase_date
+        logicalType: date
+        required: true
+      - name: purchased_at
+        logicalType: timestamp
+        required: true
+      - name: approved_at
+        logicalType: timestamp
+      - name: delivered_to_carrier_at
+        logicalType: timestamp
+      - name: delivered_to_customer_at
+        logicalType: timestamp
+      - name: estimated_delivery_date
+        logicalType: date
+      - name: items_count
+        logicalType: integer
+        required: true
+      - name: distinct_sellers_count
+        logicalType: integer
+        required: true
+      - name: items_amount
+        logicalType: number
+        required: true
+      - name: freight_amount
+        logicalType: number
+        required: true
+      - name: order_amount
+        logicalType: number
+        required: true
+      - name: payments_count
+        logicalType: integer
+        required: true
+      - name: paid_amount
+        logicalType: number
+        required: true
+      - name: max_installments
+        logicalType: integer
+      - name: credit_card_amount
+        logicalType: number
+        required: true
+      - name: boleto_amount
+        logicalType: number
+        required: true
+      - name: voucher_amount
+        logicalType: number
+        required: true
+      - name: debit_card_amount
+        logicalType: number
+        required: true
+      - name: hours_to_approve
+        logicalType: integer
+      - name: days_to_deliver
+        logicalType: integer
+      - name: days_delivered_before_estimate
+        logicalType: integer
+      - name: is_delivered
+        logicalType: boolean
+      - name: is_delivered_late
+        logicalType: boolean
+      - name: review_score
+        logicalType: integer
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [1, 2, 3, 4, 5]
+            mustBe: 0
+      - name: has_review
+        logicalType: boolean
+        required: true
+    quality:
+      - &not_empty_rule
+        type: library
+        metric: rowCount
+        mustBeGreaterThan: 0
+      - type: sql
+        description: Order amount = items + freight.
+        query: select count(*) from {schema}.{model} where order_amount <> items_amount + freight_amount
+        mustBe: 0
+
+  - name: fct_order_items
+    physicalName: fct_order_items
+    physicalType: table
+    description: One row per order line. Incremental; `_loaded_at` = when the line was loaded.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_order_items
+    properties:
+      - name: order_item_sk
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: order_id
+        logicalType: string
+        required: true
+        relationships:
+          - type: foreignKey
+            to: fct_orders.order_id
+      - name: order_item_number
+        logicalType: integer
+        required: true
+      - name: product_id
+        logicalType: string
+        required: true
+        relationships:
+          - type: foreignKey
+            to: dim_products.product_id
+      - name: seller_id
+        logicalType: string
+        required: true
+        relationships:
+          - type: foreignKey
+            to: dim_sellers.seller_id
+      - name: customer_unique_id
+        logicalType: string
+        required: true
+        classification: restricted
+        relationships:
+          - type: foreignKey
+            to: dim_customers.customer_unique_id
+      - name: order_status
+        logicalType: string
+        required: true
+      - name: purchase_date
+        logicalType: date
+        required: true
+      - name: purchased_at
+        logicalType: timestamp
+        required: true
+      - name: shipping_limit_at
+        logicalType: timestamp
+      - name: price
+        logicalType: number
+        required: true
+      - name: freight_value
+        logicalType: number
+        required: true
+      - name: item_amount
+        logicalType: number
+        required: true
+      - name: _loaded_at
+        logicalType: timestamp
+        required: true
+    quality:
+      - *not_empty_rule
+      - type: sql
+        description: Line amount = price + freight.
+        query: select count(*) from {schema}.{model} where item_amount <> price + freight_value
+        mustBe: 0
+
+  - name: dim_customers
+    physicalName: dim_customers
+    physicalType: table
+    description: One row per person (`customer_unique_id`); location from the latest order.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.dim_customers
+    properties:
+      - name: customer_unique_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+        classification: restricted
+      - name: zip_code_prefix
+        logicalType: string
+        classification: restricted
+      - name: city
+        logicalType: string
+        classification: restricted
+      - name: state
+        logicalType: string
+      - name: latitude
+        logicalType: number
+        classification: restricted
+      - name: longitude
+        logicalType: number
+        classification: restricted
+      - name: first_order_at
+        logicalType: timestamp
+        required: true
+      - name: last_order_at
+        logicalType: timestamp
+        required: true
+      - name: orders_count
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 1
+      - name: is_repeat_customer
+        logicalType: boolean
+        required: true
+      - name: lifetime_value
+        logicalType: number
+        required: true
+        logicalTypeOptions:
+          minimum: 0
+    quality: [*not_empty_rule]
+
+  - name: dim_sellers
+    physicalName: dim_sellers
+    physicalType: table
+    description: One row per seller, with the zip-code prefix centroid.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.dim_sellers
+    properties:
+      - name: seller_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: zip_code_prefix
+        logicalType: string
+      - name: city
+        logicalType: string
+      - name: state
+        logicalType: string
+      - name: latitude
+        logicalType: number
+      - name: longitude
+        logicalType: number
+    quality: [*not_empty_rule]
+
+  - name: dim_products
+    physicalName: dim_products
+    physicalType: table
+    description: One row per product; category translated to English (`unknown` when missing).
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.dim_products
+    properties:
+      - name: product_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: category_name_pt
+        logicalType: string
+      - name: category_name
+        logicalType: string
+        required: true
+      - name: name_length
+        logicalType: integer
+      - name: description_length
+        logicalType: integer
+      - name: photos_qty
+        logicalType: integer
+      - name: weight_g
+        logicalType: integer
+      - name: length_cm
+        logicalType: integer
+      - name: height_cm
+        logicalType: integer
+      - name: width_cm
+        logicalType: integer
+      - name: volume_cm3
+        logicalType: integer
+    quality: [*not_empty_rule]
