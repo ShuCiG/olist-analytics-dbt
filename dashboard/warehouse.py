@@ -131,10 +131,15 @@ def period() -> tuple[dt.date, dt.date]:
     return st.session_state["period"]
 
 
-def period_filter(column: str = "purchase_date") -> str:
-    # Values are datetime.date objects from st.date_input, never free text
-    lo, hi = period()
+def date_filter(dates: tuple[dt.date, dt.date], column: str = "purchase_date") -> str:
+    # Values are datetime.date objects (st.date_input, tests), never free text
+    lo, hi = dates
     return f"{column} between date '{lo.isoformat()}' and date '{hi.isoformat()}'"
+
+
+def period_filter(column: str = "purchase_date") -> str:
+    """`date_filter` for the period picked in the sidebar."""
+    return date_filter(period(), column)
 
 
 def monthly(df: pd.DataFrame) -> pd.DataFrame:

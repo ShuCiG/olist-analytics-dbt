@@ -2,7 +2,8 @@ import altair as alt
 import streamlit as st
 
 import charts
-from warehouse import LOST_STATUSES, monthly, period_filter, query, table
+import kpis
+from warehouse import LOST_STATUSES, monthly, period, period_filter, query, table
 
 st.title("Sales overview")
 lost = ", ".join(f"'{s}'" for s in LOST_STATUSES)
@@ -11,21 +12,13 @@ st.caption(
     "(`fct_orders.order_amount`), in Brazilian reais."
 )
 
-kpi = query(f"""
-    select
-        count(*) as orders,
-        count(distinct customer_unique_id) as customers,
-        sum(case when order_status not in ({lost}) then order_amount end) as revenue,
-        sum(case when order_status not in ({lost}) then 1 else 0 end) as sold_orders
-    from {table('fct_orders')}
-    where {period_filter()}
-""").iloc[0]
+kpi = kpis.sales(period())
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Orders", f"{kpi.orders:,.0f}", border=True)
 c2.metric("Customers", f"{kpi.customers:,.0f}", border=True)
 c3.metric("Revenue", f"R$ {kpi.revenue / 1e6:,.2f}M", border=True)
-c4.metric("Avg order value", f"R$ {kpi.revenue / max(kpi.sold_orders, 1):,.0f}", border=True)
+c4.metric("Avg order value", f"R$ {kpi.avg_order_value:,.0f}", border=True)
 
 trend = monthly(query(f"""
     select

@@ -196,8 +196,15 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # Every dashboard page renders on the marts just built (headless AppTest)
-      - name: Dashboard smoke test
+      # Semantic layer (D35): every entity, dimension, measure and metric queries
+      # the marts just built
+      - name: Validate semantic layer (MetricFlow)
+        working-directory: transform
+        run: uv run mf validate-configs
+
+      # Every dashboard page renders on the marts just built (headless AppTest),
+      # and its KPI tiles equal the semantic layer's metrics (mf query)
+      - name: Dashboard tests
         run: uv run pytest dashboard -q
 
   # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.

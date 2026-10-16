@@ -3,7 +3,8 @@ import numpy as np
 import streamlit as st
 
 import charts
-from warehouse import LOST_STATUSES, period_filter, query, table
+import kpis
+from warehouse import LOST_STATUSES, period, period_filter, query, table
 
 st.title("Customers & sellers")
 lost = ", ".join(f"'{s}'" for s in LOST_STATUSES)
@@ -12,22 +13,7 @@ st.caption(
     "with every order. Counts are within the selected period."
 )
 
-kpi = query(f"""
-    with per_customer as (
-        select
-            customer_unique_id,
-            count(*) as orders,
-            sum(case when order_status not in ({lost}) then order_amount else 0 end) as spend
-        from {table('fct_orders')}
-        where {period_filter()}
-        group by 1
-    )
-    select
-        count(*) as customers,
-        avg(case when orders > 1 then 1.0 else 0.0 end) as repeat_rate,
-        avg(spend) as avg_spend
-    from per_customer
-""").iloc[0]
+kpi = kpis.customers(period())
 
 sellers_kpi = query(f"""
     select count(distinct seller_id) as sellers

@@ -17,6 +17,7 @@ dashboard = [
     "streamlit>=1.65.0",
 ]
 dev = [
+    "dbt-metricflow>=0.15.0",
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
     "pyright>=1.1.414",
