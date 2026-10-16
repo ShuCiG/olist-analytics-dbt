@@ -79,6 +79,14 @@ jobs:
       - name: pytest
         run: uv run pytest -q
 
+      # Data product (D37): a changed contract raises its version, a breaking change
+      # its major version (consumers pin a major and must follow)
+      - name: Data contract versioning (vs main)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          uv run python data-product/check_compatibility.py origin/main
+
   # dbt_project_evaluator: project structure rules (naming, DAG shape, docs and test
   # coverage, governance: public marts need contracts, exposures only read public
   # models). Reads dbt's graph, not data, so an empty DuckDB file is enough. Off in
@@ -352,6 +360,8 @@ jobs:
         run: |
           mkdir -p _site
           cp transform/target/static_index.html _site/index.html
+          # Data product page + contract catalog at /data-product/ (D37)
+          uv run python data-product/build_site.py _site/data-product
 
       - name: Upload docs artifact
         uses: actions/upload-pages-artifact@v5

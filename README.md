@@ -214,6 +214,13 @@ Each data port is bound to a versioned [ODCS](https://bitol-io.github.io/open-da
   column, keys and foreign keys, value rules, freshness SLA, classification of person-related columns), on three
   servers: local DuckDB, BigQuery prod, BigQuery live feed.
 
+Consumers sign a **data usage agreement** ([`consumers/olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml)):
+purpose, output port, pinned contract version, and the exact columns and metrics they rely on. For the dashboard
+this is verified, not trusted: a test records every SQL query the pages send and resolves each column with sqlglot,
+so the agreement always equals what the dashboard really reads. A contract change raises its version, and a breaking
+one (`datacontract breaking`) needs a new major version, which in turn fails every agreement pinned to the old one.
+Product page with the contract catalog: https://shucig.github.io/olist-analytics-dbt/data-product/
+
 dbt is the implementation, the contract is the promise, and CI holds them together: the input contract is tested
 right after the ingest, the output contract after `dbt build` (`datacontract ci`, ~370 checks on the data), and
 `pytest data-product` checks that the descriptor is valid ODPS, its ports pin existing contract versions, and the

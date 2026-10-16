@@ -6,14 +6,19 @@ against each other and against the dbt project:
 - the product owner is the owner of the dbt groups,
 - the output contract describes the public dbt marts column for column (names,
   types, primary keys), so a model change that breaks the promise fails CI,
-- the input contract covers exactly the dbt sources.
+- the input contract covers exactly the dbt sources,
+- every consumer agreement (consumers/*.yaml) points to an existing port, a compatible
+  contract version, a dbt exposure and metrics, and only uses promised columns,
+- the versioning rule of check_compatibility.py, and the product page builds.
 
 Needs the dbt packages (`dbt deps`, for `dbt parse`), not built data:
 uv run pytest data-product
 """
 
+import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -175,3 +180,89 @@ def test_input_contract_covers_the_dbt_sources(
     contract = contracts[port["contractId"]]
     sources = {s["name"] for s in manifest["sources"].values() if s["source_name"] == "olist"}
     assert {obj["physicalName"] for obj in contract["schema"]} == sources
+
+
+@pytest.fixture(scope="module")
+def agreements() -> list[dict[str, Any]]:
+    found = [load(p) for p in sorted((PRODUCT_DIR / "consumers").glob("*.yaml"))]
+    assert found, "no consumer agreements"
+    return found
+
+
+def test_consumer_agreements_match_the_product(
+    product: dict[str, Any],
+    contracts: dict[str, dict[str, Any]],
+    agreements: list[dict[str, Any]],
+    manifest: dict[str, Any],
+) -> None:
+    ports = {p["name"]: p for p in product["outputPorts"]}
+    for agreement in agreements:
+        who, provider = agreement["id"], agreement["provider"]
+        assert agreement["kind"] == "DataUsageAgreement", who
+        assert provider["dataProduct"] == product["id"], who
+        port = ports[provider["outputPort"]]
+        assert port["contractId"] == provider["contractId"], who
+        contract = contracts[provider["contractId"]]
+
+        # Compatible = same major version, not newer than the contract
+        pinned, current = (tuple(map(int, v.split("."))) for v in (provider["contractVersion"], contract["version"]))
+        assert pinned[0] == current[0] and pinned <= current, (
+            f"{who} pins {provider['contractVersion']}, contract is {contract['version']}: "
+            "update the consumer for the breaking change, then renew the agreement"
+        )
+        assert provider["server"] in {s["server"] for s in contract["servers"]}, who
+        assert provider["role"] in {r["role"] for r in contract.get("roles", [])}, who
+
+        promised = {obj["physicalName"]: {p["name"] for p in obj["properties"]} for obj in contract["schema"]}
+        for table, columns in agreement["uses"].items():
+            missing = set(columns) - promised.get(table, set())
+            assert not missing, f"{who} uses {table}.{sorted(missing)}, which {contract['id']} no longer promises"
+
+        # The dbt exposure (lineage in the dbt docs) lists the same tables
+        (exposure,) = [e for e in manifest["exposures"].values() if e["name"] == agreement["consumer"]["dbtExposure"]]
+        exposed = {manifest["nodes"][uid]["alias"] for uid in exposure["depends_on"]["nodes"]}
+        assert exposed == set(agreement["uses"]), f"{who}: exposure depends on {sorted(exposed)}"
+
+        metrics = agreement.get("metrics")
+        if metrics:
+            assert ports[metrics["outputPort"]]["type"] == "semantic-layer", who
+            defined = {m["name"] for m in manifest["metrics"].values()}
+            assert set(metrics["names"]) <= defined, f"{who}: unknown metrics {set(metrics['names']) - defined}"
+
+
+def load_script(name: str):
+    spec = importlib.util.spec_from_file_location(name, PRODUCT_DIR / f"{name}.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "changed", "breaking", "ok"),
+    [
+        ("1.0.0", "1.0.0", False, False, True),   # untouched
+        ("1.0.0", "1.0.1", True, False, True),    # description, new rule
+        ("1.0.0", "1.1.0", True, False, True),    # added column
+        ("1.0.0", "1.0.0", True, False, False),   # changed, version kept
+        ("1.0.0", "1.1.0", True, True, False),    # breaking as a minor
+        ("1.4.2", "2.0.0", True, True, True),     # breaking as a major
+        ("2.0.0", "1.9.0", True, False, False),   # version went down
+    ],
+)
+def test_contract_versioning_rule(old: str, new: str, changed: bool, breaking: bool, ok: bool) -> None:
+    check = load_script("check_compatibility")
+    assert (check.verdict(old, new, changed, breaking) is None) == ok
+
+
+def test_product_page_builds(tmp_path: Path, product: dict[str, Any], agreements: list[dict[str, Any]]) -> None:
+    out = tmp_path / "data-product"
+    load_script("build_site").build(out)
+    page = (out / "index.html").read_text(encoding="utf-8")
+    assert product["name"] in page
+    for agreement in agreements:
+        assert agreement["name"] in page
+    # Relative links (contract pages) point to files that were built; ../ is the dbt docs
+    for href in re.findall(r'href="([^"]+)"', page):
+        if not href.startswith(("http", "../")):
+            assert (out / href).is_file(), href
