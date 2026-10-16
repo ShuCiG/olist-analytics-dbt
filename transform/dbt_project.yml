@@ -17,6 +17,15 @@ flags:
   # ours (its own copy is disabled below) without a cycle warning per rule.
   require_ref_searches_node_package_before_root: true
 
+vars:
+  # Elementary's clock (D38). Anomaly tests look back from "now"; the data is a
+  # 2016-2018 dump, so "now" is the last order in the data, not the wall clock.
+  # Default = the dump's last order (full loads: CI, prod); Airflow's replay passes
+  # the last order of the months loaded so far (feed status `last_order_at`).
+  custom_run_started_at: "{{ env_var('OLIST_AS_OF', '2018-10-17T17:30:18') }}"
+  # dbt_project_evaluator lints this project's nodes, not Elementary's internal models
+  exclude_packages: ["elementary"]
+
 models:
   olist:
     staging:
@@ -36,6 +45,9 @@ models:
   dbt_project_evaluator:
     +enabled: &evaluator_enabled "{{ (env_var('DBT_PROJECT_EVALUATOR', 'false') | lower == 'true') | as_bool }}"
     +schema: project_evaluator
+  # Observability tables (run/test history, metrics), filled by its on-run-end hooks
+  elementary:
+    +schema: elementary
 
 data_tests:
   dbt_project_evaluator:

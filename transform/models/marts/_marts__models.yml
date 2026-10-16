@@ -235,7 +235,8 @@ models:
       - name: payments_count
         description: Number of payment records.
         data_type: bigint
-      - name: paid_amount
+      - &paid_amount_col
+        name: paid_amount
         description: "{{ doc('paid_amount') }}"
         data_type: *money_type
       - name: max_installments
@@ -286,6 +287,31 @@ models:
         # Data tests run once, here. v1 is a projection of v2: it inherits the
         # contract and the primary-key tests, nothing else (no duplicate warnings).
         # `<<: *x_col` = the shared column above plus this version's tests.
+        # Observability (Elementary, D38): each day of purchases against the days
+        # before it. Warn only: an anomaly is a question for the business, not a bug.
+        data_tests:
+          - elementary.volume_anomalies:
+              description: >-
+                Days with an unusual number of orders compared with the same weekday in
+                the previous 14 weeks. A drop means orders stopped arriving (source feed or
+                checkout broken); a spike is a campaign (Black Friday) or duplicated loads.
+              # Each day vs the same weekday before it. With weekday seasonality
+              # Elementary multiplies the training period by 7: 14 days = 14 weeks.
+              arguments: &daily_anomalies
+                timestamp_column: purchased_at
+                time_bucket: {period: day, count: 1}
+                training_period: {period: day, count: 14}
+                detection_period: {period: day, count: 30}
+                seasonality: day_of_week
+              config: &anomaly_config
+                severity: warn
+                meta: {alert_unit: days}
+          - elementary.freshness_anomalies:
+              description: >-
+                Days whose gap since the previous order is unusually long. New orders
+                normally arrive every few minutes; a long gap means the feed stalled.
+              arguments: *daily_anomalies
+              config: *anomaly_config
         columns:
           - include: all
           - <<: *customer_unique_id_col
@@ -345,12 +371,31 @@ models:
                   config:
                     severity: warn
                     meta: {alert_unit: orders}
+          - <<: *paid_amount_col
+            data_tests:
+              - elementary.column_anomalies:
+                  description: >-
+                    Days with an unusual average paid amount per order. It moves with
+                    prices, vouchers and the product mix; a jump also follows a currency
+                    or decimal error in the payment feed.
+                  arguments:
+                    <<: *daily_anomalies
+                    column_anomalies: [average]
+                  config: *anomaly_config
           - <<: *review_score_col
             data_tests:
               - accepted_values:
                   arguments:
                     values: [1, 2, 3, 4, 5]
                     quote: false
+              - elementary.column_anomalies:
+                  description: >-
+                    Days with an unusual average review score. A drop points to late
+                    deliveries or a seller with bad products; check the delivery KPIs.
+                  arguments:
+                    <<: *daily_anomalies
+                    column_anomalies: [average]
+                  config: *anomaly_config
       - v: 1
         deprecation_date: 2026-12-31T00:00:00Z
         description: >
@@ -371,6 +416,14 @@ models:
       group: orders
       contract:
         enforced: true
+    data_tests:
+      - elementary.volume_anomalies:
+          description: >-
+            Days with an unusual number of sold items compared with the same weekday in
+            the previous 14 weeks. Read together with the order volume: items moving
+            alone means larger or smaller baskets, or items loaded without their orders.
+          arguments: *daily_anomalies
+          config: *anomaly_config
     columns:
       - name: order_item_sk
         description: Surrogate key (order_id, order_item_number). Primary key.

@@ -92,6 +92,30 @@ DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics or
 
 `mf` has no `--target` flag: `profiles.yml` takes the default target from `DBT_TARGET`.
 
+## Observability report (Elementary)
+
+Every `dbt build` records its run and test results in the `elementary` schema (on-run-end hooks); the anomaly and
+schema-change tests run with the other tests. The report is rendered by Elementary's CLI, `edr`, which is not in
+`uv.lock` (it would downgrade `networkx`), so it runs in its own `uvx` environment pinned to the project's dbt versions:
+
+```bash
+cd transform
+mkdir -p ../data/elementary
+# edr runs its own dbt project from its install folder: the DuckDB path must be absolute
+DBT_DUCKDB_PATH="$(cd ../data && pwd)/olist.duckdb" \
+  uvx --python 3.12 --from "elementary-data[duckdb]==0.26.1" \
+    --with dbt-core==1.12.5 --with dbt-duckdb==1.11.0 --with duckdb==1.5.6 \
+  edr report --profiles-dir . --file-path ../data/elementary/index.html
+```
+
+- BigQuery prod: `--from "elementary-data[bigquery]==0.26.1" --with dbt-core==1.12.5 --with dbt-bigquery==1.12.1`
+  and `--profile-target prod` (CD publishes this one at `/elementary/` on GitHub Pages).
+- Windows: `edr`'s internal dbt project is deep inside uv's cache and passes the 260-character path limit
+  (`No such file or directory: 'dbt_packages\...'`); point uv at a short cache, e.g. `UV_CACHE_DIR=C:/uvc`.
+- The anomaly tests' clock is the last order in the data (var `custom_run_started_at`, env `OLIST_AS_OF`), not
+  today: try `OLIST_AS_OF=2017-11-30T23:59:59 uv run dbt test --select test_name:volume_anomalies` to see
+  Black Friday 2017 flagged.
+
 ## Project evaluator
 
 dbt_project_evaluator is off in normal runs (its ~50 nodes stay out of builds and Airflow); CI turns it on:

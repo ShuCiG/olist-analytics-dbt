@@ -51,3 +51,24 @@ olist:
       path: ":memory:"
       schema: main
       threads: 1
+
+# Read by Elementary's CLI (`edr report`, D38): the `elementary` schema the package's
+# on-run-end hooks fill. Same warehouses and targets as above.
+elementary:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/olist.duckdb') }}"
+      schema: elementary
+      threads: 4
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'olist-analytics-dbt-472315') }}"
+      dataset: elementary
+      location: EU
+      threads: 8
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive

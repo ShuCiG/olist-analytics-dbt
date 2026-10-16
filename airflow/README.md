@@ -2,7 +2,8 @@
 
 Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
 simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
-when nothing arrived) → `dbt` task group → `report` (email, see below), where the
+when nothing arrived) → `elementary_tables` (Elementary's history tables, D38) →
+`dbt` task group → `report` (email, see below), where the
 dbt group is rendered by
 [Cosmos](https://github.com/astronomer/astronomer-cosmos) in watcher mode: one
 producer task runs `dbt source freshness` + a single `dbt build` for the whole

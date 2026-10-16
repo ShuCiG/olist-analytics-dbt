@@ -12,3 +12,7 @@ packages:
   # Disabled unless DBT_PROJECT_EVALUATOR=true (dbt_project.yml): CI runs it as its own step.
   - package: dbt-labs/dbt_project_evaluator
     version: [">=1.0.0", "<2.0.0"]
+  # Data observability: run/test history in its own schema (on-run-end hooks) and
+  # anomaly + schema-change tests. Report: `edr report` (CLI, not in uv.lock, D38).
+  - package: elementary-data/elementary
+    version: [">=0.26.0", "<0.27.0"]

@@ -59,6 +59,8 @@ GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
 
 # Which orders to load: up to the `until` param if given, else the next month
 CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
+# Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders
+AS_OF = "{{ ti.xcom_pull(task_ids='has_new_orders', key='as_of') }}"
 
 
 @dataclass(frozen=True)
@@ -85,10 +87,15 @@ def has_new_orders(ti, params) -> bool:
     Reads the feed status JSON that `pipeline.py` prints as the ingest's last line
     (its XCom). Manual runs with `until` or `full_refresh` always build: re-running a
     month whose dbt failed loads 0 new orders but still has to rebuild.
+
+    Also pushes `as_of` (XCom), the last order loaded so far: Elementary's clock
+    (D38), so its anomaly tests look back from the replayed month, not from today.
     """
+    status = json.loads(ti.xcom_pull(task_ids="dlt_ingest"))
+    ti.xcom_push(key="as_of", value=status["last_order_at"] or "")
     if params["until"] or params["full_refresh"]:
         return True
-    return json.loads(ti.xcom_pull(task_ids="dlt_ingest"))["orders_loaded"] > 0
+    return status["orders_loaded"] > 0
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
@@ -210,8 +217,33 @@ def build_dag(wh: Warehouse) -> DAG:
                 should_detach_multiple_parents_tests=False,
                 # Source tasks run `dbt source freshness` (warn-only, D18)
                 source_rendering_behavior=SourceRenderingBehavior.WITH_TESTS_OR_FRESHNESS,
+                # Elementary's tables are built by elementary_tables, before the build
+                # (the producer gets this exclude too)
+                exclude=["package:elementary"],
             ),
-            operator_args={"full_refresh": "{{ params.full_refresh }}"},
+            operator_args={
+                "full_refresh": "{{ params.full_refresh }}",
+                # The replay's last order (empty: the wall clock). A new value each
+                # month makes dbt re-parse once (vars changed).
+                "vars": {"custom_run_started_at": AS_OF},
+            },
+        )
+
+        # Elementary's tables (run/test history, metrics) before the build: on a fresh
+        # warehouse its schema-change tests on sources would start before dbt creates
+        # them. Incremental and filled by hooks, so a rebuild keeps the history (D38).
+        # Own target path: the producer's partial parse stays untouched.
+        elementary_tables = BashOperator(
+            task_id="elementary_tables",
+            bash_command=(
+                f"{DBT_EXECUTABLE} run --select package:elementary"
+                f" --target {wh.dbt_target} --target-path target_elementary_{wh.name}"
+                f" --vars '{{custom_run_started_at: \"{AS_OF}\"}}'"
+            ),
+            cwd=str(DBT_PROJECT_DIR),
+            env={**wh.env, "DBT_PROFILES_DIR": str(DBT_PROJECT_DIR)},
+            append_env=True,
+            **({"pool": wh.pool} if wh.pool else {}),
         )
 
         new_orders = ShortCircuitOperator(
@@ -229,7 +261,7 @@ def build_dag(wh: Warehouse) -> DAG:
             trigger_rule=TriggerRule.NONE_FAILED,
         )
 
-        ingest >> new_orders >> dbt >> email_report
+        ingest >> new_orders >> elementary_tables >> dbt >> email_report
     return dag
 
 
