@@ -278,6 +278,18 @@ jobs:
         working-directory: transform
         run: uv run dbt deps
 
+      # The cleanup below must refuse a dataset outside ci_*. A name that doesn't
+      # exist: if the guard is ever broken, this drops nothing real.
+      - name: Drop guard refuses non-CI datasets
+        working-directory: transform
+        env:
+          DBT_CI_SCHEMA: marts_guard_check
+        run: |
+          if uv run dbt run-operation drop_isolated_datasets --target ci; then
+            echo "::error::drop_isolated_datasets accepted dataset '$DBT_CI_SCHEMA'"
+            exit 1
+          fi
+
       - name: Download prod manifest (last successful run on main)
         env:
           GH_TOKEN: ${{ github.token }}
