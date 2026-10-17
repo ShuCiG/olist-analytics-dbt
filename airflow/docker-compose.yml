@@ -1,5 +1,7 @@
 # Local Airflow 3 for the olist ELT DAGs. Not for production: LocalExecutor,
-# no login (all users admin), fixed local secrets.
+# no login (all users admin), fixed local secrets (override in airflow/.env).
+# Ports are published on 127.0.0.1 only: no login is acceptable because nothing
+# but this machine reaches the UI, the API or Mailpit.
 # The code is baked into the image (prod-like): a code change needs a rebuild or
 # another published image. Live edit: add docker-compose.dev.yml (see there).
 #   docker compose -f airflow/docker-compose.yml up -d --build
@@ -24,11 +26,11 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
-    # Shared by the components that sign / check task tokens; local-only value
-    AIRFLOW__API_AUTH__JWT_SECRET: local-dev-only-not-a-secret
+    # Shared by the components that sign / check task tokens; local-only default
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-dev-only-not-a-secret}
     # Signs log requests from the UI to the scheduler's log server; unset = each
     # component picks a random key and the UI can't fetch task logs
-    AIRFLOW__API__SECRET_KEY: local-dev-only-not-a-secret
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY:-local-dev-only-not-a-secret}
     # Encrypts Variables / Connections in the metadata DB. Unset = each component
     # generates its own key, and a Variable set from one container reads as missing
     # in the others ("Can't decrypt _val": alert recipients fell back to the
@@ -67,7 +69,7 @@ services:
   mailpit:
     image: axllent/mailpit:v1.31.3
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
     restart: always
 
   postgres:
@@ -117,7 +119,7 @@ services:
     <<: *airflow-common
     command: api-server
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
       interval: 30s

@@ -22,8 +22,11 @@ cp airflow/.env.example airflow/.env      # optional: GCP_KEY_FILE for the BigQu
 GIT_SHA=$(git rev-parse HEAD) docker compose -f airflow/docker-compose.yml up -d --build
 ```
 
-UI at http://localhost:8080 (no login: local only), alert emails at
-http://localhost:8025 (Mailpit). DAGs start paused.
+UI at http://localhost:8080, alert emails at http://localhost:8025 (Mailpit). DAGs
+start paused. No login (all users admin), so both ports are published on `127.0.0.1`
+only: other machines on the network can't reach them. The shared secrets (JWT, API
+secret key, Fernet key) have fixed local defaults; set your own in `airflow/.env`
+(see [.env.example](.env.example)).
 
 ### Image: code baked in, or live edit
 
