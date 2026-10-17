@@ -243,9 +243,11 @@ jobs:
   # Builds only modified models + children; unmodified parents are read from prod
   # (--defer to the manifest of the last successful deploy). Full build if none.
   # Reads the shared `raw` dataset (no ingest here: raw is prod data).
+  # Not on Dependabot PRs: GitHub gives them no Actions secrets, so there is no
+  # GCP key (and it shouldn't get one). Their changes reach BigQuery on main.
   dbt-build-bigquery:
     name: dbt build (BigQuery)
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
     needs: sqlfluff-lint
     permissions:
       contents: read
