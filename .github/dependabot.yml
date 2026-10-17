@@ -1,0 +1,15 @@
+# Actions are pinned to commit SHAs (a tag can be moved to other code); Dependabot
+# proposes the new SHA with its version comment, one weekly PR per ecosystem.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /airflow
+    schedule:
+      interval: weekly

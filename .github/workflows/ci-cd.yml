@@ -26,9 +26,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -48,9 +48,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -67,9 +67,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -105,9 +105,9 @@ jobs:
       DBT_PROJECT_EVALUATOR: "true"
       DBT_DUCKDB_PATH: evaluator.duckdb  # relative to transform/, fresh on the runner
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -131,12 +131,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: Build Airflow image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           file: airflow/Dockerfile
@@ -166,9 +166,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -176,7 +176,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Cache Kaggle dataset
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/kagglehub
           key: kagglehub-olistbr-brazilian-ecommerce-v2
@@ -211,7 +211,7 @@ jobs:
       # the build fails, since dbt parses before it runs anything
       - name: Upload manifest (for the failure email)
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ci-manifest
           path: transform/target/manifest.json
@@ -259,9 +259,9 @@ jobs:
       # run_id in the name: a cancelled run's cleanup can't drop a newer run's datasets
       DBT_CI_SCHEMA: ci_pr_${{ github.event.number }}_${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -270,7 +270,7 @@ jobs:
 
       # Writes the key to a temp file and sets GOOGLE_APPLICATION_CREDENTIALS (ADC)
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
@@ -332,9 +332,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v10.2.0  # upstream has no floating major tag
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
 
@@ -342,13 +342,13 @@ jobs:
         run: uv sync --frozen
 
       - name: Cache Kaggle dataset
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/kagglehub
           key: kagglehub-olistbr-brazilian-ecommerce-v2
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
@@ -383,7 +383,7 @@ jobs:
         run: uv run dbt docs generate --target prod --static
 
       - name: Upload prod manifest (state for slim CI)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: prod-manifest
           path: transform/target/manifest.json
@@ -398,22 +398,26 @@ jobs:
 
       # Observability report at /elementary/ (D38): test and run history, anomaly
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
-      # own uvx env, pinned to the project's dbt versions (it would downgrade
-      # networkx in uv.lock); it does not create the output folder.
+      # own venv (it would downgrade networkx in uv.lock), installed only from a
+      # hash-pinned lock: this job holds the prod credentials. It does not create
+      # the output folder.
       - name: Elementary report
         working-directory: transform
         run: |
           mkdir -p "$RUNNER_TEMP/edr" "$GITHUB_WORKSPACE/_site/elementary"
           printf 'anonymous_usage_tracking: false\n' > "$RUNNER_TEMP/edr/config.yml"
-          uvx --python 3.12 --from "elementary-data[bigquery]==0.26.1" \
-            --with dbt-core==1.12.5 --with dbt-bigquery==1.12.1 \
-            edr report --profiles-dir . --profile-target prod \
+          uv venv --python 3.12 "$RUNNER_TEMP/edr-venv"
+          uv pip install --python "$RUNNER_TEMP/edr-venv" --require-hashes \
+            -r "$GITHUB_WORKSPACE/.github/edr-requirements.txt"
+          # edr runs dbt as a subprocess: the venv's dbt must come first on PATH
+          export PATH="$RUNNER_TEMP/edr-venv/bin:$PATH"
+          edr report --profiles-dir . --profile-target prod \
             --config-dir "$RUNNER_TEMP/edr" --target-path "$RUNNER_TEMP/edr" \
             --file-path "$GITHUB_WORKSPACE/_site/elementary/index.html" \
             --env prod --days-back 30 --open-browser false
 
       - name: Upload docs artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: _site
 
@@ -430,9 +434,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
-
-  # The Airflow image of this commit (code + dbt manifest baked in), published as
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
   # ghcr.io/<owner>/olist-airflow:<sha> and :latest once prod is deployed, so the
   # image matches prod. Same DAG parse check as in PR CI before pushing.
   publish-airflow-image:
@@ -445,18 +447,18 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Build Airflow image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           file: airflow/Dockerfile
@@ -498,8 +500,7 @@ jobs:
       contents: read
       actions: read # job list + logs of this run
     steps:
-      - uses: actions/checkout@v7
-      # Optional: without it, data tests are listed by their dbt names only
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Download manifest (test descriptions)
         continue-on-error: true
         env:
