@@ -142,14 +142,35 @@ def test_full_refresh_drops_data_and_cursor(run) -> None:
     assert run("--next")["last_order_at"][:7] == "2016-10"
 
 
-def test_feed_status_rejects_a_non_timestamp(run, dump: Path) -> None:
-    # Sorts last, so it becomes max(order_purchase_timestamp): Airflow would render it
-    # into a bash command (Elementary's clock); the ingest must fail instead
-    tampered = [*ORDERS, ("o6", "2016-12-31 23:59:59'; touch /tmp/pwned #")]
+def write_orders(dump: Path, orders: list[tuple[str, str]]) -> None:
     write_csv(
         dump / "olist_orders_dataset.csv",
         ["order_id", "order_purchase_timestamp", "order_status"],
-        [(order_id, ts, "delivered") for order_id, ts in tampered],
+        [(order_id, ts, "delivered") for order_id, ts in orders],
     )
-    with pytest.raises(ValueError, match="not a timestamp"):
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        # Sorts last: would become the cursor and Elementary's clock, which Airflow
+        # renders into a bash command
+        "2016-12-31 23:59:59'; touch /tmp/pwned #",
+        # Sorts first: `--next` would pick month "2016-5-" and crash every hour
+        "2016-5-01 10:00:00",
+    ],
+)
+def test_malformed_purchase_time_stops_the_load(run, dump: Path, bad: str) -> None:
+    run("--until", "2016-09")
+    write_orders(dump, [*ORDERS, ("o6", bad)])
+    with pytest.raises(Exception, match="malformed order_purchase_timestamp"):  # dlt wraps it
+        run("--next")
+    # Nothing loaded, cursor untouched: once the file is fixed the feed goes on
+    write_orders(dump, ORDERS)
+    assert run("--next")["last_order_at"][:7] == "2016-10"
+
+
+def test_empty_reference_file_stops_the_load(run, dump: Path) -> None:
+    write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id", "zip_code_prefix"], [])
+    with pytest.raises(ValueError, match="no rows"):
         run()

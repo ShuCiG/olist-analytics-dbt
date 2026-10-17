@@ -120,8 +120,13 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
     loaded_at = datetime.now(UTC)
 
     for table_name, file_name in REFERENCE_TABLES.items():
+        table = read_csv_as_strings(source_dir / file_name)
+        # `replace`: an empty file would wipe the table, and the sellers snapshot would
+        # close every seller's history (hard_deletes: new_record)
+        if not table.num_rows:
+            raise ValueError(f"{file_name} has no rows: refusing to replace {table_name}")
         yield dlt.resource(
-            [with_loaded_at(read_csv_as_strings(source_dir / file_name), loaded_at)],
+            [with_loaded_at(table, loaded_at)],
             name=table_name,
             write_disposition="replace",
         )
@@ -134,10 +139,19 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         loaded_until = state.get(STATE_KEY)
         # Timestamps are ISO strings, so string order = time order
         purchased_at = pc.field("order_purchase_timestamp")
+        all_orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0])
+        # The chunk and the cursor come from string order and the "YYYY-MM" prefix:
+        # one malformed value would pick the wrong month or poison the cursor
+        bad = all_orders.filter(
+            pc.is_valid(purchased_at) & ~pc.match_substring_regex(purchased_at, f"^{TIMESTAMP}$")
+        )
+        if bad.num_rows:
+            examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3]))
+            raise ValueError(f"{bad.num_rows} orders with a malformed order_purchase_timestamp, e.g. {examples}")
         in_chunk = pc.is_valid(purchased_at)
         if loaded_until:
             in_chunk &= purchased_at >= next_month(loaded_until)
-        orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0]).filter(in_chunk)
+        orders = all_orders.filter(in_chunk)
         # `--next`: the first month after the cursor that has orders. Not simply the
         # next calendar month: the dump has empty months (2016-11), which would
         # never move the cursor.

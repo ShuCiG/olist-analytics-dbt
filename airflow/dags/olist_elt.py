@@ -89,7 +89,9 @@ def has_new_orders(ti, params) -> bool:
 
     Reads the feed status JSON that `pipeline.py` prints as the ingest's last line
     (its XCom). Manual runs with `until` or `full_refresh` always build: re-running a
-    month whose dbt failed loads 0 new orders but still has to rebuild.
+    month whose dbt failed loads 0 new orders but still has to rebuild. So does the
+    run after a failed scheduled run: once the dump is used up no run brings orders,
+    and a failed last month would otherwise stay unbuilt with a single email.
 
     Also pushes `as_of` (XCom), the last order loaded so far: Elementary's clock
     (D38), so its anomaly tests look back from the replayed month, not from today.
@@ -102,6 +104,10 @@ def has_new_orders(ti, params) -> bool:
         raise ValueError(f"last_order_at is not a timestamp: {as_of!r}")
     ti.xcom_push(key="as_of", value=as_of)
     if params["until"] or params["full_refresh"]:
+        return True
+    previous = ti.get_previous_dagrun()
+    if previous is not None and previous.state == "failed":
+        print(f"Previous run {previous.run_id} failed: building again")
         return True
     return status["orders_loaded"] > 0
 
