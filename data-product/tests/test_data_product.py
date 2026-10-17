@@ -255,6 +255,20 @@ def test_contract_versioning_rule(old: str, new: str, changed: bool, breaking: b
     assert (check.verdict(old, new, changed, breaking) is None) == ok
 
 
+def test_contracts_pair_by_id_not_file_name() -> None:
+    check = load_script("check_compatibility")
+    base = {"c/a.odcs.yaml": "id: a\nversion: 1.0.0\n", "c/b.odcs.yaml": "id: b\nversion: 1.0.0\n"}
+    current = {"c/renamed.odcs.yaml": "id: a\nversion: 1.0.0\n", "c/new.odcs.yaml": "id: n\nversion: 1.0.0\n"}
+    pairs, removed = check.pair_by_id(base, current)
+    # A renamed file is still contract `a` and gets checked against its base version
+    assert pairs == {"c/renamed.odcs.yaml": base["c/a.odcs.yaml"], "c/new.odcs.yaml": None}
+    assert removed == ["b"]
+
+
+def test_page_keeps_code_span_text() -> None:
+    assert load_script("build_site").text("dataset `raw` & co") == "dataset <code>raw</code> &amp; co"
+
+
 def test_product_page_builds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, product: dict[str, Any], agreements: list[dict[str, Any]]
 ) -> None:

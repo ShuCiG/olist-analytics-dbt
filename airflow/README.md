@@ -129,8 +129,10 @@ reads as missing in the others (recipients silently fell back to the default).
 
 Mid-feed, a failed dbt step heals itself: the next hourly run loads the next month
 and builds everything, including the failed month's rows (the incremental model's
-`_loaded_at` cursor is still behind them). After the last month there is no run
-with new data, so re-run with a **new** manual run with `until`, not with Clear:
+`_loaded_at` cursor is still behind them). After the last month no run brings new
+data, so the run after a failed scheduled run builds anyway (`has_new_orders`): a
+failing build keeps failing (and emailing) every hour until it is fixed. To re-run
+by hand, use a **new** manual run with `until`, not Clear:
 
 ```bash
 docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
