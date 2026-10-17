@@ -54,6 +54,8 @@ KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
 STATE_KEY = "orders_loaded_until"  # last loaded purchase month, "YYYY-MM"
+# Olist purchase time, "2017-10-02 10:56:33" (optionally ISO "T", fractions)
+TIMESTAMP = r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?"
 
 # The BigQuery client suggests the Storage API for fast reads; dlt here only writes
 warnings.filterwarnings("ignore", message="Cannot create BigQuery Storage client")
@@ -182,6 +184,10 @@ def feed_status(pipeline: dlt.Pipeline) -> dict[str, object]:
         )
     assert rows, "no result from the orders status query"
     total, last_order_at, last_loaded_at = rows[0]
+    # Airflow renders it into a dbt command line (Elementary's clock): a value from
+    # the dump that isn't a plain timestamp must stop the run, not reach a shell
+    if last_order_at is not None and not re.fullmatch(TIMESTAMP, last_order_at):
+        raise ValueError(f"max order_purchase_timestamp is not a timestamp: {last_order_at!r}")
     return {
         "orders_loaded": normalize_info.row_counts.get("orders", 0),
         "orders_total": total,
