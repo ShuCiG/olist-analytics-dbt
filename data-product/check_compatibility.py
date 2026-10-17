@@ -5,6 +5,9 @@ For every data contract that differs from the base branch:
 - a breaking change (`datacontract breaking`: a removed column, a changed type, a
   dropped promise) needs a new major version.
 
+Contracts are matched by their `id`, not the file name: a renamed file is the same
+contract and is checked like any other change.
+
 Consumers pin a major version (data-product/consumers/*.yaml), so a major bump
 fails their agreement in CI until they are updated: a breaking change can't reach
 a consumer silently.
@@ -40,11 +43,33 @@ def verdict(old_version: str, new_version: str, changed: bool, breaking: bool) -
     return None
 
 
-def base_file(base_ref: str, path: Path) -> str | None:
-    done = subprocess.run(
-        ["git", "show", f"{base_ref}:{path.as_posix()}"], cwd=REPO, capture_output=True, text=True, encoding="utf-8"
-    )
-    return done.stdout if done.returncode == 0 else None
+def git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=REPO, capture_output=True, text=True, encoding="utf-8", check=True
+    ).stdout
+
+
+def base_contracts(base_ref: str) -> dict[str, str]:
+    """Contract files on the base branch: repo path -> text."""
+    paths = git("ls-tree", "--name-only", f"{base_ref}:{CONTRACTS.as_posix()}").split()
+    return {
+        f"{CONTRACTS.as_posix()}/{name}": git("show", f"{base_ref}:{CONTRACTS.as_posix()}/{name}")
+        for name in paths
+        if name.endswith(".odcs.yaml")
+    }
+
+
+def pair_by_id(base: dict[str, str], current: dict[str, str]) -> tuple[dict[str, str | None], list[str]]:
+    """Each current contract (path) -> its base text by contract `id` (None = new),
+    and the ids that are on the base branch but gone now."""
+    base_by_id = {yaml.safe_load(text)["id"]: text for text in base.values()}
+    pairs: dict[str, str | None] = {}
+    current_ids = set()
+    for path, text in current.items():
+        contract_id = yaml.safe_load(text)["id"]
+        current_ids.add(contract_id)
+        pairs[path] = base_by_id.get(contract_id)
+    return pairs, sorted(set(base_by_id) - current_ids)
 
 
 def is_breaking(old_text: str, new_path: Path) -> bool:
@@ -64,14 +89,20 @@ def is_breaking(old_text: str, new_path: Path) -> bool:
 
 def main(base_ref: str = "origin/main") -> int:
     problems = []
-    for path in sorted((REPO / CONTRACTS).glob("*.odcs.yaml")):
-        rel = path.relative_to(REPO)
-        name = rel.as_posix()
-        old_text = base_file(base_ref, rel)
+    current = {
+        path.relative_to(REPO).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted((REPO / CONTRACTS).glob("*.odcs.yaml"))
+    }
+    pairs, removed = pair_by_id(base_contracts(base_ref), current)
+    for contract_id in removed:
+        # A consumer pinned to it breaks; that is their agreement's test to catch
+        print(f"::warning::contract {contract_id} was removed")
+    for name, old_text in pairs.items():
+        rel = Path(name)
         if old_text is None:
             print(f"{name}: new contract")
             continue
-        old, new = yaml.safe_load(old_text), yaml.safe_load(path.read_text(encoding="utf-8"))
+        old, new = yaml.safe_load(old_text), yaml.safe_load(current[name])
         changed = old != new  # comments and formatting don't count
         breaking = changed and is_breaking(old_text, rel)
         problem = verdict(old["version"], new["version"], changed, breaking)
