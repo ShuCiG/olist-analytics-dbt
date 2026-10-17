@@ -2,7 +2,10 @@
 -- Incremental: each run merges only rows whose raw source was (re)loaded since the
 -- last run, by `_loaded_at`. An item is reprocessed when the item or its order row
 -- changes (e.g. a new order_status). Customers are replaced on every load, so they
--- are not part of the cursor; `--full-refresh` rebuilds everything.
+-- are not part of the cursor; `--full-refresh` rebuilds everything. Trade-off: a
+-- changed customer (customer_unique_id, zip) reaches existing rows here only on a
+-- full refresh, while fct_orders (a table) has it on the next build. The dump is
+-- static, so customers never change after their orders load.
 {{
     config(
         materialized='incremental',
