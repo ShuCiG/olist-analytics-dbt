@@ -97,8 +97,9 @@ def query(sql: str) -> pd.DataFrame:
     else:
         import duckdb
 
-        # Short-lived read-only connection: doesn't hold the file lock that a
-        # concurrent `dbt build` or dlt load needs
+        # Short-lived read-only connection: DuckDB lets one process write or several
+        # read, so the lock is held only for this query. A query while `dbt build`
+        # or a dlt load writes the file fails with a lock error (and vice versa).
         with duckdb.connect(DUCKDB_PATH, read_only=True) as con:
             df = con.sql(sql).df()
     return _to_plain_types(df)

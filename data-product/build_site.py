@@ -31,7 +31,7 @@ def e(value: Any) -> str:
 
 def text(value: Any) -> str:
     """Escaped prose, `code` spans as <code>."""
-    return re.sub(r"`([^`]+)`", r"<code></code>", e(value))
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", e(value))
 
 
 def build_catalog(out: Path) -> None:
