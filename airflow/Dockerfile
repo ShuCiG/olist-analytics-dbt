@@ -1,9 +1,10 @@
 # Airflow 3 + Cosmos. dbt and dlt live in a separate venv (/opt/project-venv)
 # built from uv.lock: same versions as local dev and CI, and no dependency clash
 # with Airflow's own packages. Cosmos calls dbt from there as a subprocess.
-FROM apache/airflow:3.3.2-python3.12
+# Base images by digest (a tag can be re-pushed); Dependabot proposes updates
+FROM apache/airflow:3.3.2-python3.12@sha256:9df9c8be4096b9cc626bd7cb1f2b8c712eef66c59c615f8c7e6200871ca10bd1
 
-COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
 # Airflow side: Cosmos only, pinned against Airflow's constraint file
 RUN pip install --no-cache-dir \
