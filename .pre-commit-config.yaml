@@ -13,6 +13,16 @@ repos:
       - id: no-commit-to-branch
         args: [--branch, main]
 
+  - repo: local
+    hooks:
+      # Security audit reports name weak spots and may quote secrets: even a forced
+      # `git add -f .audit/...` must not get into a commit
+      - id: no-audit-reports
+        name: block .audit/ (local security reports)
+        entry: .audit/ holds local security findings and must never be committed
+        language: fail
+        files: ^\.audit/
+
   # Local hook: uses the sqlfluff version pinned in uv.lock (same as CI)
   - repo: local
     hooks:
@@ -36,5 +46,5 @@ repos:
         name: pytest
         entry: uv run pytest -q
         language: system
-        files: ^(ingestion|alerting|tests|airflow/dags)/.*\.py$
+        files: ^(ingestion|alerting|tests|airflow/dags|\.claude/skills/audit)/.*\.py$
         pass_filenames: false

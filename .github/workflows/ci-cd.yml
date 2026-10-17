@@ -79,6 +79,11 @@ jobs:
       - name: pytest
         run: uv run pytest -q
 
+      # Security audit reports (/audit skill) stay local; also enforced by gitignore
+      # and a pre-commit hook, this catches a commit made with --no-verify
+      - name: No audit reports in git
+        run: uv run python .claude/skills/audit/audit_tools.py check
+
       # Data product (D37): a changed contract raises its version, a breaking change
       # its major version (consumers pin a major and must follow)
       - name: Data contract versioning (vs main)
