@@ -41,6 +41,13 @@ DUCKDB_PATH = os.environ.get(
 # (2016) and ends mid-way through Sep 2018, which reads as fake spikes and drops
 DEFAULT_PERIOD = (dt.date(2017, 1, 1), dt.date(2018, 8, 31))
 
+# Every distinct period is a new BigQuery job, and the app is public. All marts
+# together are ~110 MB, so a query that would scan more is a bug or abuse: it
+# fails instead of being billed. Cache size bounds memory across many periods.
+MAX_BYTES_BILLED = 1_000_000_000
+QUERY_TIMEOUT_MS = 60_000
+CACHE_ENTRIES = 256
+
 # Statuses that never turned into a sale: left out of revenue KPIs
 LOST_STATUSES = ("canceled", "unavailable")
 
@@ -88,12 +95,19 @@ def _to_plain_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+def _job_config():
+    from google.cloud import bigquery
+
+    return bigquery.QueryJobConfig(maximum_bytes_billed=MAX_BYTES_BILLED, job_timeout_ms=QUERY_TIMEOUT_MS)
+
+
+@st.cache_data(ttl="1h", max_entries=CACHE_ENTRIES, show_spinner=False)
 def query(sql: str) -> pd.DataFrame:
     """Run a query, cached for an hour (BigQuery bills per scan)."""
     if BACKEND == "bigquery":
         # Results are chart-sized: plain REST, no BigQuery Storage API client
-        df = _client().query(sql).to_dataframe(create_bqstorage_client=False)
+        job = _client().query(sql, job_config=_job_config())
+        df = job.to_dataframe(create_bqstorage_client=False)
     else:
         import duckdb
 
