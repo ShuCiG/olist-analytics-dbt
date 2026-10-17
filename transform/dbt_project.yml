@@ -25,6 +25,12 @@ vars:
   custom_run_started_at: "{{ env_var('OLIST_AS_OF', '2018-10-17T17:30:18') }}"
   # dbt_project_evaluator lints this project's nodes, not Elementary's internal models
   exclude_packages: ["elementary"]
+  # No failing-row samples in Elementary's tables or its public report (Pages): rows
+  # of fct_orders carry customer_unique_id. Today dbt ignores Elementary's test
+  # materialization (require_explicit_package_overrides_for_builtin_materializations
+  # defaults to true), which is where samples are taken; this keeps them off if
+  # that flag is ever turned off. Failure counts are stored either way.
+  test_sample_row_count: 0
 
 models:
   olist:
