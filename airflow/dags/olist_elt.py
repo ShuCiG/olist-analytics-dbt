@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -94,7 +95,12 @@ def has_new_orders(ti, params) -> bool:
     (D38), so its anomaly tests look back from the replayed month, not from today.
     """
     status = json.loads(ti.xcom_pull(task_ids="dlt_ingest"))
-    ti.xcom_push(key="as_of", value=status["last_order_at"] or "")
+    # Rendered into the elementary_tables bash command: only a plain timestamp
+    # (pipeline.py checks it too; same pattern as its TIMESTAMP)
+    as_of = status["last_order_at"] or ""
+    if as_of and not re.fullmatch(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?", as_of):
+        raise ValueError(f"last_order_at is not a timestamp: {as_of!r}")
+    ti.xcom_push(key="as_of", value=as_of)
     if params["until"] or params["full_refresh"]:
         return True
     return status["orders_loaded"] > 0

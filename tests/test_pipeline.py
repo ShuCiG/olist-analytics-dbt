@@ -140,3 +140,16 @@ def test_full_refresh_drops_data_and_cursor(run) -> None:
     status = run("--full-refresh", "--until", "2016-09")
     assert (status["orders_loaded"], status["orders_total"]) == (2, 2)
     assert run("--next")["last_order_at"][:7] == "2016-10"
+
+
+def test_feed_status_rejects_a_non_timestamp(run, dump: Path) -> None:
+    # Sorts last, so it becomes max(order_purchase_timestamp): Airflow would render it
+    # into a bash command (Elementary's clock); the ingest must fail instead
+    tampered = [*ORDERS, ("o6", "2016-12-31 23:59:59'; touch /tmp/pwned #")]
+    write_csv(
+        dump / "olist_orders_dataset.csv",
+        ["order_id", "order_purchase_timestamp", "order_status"],
+        [(order_id, ts, "delivered") for order_id, ts in tampered],
+    )
+    with pytest.raises(ValueError, match="not a timestamp"):
+        run()
