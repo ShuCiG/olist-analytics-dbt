@@ -44,3 +44,9 @@ docs/PROGRESS.md
 
 # Saved emails
 *.eml
+
+# Security audit reports (/audit skill): local only, never committed
+.audit/
+
+# Claude Code per-user settings
+.claude/settings.local.json

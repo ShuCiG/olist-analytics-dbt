@@ -39,7 +39,7 @@ pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard", "alerting", "tests", "data-product", ".github/scripts"]
+include = ["ingestion", "dashboard", "alerting", "tests", "data-product", ".github/scripts", ".claude/skills/audit"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

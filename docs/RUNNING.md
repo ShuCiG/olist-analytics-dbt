@@ -184,3 +184,15 @@ uv run pre-commit install   # whitespace / YAML / secrets checks, no commits to 
 uv run sqlfluff lint transform/models transform/tests
 uv run pyright
 ```
+
+## Security review (`/audit`)
+
+In Claude Code, run `/audit`: four agents review the repo (D39) and write their reports to `.audit/<date>/`
+(`thief.md`, `vandal.md`, `mayor.md`, `chief.md`). The folder stays local: gitignored, blocked by a
+pre-commit hook and by CI. Helpers, also usable on their own:
+
+```bash
+uv run python .claude/skills/audit/audit_tools.py check                 # .audit/ ignored and untracked
+uv run python .claude/skills/audit/audit_tools.py prepare .audit/<dir>  # context pack for the agents
+uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask secrets in the reports
+```
