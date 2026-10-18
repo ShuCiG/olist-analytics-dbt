@@ -90,6 +90,20 @@ def failed_jobs(repo: str, run_id: str, docs: dict[str, dbt_summary.TestDoc]) ->
     return result
 
 
+def config_error(to: list[str], conn_uri: str) -> str | None:
+    """Why no email can be sent, or None. The job runs only on failure, so a missing
+    secret or a mangled URI must fail it visibly, not skip the alert in silence."""
+    if not to:
+        return "ALERT_EMAILS is empty: no recipients"
+    if not conn_uri:
+        return "secret SMTP_CONN is not set"
+    uri = urlsplit(conn_uri)
+    if uri.scheme not in ("smtp", "smtps") or not uri.hostname:
+        # e.g. pasted as `SMTP_CONN=smtp://...`: urlsplit then finds no host
+        return "secret SMTP_CONN is not an smtp://user:password@host:port URI"
+    return None
+
+
 def send(conn_uri: str, to: list[str], subject: str, html: str) -> None:
     """Send with an Airflow-style SMTP URI (same flags: disable_ssl / disable_tls)."""
     uri = urlsplit(conn_uri)
@@ -115,9 +129,9 @@ def send(conn_uri: str, to: list[str], subject: str, html: str) -> None:
 def main() -> None:
     repo, run_id = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
     to = [a.strip() for a in os.environ.get("ALERT_EMAILS", "").split(",") if a.strip()]
-    if not to or not os.environ.get("SMTP_CONN"):
-        print("ALERT_EMAILS or SMTP_CONN not set: no email")
-        return
+    if error := config_error(to, os.environ.get("SMTP_CONN", "")):
+        print(f"::error::No failure email sent: {error}")
+        sys.exit(1)
     run = json.loads(gh_api(f"repos/{repo}/actions/runs/{run_id}"))
     # Test descriptions: the CI dbt job's manifest (artifact), else none
     docs = dbt_summary.test_docs(os.environ.get("DBT_MANIFEST", "transform/target/manifest.json"))

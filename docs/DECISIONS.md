@@ -289,3 +289,9 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - Workflow actions are pinned to full commit SHAs with the version in a comment (`@<sha>  # v7.0.1`): a tag can be moved to other code, and several jobs hold the GCP key or a write token. The Airflow base images (`apache/airflow`, `uv`) are pinned by digest. Dependabot (`.github/dependabot.yml`, weekly, actions grouped) proposes updates, so pinning doesn't mean freezing.
 - The Elementary CLI in CD no longer resolves at run time (`uvx`, D38): it installs into its own venv from `.github/edr-requirements.txt` (`uv pip compile --generate-hashes`, Linux / Python 3.12) with `--require-hashes`. Local runs keep the `uvx` command in `docs/RUNNING.md`; they hold no CI secrets.
 - Guard: `tests/test_supply_chain_pins.py` fails on a tag-pinned action, a base image without a digest, or an `edr` install without hashes.
+
+## D44 · 2026-10-18 · CI alerting fails loudly; prod marts are replaced before their tests
+- `notify-failure` runs on any failure (except Dependabot PRs, which get no Actions secrets). If `ALERT_EMAILS` is empty, `SMTP_CONN` is missing, or `SMTP_CONN` is not an `smtp://` URI with a host (e.g. pasted with its `SMTP_CONN=` prefix), the script exits 1 with an `::error::`, so a broken alert setup shows up as a red job instead of a silent gap.
+- Its `needs` list is kept by hand; `tests/test_ci_workflow.py` fails when a job is missing from it.
+- The Elementary report step in `deploy-prod` is `continue-on-error`: a failed `edr` publishes a stub page at `/elementary/` with a run warning, and dbt docs and the Airflow image still ship.
+- Accepted risk: `dbt build --target prod` replaces each mart before its own tests run, so a failing error-severity test leaves the new data in place (downstream models are skipped). Building into a staging dataset and promoting after tests would double the BigQuery work for public data that is rebuilt on every deploy.
