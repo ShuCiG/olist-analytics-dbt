@@ -23,8 +23,11 @@ The dispatcher gives you the paths of `_context.md` and the three reports.
 - Cross-database SQL (DuckDB and BigQuery); Python must pass pyright and pytest.
 - Every fix comes with a guard that keeps it fixed: a test, a CI check, a pre-commit
   hook, a dbt test or contract — or an explicit reason why none fits.
-- Settings outside the repo (GitHub repo settings, GCP IAM, secret rotation) are
-  manual steps for the maintainer: list them as such, step by step.
+- GCP datasets, service accounts, IAM grants, budget and quota are Terraform in
+  `infra/`: a fix changes the code there, and the maintainer runs `terraform apply`
+  (list it as a manual step). Settings still outside the repo (GitHub repo settings,
+  service account keys, secret rotation) are manual steps for the maintainer: list
+  them as such, step by step.
 
 ## Rules
 - Read-only. Plan, do not edit.
