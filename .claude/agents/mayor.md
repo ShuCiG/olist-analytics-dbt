@@ -19,7 +19,8 @@ The dispatcher gives you the paths of `_context.md`, `thief.md` and `vandal.md`
 ## Context for judging
 Portfolio project, one maintainer. Public GitHub repo; branch protection on `main`,
 the maintainer merges every PR. GitHub Actions secrets: a GCP service account key and
-an SMTP connection. BigQuery project with a small budget. Airflow runs locally in
+an SMTP connection. BigQuery project with a small budget and a daily query quota, set
+up with Terraform (`infra/`, applied locally by the maintainer). Airflow runs locally in
 Docker. Data: the public Olist dump (no real names, but customer cities / zip codes
 and review texts).
 

@@ -8,11 +8,13 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [SCD2 snapshot demo](#scd2-snapshot-demo)
 - [Data product checks](#data-product-checks)
 - [Semantic layer queries](#semantic-layer-queries)
+- [Observability report (Elementary)](#observability-report-elementary)
 - [Project evaluator](#project-evaluator)
 - [Dashboard](#dashboard)
 - [BigQuery](#bigquery)
 - [Airflow](#airflow)
 - [Development hooks](#development-hooks)
+- [Security review (`/audit`)](#security-review-audit)
 
 ## Local build (DuckDB)
 
@@ -136,7 +138,8 @@ uv run pytest dashboard                                                 # pages 
 
 Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim
 `dashboard/requirements.txt`, not the dbt/dlt project). Access is service account `dashboard-reader`:
-*BigQuery Job User* on the project + *BigQuery Data Viewer* on datasets `marts` and `airflow_marts` only.
+*BigQuery Job User* on the project + *BigQuery Data Viewer* on datasets `marts` and `airflow_marts` only
+(granted in [`infra/iam.tf`](../infra/iam.tf)).
 App secrets:
 
 ```toml
@@ -155,7 +158,9 @@ Streamlit Cloud workspace (saving them alone keeps the old values).
 ## BigQuery
 
 Needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*
-(+ *BigQuery Read Session User* for `datacontract test` on BigQuery):
+(+ *BigQuery Read Session User* for `datacontract test` on BigQuery). This project's datasets, service accounts,
+grants, budget and quota are Terraform in [`infra/`](../infra/README.md) (`terraform plan` / `apply` with your own
+Google account; for another project set `project_id`). Service account keys are made in the console.
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json   # Application Default Credentials
