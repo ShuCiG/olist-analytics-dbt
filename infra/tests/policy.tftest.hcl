@@ -1,0 +1,136 @@
+# Policy checks on the planned configuration (D46). Mock providers: no
+# credentials, no calls to GCP; runs in CI on every PR. They guard the code,
+# not the live project (`terraform plan` against GCP does that, locally).
+# Run: cd infra && terraform init -backend=false && terraform test
+
+mock_provider "google" {}
+mock_provider "google-beta" {}
+
+# imports.tf targets: a mock provider can't import, an override stands in
+override_resource {
+  target = google_project_service.this
+}
+override_resource {
+  target = google_service_account.this
+  values = { # the provider validates the IAM member format
+    email  = "mock@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    member = "serviceAccount:mock@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+  }
+}
+override_resource {
+  target = google_project_iam_member.this
+}
+override_resource {
+  target = google_bigquery_dataset.this
+}
+override_resource {
+  target = google_bigquery_dataset_iam_member.reader
+}
+override_resource {
+  target = google_billing_budget.monthly
+}
+override_resource {
+  target = google_service_usage_consumer_quota_override.bigquery_query_per_day
+}
+
+variables {
+  billing_account = "000000-000000-000000"
+}
+
+run "datasets" {
+  command = plan
+
+  # Every prod layer has its Airflow twin, and nothing else is managed
+  assert {
+    condition = toset(keys(google_bigquery_dataset.this)) == toset(concat(
+      local.dataset_layers, [for layer in local.dataset_layers : "airflow_${layer}"]
+    ))
+    error_message = "Datasets must be exactly the prod layers plus their airflow_ twins."
+  }
+
+  assert {
+    condition     = alltrue([for ds in google_bigquery_dataset.this : ds.location == "EU"])
+    error_message = "All datasets live in EU (dbt profiles and the dashboard query there)."
+  }
+
+  # The BigQuery sandbox left a 60-day expiry on raw and seeds, which would have
+  # deleted the prod raw tables (D46)
+  assert {
+    condition = alltrue([
+      for ds in google_bigquery_dataset.this :
+      ds.default_table_expiration_ms == null && ds.default_partition_expiration_ms == null
+    ])
+    error_message = "No dataset may set a default table or partition expiry: tables would be deleted."
+  }
+}
+
+run "grants" {
+  command = plan
+
+  # Datasets are only ever granted read access
+  assert {
+    condition     = alltrue([for g in google_bigquery_dataset_iam_member.reader : g.role == "roles/bigquery.dataViewer"])
+    error_message = "Dataset grants must be roles/bigquery.dataViewer."
+  }
+
+  # No service account gets a basic role on the project
+  assert {
+    condition = alltrue([
+      for m in google_project_iam_member.this :
+      !contains(["roles/owner", "roles/editor", "roles/viewer"], m.role)
+    ])
+    error_message = "Service accounts must not hold owner / editor / viewer on the project."
+  }
+
+  # PR CI (olist-ci) reads only what a build or slim CI's --defer reads: no
+  # Elementary history, no Airflow datasets, no write role (D45)
+  assert {
+    condition = alltrue([
+      for k in keys(google_bigquery_dataset_iam_member.reader) :
+      !(endswith(k, "/olist-ci") && (startswith(k, "airflow_") || startswith(k, "elementary/")))
+    ])
+    error_message = "olist-ci must not read elementary or airflow_* datasets."
+  }
+
+  assert {
+    condition     = [for k, m in google_project_iam_member.this : m.role if startswith(k, "olist-ci/")] == ["roles/bigquery.user"]
+    error_message = "olist-ci's only project role is roles/bigquery.user."
+  }
+
+  # The dashboard must be able to read the dataset its data usage agreement
+  # names (consumer -> contract server -> dataset)
+  assert {
+    condition = contains(
+      keys(google_bigquery_dataset_iam_member.reader),
+      "${one([
+        for s in yamldecode(file("../data-product/contracts/olist-marts.odcs.yaml")).servers :
+        s.dataset if s.server == yamldecode(file("../data-product/consumers/olist-dashboard.yaml")).provider.server
+      ])}/${yamldecode(file("../data-product/consumers/olist-dashboard.yaml")).provider.role}"
+    )
+    error_message = "The dashboard's service account lacks read access to the dataset its agreement names."
+  }
+}
+
+run "cost_and_state" {
+  command = plan
+
+  # Hard daily cap stays inside BigQuery's free 1 TiB of queries per month
+  assert {
+    condition     = tonumber(google_service_usage_consumer_quota_override.bigquery_query_per_day.override_value) <= 1048576 / 30
+    error_message = "Daily query quota must stay at or below 1/30 of the free TiB (MiB)."
+  }
+
+  assert {
+    condition     = length(google_billing_budget.monthly.threshold_rules) > 0
+    error_message = "The budget must alert at some threshold."
+  }
+
+  assert {
+    condition = (
+      google_storage_bucket.tfstate.versioning[0].enabled
+      && google_storage_bucket.tfstate.public_access_prevention == "enforced"
+      && google_storage_bucket.tfstate.uniform_bucket_level_access
+    )
+    error_message = "State bucket must be versioned, private and use uniform access."
+  }
+}
