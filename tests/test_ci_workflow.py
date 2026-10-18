@@ -45,7 +45,8 @@ def test_prod_key_only_in_main_jobs_behind_environment() -> None:
     jobs = _jobs()
     holders = {name for name, job in jobs.items() if "GCP_SA_KEY" in _secrets(job)}
     assert holders == {"deploy-prod"}
-    assert jobs["deploy-prod"]["environment"] == "prod"
+    environment = jobs["deploy-prod"]["environment"]
+    assert (environment["name"] if isinstance(environment, dict) else environment) == "prod"
     assert MAIN_ONLY in jobs["deploy-prod"]["if"]
 
 
