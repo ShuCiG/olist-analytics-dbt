@@ -64,7 +64,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
   pre-commit, pyright, pytest
-- **Cloud:** Google Cloud (BigQuery, IAM service accounts with least privilege), Streamlit Community Cloud
+- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, budget and quota), Terraform
+  (import of existing resources, GCS remote state), Streamlit Community Cloud
 - **BI:** Streamlit + Altair dashboard on both warehouses
 
 </details>
@@ -345,12 +346,16 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 
 | On every pull request | On every merge to `main` |
 |---|---|
-| sqlfluff, pyright, pytest, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
+| sqlfluff, pyright, pytest, terraform fmt / validate, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first) |
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 `main` is protected; every change goes through a PR. The same lint, type check and tests run locally as pre-commit hooks.
+
+The GCP side (datasets, service accounts, IAM grants, budget, BigQuery quota) is Terraform in [`infra/`](infra/),
+with state in a GCS bucket. It was imported from the hand-made setup without recreating anything; `plan` and `apply`
+run with the owner's account, CI checks format and config.
 
 ## Dashboard
 
@@ -391,13 +396,13 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions
+├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, budget, quota
 ├── .github/workflows/ci-cd.yml  # CI on PRs, CD on merge
 └── docs/                        # DECISIONS.md (decision log), RUNNING.md, screenshots
 ```
 
 ## Next
 
-- Terraform for the GCP setup (datasets, service accounts, IAM grants), imported without recreating anything
 - Drop `fct_orders` v1 after its deprecation date (2026-12-31)
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

@@ -150,14 +150,14 @@ incremental model. Retries are off (`retries=0`) for the same reason.
 
 Put the service-account key path in `airflow/.env` (`GCP_KEY_FILE=...`, see `.env.example`) and
 recreate the stack (`up -d`). The DAG writes `airflow_raw` (dlt) and `airflow_staging`, `airflow_marts`,
-... (dbt target `airflow`), never prod. Reset it (drops all `airflow*` datasets, guarded to targets
-`ci` / `airflow`):
+... (dbt target `airflow`), never prod. Reset it (empties all `airflow*` datasets: drops every table and view
+but keeps the datasets, which Terraform owns with their grants, `infra/`; guarded to targets `ci` / `airflow`):
 
 ```bash
 cd transform && uv run dbt run-operation drop_isolated_datasets --target airflow
 ```
 
-The dlt cursor lives in `airflow_raw` and in the `dlt-pipelines` volume; after dropping the datasets also
+The dlt cursor lives in `airflow_raw` and in the `dlt-pipelines` volume; after emptying the datasets also
 clear it: `docker compose -f airflow/docker-compose.yml exec airflow-scheduler rm -rf /home/airflow/.dlt/pipelines/olist_bigquery_airflow_raw`.
 
 ## Params
