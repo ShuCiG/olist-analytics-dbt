@@ -402,8 +402,11 @@ jobs:
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
       # own venv (it would downgrade networkx in uv.lock), installed only from a
       # hash-pinned lock: this job holds the prod credentials. It does not create
-      # the output folder.
+      # the output folder. Optional: a broken report must not hold back the prod
+      # docs and the Airflow image (next step leaves a stub page and a warning).
       - name: Elementary report
+        id: edr
+        continue-on-error: true
         working-directory: transform
         run: |
           mkdir -p "$RUNNER_TEMP/edr" "$GITHUB_WORKSPACE/_site/elementary"
@@ -417,6 +420,15 @@ jobs:
             --config-dir "$RUNNER_TEMP/edr" --target-path "$RUNNER_TEMP/edr" \
             --file-path "$GITHUB_WORKSPACE/_site/elementary/index.html" \
             --env prod --days-back 30 --open-browser false
+
+      - name: Elementary report stub
+        if: steps.edr.outcome == 'failure'
+        run: |
+          mkdir -p _site/elementary
+          echo '<!doctype html><meta charset="utf-8"><title>Elementary report</title><p>The Elementary report failed to build in the last deploy; see the GitHub Actions log.</p>' \
+            > _site/elementary/index.html
+          echo "::warning::Elementary report failed: published a stub at /elementary/"
+          echo "Elementary report failed: stub page published" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload docs artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
@@ -492,10 +504,13 @@ jobs:
   # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
   # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
   # GitHub's own notification only reaches the person who triggered the run.
+  # `needs` must list every other job (tests/test_ci_workflow.py). A missing secret
+  # or recipient list fails this job instead of skipping the email. Not on
+  # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
     needs: [sqlfluff-lint, pyright, python-tests, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
-    if: failure() && vars.ALERT_EMAILS != ''
+    if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
