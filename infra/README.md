@@ -31,6 +31,20 @@ terraform plan                                 # expected: No changes
 terraform apply
 ```
 
+## Tests
+
+`terraform test` (`tests/policy.tftest.hcl`) plans the configuration on mock providers. It needs no credentials and makes no GCP calls; CI runs it on every PR. It checks the code, not the live project; for that, run `terraform plan` against GCP. It asserts:
+- the datasets are exactly the prod layers plus their `airflow_` twins, all in EU, with no default table or partition expiry;
+- dataset grants are read-only (`dataViewer`), no service account holds a basic role (`owner`, `editor`, `viewer`), and `olist-ci` has only `bigquery.user` and reads no `elementary` or `airflow_*` dataset (D45);
+- `dashboard-reader` can read the dataset that the dashboard's data usage agreement points to (consumer → contract server → dataset);
+- the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private.
+
+`tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
+
+```bash
+cd infra && terraform init -backend=false && terraform test
+```
+
 ## First run (bootstrap, done once)
 
 The state bucket is declared here too, so the very first run had no bucket to keep its state in:

@@ -92,9 +92,9 @@ jobs:
           git fetch --no-tags --depth=1 origin main
           uv run python data-product/check_compatibility.py origin/main
 
-  # GCP infrastructure as code (infra/, D46): format and config check only. No
-  # credentials here: plan and apply run locally with the owner's account, the CI
-  # keys hold no IAM or billing rights
+  # GCP infrastructure as code (infra/, D46): format, config and policy tests
+  # (terraform test on mock providers, D47). No credentials here: plan and apply
+  # run locally with the owner's account, the CI keys hold no IAM or billing rights
   terraform:
     name: terraform
     runs-on: ubuntu-24.04
@@ -118,6 +118,10 @@ jobs:
         run: |
           terraform init -backend=false -lockfile=readonly -input=false
           terraform validate
+
+      # infra/tests/*.tftest.hcl: plan on mock providers, asserts the policy rules
+      - name: terraform test
+        run: terraform test
 
   # dbt_project_evaluator: project structure rules (naming, DAG shape, docs and test
   # coverage, governance: public marts need contracts, exposures only read public
