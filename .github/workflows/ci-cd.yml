@@ -270,11 +270,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      # Writes the key to a temp file and sets GOOGLE_APPLICATION_CREDENTIALS (ADC)
+      # Writes the key to a temp file and sets GOOGLE_APPLICATION_CREDENTIALS (ADC).
+      # PR key (service account olist-ci): reads the prod datasets slim CI defers
+      # to, writes only the ci_* datasets it creates. The prod key is in the
+      # `prod` environment, main only (D45).
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_SA_KEY_CI }}
 
       - name: dbt deps
         working-directory: transform
@@ -328,6 +331,8 @@ jobs:
     name: Deploy to BigQuery prod
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: dbt-build
+    # Holds secret GCP_SA_KEY (prod writer); the environment admits only main
+    environment: prod
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -517,7 +522,12 @@ jobs:
       contents: read
       actions: read # job list + logs of this run
     steps:
+      # On PRs the alert code comes from the base commit, not the PR head: the
+      # job holds SMTP_CONN, so a PR can't swap the script that reads it
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
       - name: Download manifest (test descriptions)
         continue-on-error: true
         env:

@@ -295,3 +295,10 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - Its `needs` list is kept by hand; `tests/test_ci_workflow.py` fails when a job is missing from it.
 - The Elementary report step in `deploy-prod` is `continue-on-error`: a failed `edr` publishes a stub page at `/elementary/` with a run warning, and dbt docs and the Airflow image still ship.
 - Accepted risk: `dbt build --target prod` replaces each mart before its own tests run, so a failing error-severity test leaves the new data in place (downstream models are skipped). Building into a staging dataset and promoting after tests would double the BigQuery work for public data that is rebuilt on every deploy.
+
+## D45 · 2026-10-18 · PR CI and prod use separate GCP keys
+- PR CI on BigQuery authenticates as service account `olist-ci` (secret `GCP_SA_KEY_CI`): project role BigQuery User (run jobs, create datasets; the creator owns the `ci_*` datasets it makes) and Data Viewer on the prod datasets that a full build or slim CI's `--defer` reads (`raw`, `staging`, `intermediate`, `marts`, `seeds`, `snapshots`). It cannot write prod or read `elementary` and the `airflow_*` datasets.
+- The prod writer key (`GCP_SA_KEY`, a repo secret in D16) is an environment secret of `prod`, whose deployment rule admits only `main`; `deploy-prod` is the only job that uses it. Code from a PR branch can no longer reach it, even if it edits the workflow.
+- `notify-failure` holds `SMTP_CONN`; on PRs it checks out the base commit, so the alert script that reads the secret is the reviewed one.
+- Residual: a PR can still edit the workflow and use `GCP_SA_KEY_CI` / `SMTP_CONN` within its run. The CI key is scoped to read public data and write throwaway datasets; Workload Identity Federation would remove the long-lived keys but is left for later.
+- Guard: `tests/test_ci_workflow.py` fails if `GCP_SA_KEY` appears outside `deploy-prod`, if that job loses `environment: prod`, or if `notify-failure` checks out the PR head.

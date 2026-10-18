@@ -1,6 +1,8 @@
-"""CI failure alerting: every job is watched, and a broken alert setup fails loudly."""
+"""CI workflow guards: every job is watched by the failure email, a broken alert setup
+fails loudly, and the prod key never reaches a PR job."""
 
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -32,7 +34,36 @@ def test_elementary_report_does_not_block_deploy() -> None:
     assert steps["edr"]["continue-on-error"] is True
 
 
-GOOD_URI = "smtp://user%40gmail.com:pw@smtp.gmail.com:587?disable_ssl=true"
+def _secrets(job: dict) -> set[str]:
+    return set(re.findall(r"secrets\.(\w+)", yaml.safe_dump(job)))
+
+
+MAIN_ONLY = "github.ref == 'refs/heads/main'"
+
+
+def test_prod_key_only_in_main_jobs_behind_environment() -> None:
+    jobs = _jobs()
+    holders = {name for name, job in jobs.items() if "GCP_SA_KEY" in _secrets(job)}
+    assert holders == {"deploy-prod"}
+    assert jobs["deploy-prod"]["environment"] == "prod"
+    assert MAIN_ONLY in jobs["deploy-prod"]["if"]
+
+
+def test_pr_jobs_use_ci_key_only() -> None:
+    for name, job in _jobs().items():
+        if MAIN_ONLY in str(job.get("if", "")):
+            continue
+        assert "GCP_SA_KEY" not in _secrets(job), f"{name} runs on PRs: use GCP_SA_KEY_CI"
+    assert "GCP_SA_KEY_CI" in _secrets(_jobs()["dbt-build-bigquery"])
+
+
+def test_notify_failure_runs_base_branch_code_on_prs() -> None:
+    checkout = _jobs()["notify-failure"]["steps"][0]
+    assert checkout["uses"].startswith("actions/checkout@")
+    assert checkout["with"]["ref"].startswith("${{ github.event.pull_request.base.sha")
+
+
+GOOD_URI ="smtp://user%40gmail.com:pw@smtp.gmail.com:587?disable_ssl=true"
 
 
 @pytest.mark.parametrize(
