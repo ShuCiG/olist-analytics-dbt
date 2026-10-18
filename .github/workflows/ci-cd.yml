@@ -331,8 +331,11 @@ jobs:
     name: Deploy to BigQuery prod
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: dbt-build
-    # Holds secret GCP_SA_KEY (prod writer); the environment admits only main
-    environment: prod
+    # Holds secret GCP_SA_KEY (prod writer); the environment admits only main.
+    # url: link on the deployment card, the public dashboard over prod marts
+    environment:
+      name: prod
+      url: https://olist-analytics-dbt.streamlit.app/
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
