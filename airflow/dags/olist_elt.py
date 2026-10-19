@@ -17,7 +17,7 @@ airflow/README.md.
 Schedule: a simulated live feed (D28). Olist is a static 2016-2018 dump, so every
 hourly run loads the next purchase month that has orders (`pipeline.py --next`,
 cursor in dlt state): the whole history arrives in ~a day, then runs find nothing
-new and skip dbt. A manual run with the `until` param loads up to that month and
+new and skip the load (one status query, D49) and dbt. A manual run with the `until` param loads up to that month and
 always runs dbt (catch-up, recovery). See airflow/README.md.
 
 Alerts (olist_alerts.py): one email per run at most — failed run, fresh data, or

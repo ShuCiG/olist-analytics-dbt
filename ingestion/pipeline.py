@@ -12,7 +12,9 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   `merge` on primary keys. The last loaded month is kept in dlt state, so each run
   loads only months after it, up to `--until YYYY-MM` (default: everything), or
   just the next month that has orders (`--next`: the scheduled Airflow "feed";
-  once the dump is used up it loads no orders).
+  once the dump is used up it loads no orders). When the local dlt state already
+  shows the dump used up, `--next` skips the load and only reads the status: an idle
+  hourly run then costs one warehouse query instead of a dozen.
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
@@ -103,6 +105,23 @@ def with_required(table: pa.Table, columns: list[str]) -> pa.Table:
     return table.cast(schema)
 
 
+def read_orders(source_dir: Path) -> pa.Table:
+    """The orders file, refusing malformed purchase times.
+
+    The chunk and the cursor come from string order and the "YYYY-MM" prefix: one
+    malformed value would pick the wrong month or poison the cursor.
+    """
+    orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0])
+    purchased_at = pc.field("order_purchase_timestamp")
+    bad = orders.filter(
+        pc.is_valid(purchased_at) & ~pc.match_substring_regex(purchased_at, f"^{TIMESTAMP}$")
+    )
+    if bad.num_rows:
+        examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3]))
+        raise ValueError(f"{bad.num_rows} orders with a malformed order_purchase_timestamp, e.g. {examples}")
+    return orders
+
+
 def next_month(month: str) -> str:
     """'2017-12' -> '2018-01'."""
     year, mon = map(int, month.split("-"))
@@ -139,15 +158,7 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         loaded_until = state.get(STATE_KEY)
         # Timestamps are ISO strings, so string order = time order
         purchased_at = pc.field("order_purchase_timestamp")
-        all_orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0])
-        # The chunk and the cursor come from string order and the "YYYY-MM" prefix:
-        # one malformed value would pick the wrong month or poison the cursor
-        bad = all_orders.filter(
-            pc.is_valid(purchased_at) & ~pc.match_substring_regex(purchased_at, f"^{TIMESTAMP}$")
-        )
-        if bad.num_rows:
-            examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3]))
-            raise ValueError(f"{bad.num_rows} orders with a malformed order_purchase_timestamp, e.g. {examples}")
+        all_orders = read_orders(source_dir)
         in_chunk = pc.is_valid(purchased_at)
         if loaded_until:
             in_chunk &= purchased_at >= next_month(loaded_until)
@@ -182,15 +193,32 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         )
 
 
-def feed_status(pipeline: dlt.Pipeline) -> dict[str, object]:
+def dump_used_up(pipeline: dlt.Pipeline, source_dir: Path) -> bool:
+    """True when the local dlt state shows no order month left after the cursor.
+
+    Decided before the load, without the warehouse: dlt's run starts by reading its
+    state from the destination, and every empty merge is still a billed query
+    (BigQuery bills at least 10 MB each). Anything unclear means "load as usual":
+    no local state (fresh volume: dlt restores the cursor from the destination) or
+    packages a failed run left behind (only a load retries them). Reference tables
+    are not reloaded on a skipped run; in the dump they never change.
+    """
+    if pipeline.has_pending_data:
+        return False
+    loaded_until = pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
+    if not loaded_until:
+        return False
+    orders = read_orders(source_dir)
+    left = orders.filter(pc.field("order_purchase_timestamp") >= next_month(loaded_until))
+    return left.num_rows == 0
+
+
+def feed_status(pipeline: dlt.Pipeline, orders_loaded: int) -> dict[str, object]:
     """This run's order count + the raw orders table as it is now (after the load).
 
     `last_loaded_at` only moves when a run brings orders (merge of 0 rows writes
     nothing): the same signal as `dbt source freshness`.
     """
-    trace = pipeline.last_trace
-    normalize_info = trace.last_normalize_info if trace else None
-    assert normalize_info is not None, "pipeline.run() finished without a normalize step"
     with pipeline.sql_client() as client:
         orders = client.make_qualified_table_name("orders")
         rows = client.execute_sql(
@@ -203,7 +231,7 @@ def feed_status(pipeline: dlt.Pipeline) -> dict[str, object]:
     if last_order_at is not None and not re.fullmatch(TIMESTAMP, last_order_at):
         raise ValueError(f"max order_purchase_timestamp is not a timestamp: {last_order_at!r}")
     return {
-        "orders_loaded": normalize_info.row_counts.get("orders", 0),
+        "orders_loaded": orders_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -252,14 +280,21 @@ def main() -> None:
         destination=make_destination(args.destination, args.duckdb_path),
         dataset_name=args.dataset,
     )
-    source = olist_source(source_dir, until=args.until, next_only=args.next)
-    if args.full_refresh:
-        load_info = pipeline.run(source, refresh="drop_sources")
+    if args.next and not args.full_refresh and dump_used_up(pipeline, source_dir):
+        print("Dump used up (local dlt state): nothing to load, load skipped")
+        orders_loaded = 0
     else:
-        load_info = pipeline.run(source)
-    print(load_info)
+        source = olist_source(source_dir, until=args.until, next_only=args.next)
+        if args.full_refresh:
+            load_info = pipeline.run(source, refresh="drop_sources")
+        else:
+            load_info = pipeline.run(source)
+        print(load_info)
+        normalize_info = pipeline.last_trace.last_normalize_info if pipeline.last_trace else None
+        assert normalize_info is not None, "pipeline.run() finished without a normalize step"
+        orders_loaded = normalize_info.row_counts.get("orders", 0)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(pipeline)))
+    print(json.dumps(feed_status(pipeline, orders_loaded)))
 
 
 if __name__ == "__main__":

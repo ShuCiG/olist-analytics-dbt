@@ -7,6 +7,7 @@ replaced by CSVs written here.
 
 import csv
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -123,6 +124,47 @@ def test_next_skips_empty_months_until_dump_is_used_up(run) -> None:
     assert raw_count(run.db, "order_items") == 7  # o5 (no purchase time) never loads
 
 
+def loaded_at(db: Path, table: str) -> object:
+    with duckdb.connect(str(db), read_only=True) as con:
+        row = con.execute(f"select max(_loaded_at) from raw.{table}").fetchone()
+    assert row is not None
+    return row[0]
+
+
+def test_next_on_used_up_dump_skips_the_load(run) -> None:
+    run()  # everything
+    reloaded = loaded_at(run.db, "customers")
+    status = run("--next")
+    assert (status["orders_loaded"], status["orders_total"]) == (0, 4)
+    # No dlt run at all: the reference tables were not replaced
+    assert loaded_at(run.db, "customers") == reloaded
+
+
+def test_full_refresh_next_on_used_up_dump_starts_over(run) -> None:
+    run()  # everything
+    status = run("--full-refresh", "--next")
+    assert (status["orders_loaded"], status["orders_total"]) == (2, 2)
+
+
+def test_next_loads_as_usual_without_local_state(run, tmp_path: Path) -> None:
+    run()  # everything
+    reloaded = loaded_at(run.db, "customers")
+    # Fresh volume: dlt restores the cursor from the destination during the run
+    shutil.rmtree(tmp_path / "dlt")
+    status = run("--next")
+    assert (status["orders_loaded"], status["orders_total"]) == (0, 4)
+    assert loaded_at(run.db, "customers") != reloaded
+
+
+def test_next_loads_when_a_failed_run_left_packages(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run()  # everything
+    reloaded = loaded_at(run.db, "customers")
+    # Only a load retries pending packages: the skip must not strand them
+    monkeypatch.setattr(pipeline.dlt.Pipeline, "has_pending_data", property(lambda _: True))
+    run("--next")
+    assert loaded_at(run.db, "customers") != reloaded
+
+
 def test_next_from_empty_loads_first_month(run) -> None:
     status = run("--next")
     assert (status["orders_loaded"], status["last_order_at"][:7]) == (2, "2016-09")
@@ -168,6 +210,13 @@ def test_malformed_purchase_time_stops_the_load(run, dump: Path, bad: str) -> No
     # Nothing loaded, cursor untouched: once the file is fixed the feed goes on
     write_orders(dump, ORDERS)
     assert run("--next")["last_order_at"][:7] == "2016-10"
+
+
+def test_malformed_purchase_time_stops_a_used_up_next(run, dump: Path) -> None:
+    run()  # everything: `--next` would skip the load from here on
+    write_orders(dump, [*ORDERS, ("o6", "2016-5-01 10:00:00")])
+    with pytest.raises(ValueError, match="malformed order_purchase_timestamp"):
+        run("--next")
 
 
 def test_empty_reference_file_stops_the_load(run, dump: Path) -> None:
