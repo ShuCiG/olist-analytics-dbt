@@ -35,8 +35,9 @@ resource "google_billing_budget" "monthly" {
   depends_on = [google_project_service.this]
 }
 
-# Hard stop: BigQuery "Query usage per day" for the project, in MiB (~30 GiB).
-# Queries over it fail until the next day.
+# Hard stop: BigQuery "Query usage per day" for the project, in MiB (~34 GiB =
+# the free 1 TiB / 30). Queries over it fail until midnight Pacific time. Billing
+# counts at least 10 MB per query, so a prod deploy (~1,300 queries) bills ~12 GiB.
 resource "google_service_usage_consumer_quota_override" "bigquery_query_per_day" {
   provider = google-beta
 
@@ -44,6 +45,6 @@ resource "google_service_usage_consumer_quota_override" "bigquery_query_per_day"
   service        = "bigquery.googleapis.com"
   metric         = urlencode("bigquery.googleapis.com/quota/query/usage")
   limit          = urlencode("/d/project")
-  override_value = "31457"
+  override_value = "34952"
   force          = true # a decrease over 10 % needs it
 }

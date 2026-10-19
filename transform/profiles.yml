@@ -12,6 +12,8 @@ olist:
     # BigQuery. Auth = Application Default Credentials: set
     # GOOGLE_APPLICATION_CREDENTIALS to the service-account key path (locally)
     # or let google-github-actions/auth set it (CI). No key path in the repo.
+    # maximum_bytes_billed: per-query cost guard (1 GB, same as the dashboard). The
+    # largest query bills < 100 MB; a runaway scan fails instead of being billed.
     prod:
       type: bigquery
       method: oauth
@@ -21,6 +23,7 @@ olist:
       threads: 8
       job_execution_timeout_seconds: 300
       job_retries: 1
+      maximum_bytes_billed: 1000000000
       priority: interactive
     # Per-PR CI on BigQuery: datasets become <DBT_CI_SCHEMA>_staging, ..._marts
     ci:
@@ -32,6 +35,7 @@ olist:
       threads: 8
       job_execution_timeout_seconds: 300
       job_retries: 1
+      maximum_bytes_billed: 1000000000
       priority: interactive
     # Airflow's BigQuery DAG: datasets airflow_staging, ..._marts; reads airflow_raw
     # (DBT_RAW_SCHEMA). Kept apart from prod, which GitHub Actions CD owns.
@@ -44,6 +48,7 @@ olist:
       threads: 8
       job_execution_timeout_seconds: 300
       job_retries: 1
+      maximum_bytes_billed: 1000000000
       priority: interactive
     # Used by sqlfluff's dbt templater: compiles without data or a DB file
     lint:
@@ -71,4 +76,5 @@ elementary:
       threads: 8
       job_execution_timeout_seconds: 300
       job_retries: 1
+      maximum_bytes_billed: 1000000000
       priority: interactive
