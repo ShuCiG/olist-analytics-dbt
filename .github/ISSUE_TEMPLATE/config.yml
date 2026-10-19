@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How to run the project
+    url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/docs/RUNNING.md
+    about: Setup and how-tos for DuckDB, BigQuery, Airflow and the dashboard.
