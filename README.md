@@ -64,7 +64,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
   pre-commit, pyright, pytest
-- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, budget and quota), Terraform
+- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, budget, quota, per-query byte caps), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
 - **BI:** Streamlit + Altair dashboard on both warehouses
 
