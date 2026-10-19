@@ -6,7 +6,9 @@ Cosmos watcher producer is missing, when dbt is not gated by `has_new_orders`
 (dlt_ingest -> has_new_orders -> elementary_tables -> producer: no rebuild once the
 feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
-failure callback), or
+failure callback), when a dbt-running task gets Elementary's clock as `--vars`
+instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
+a full parse per run, D50), or
 when the DuckDB pool holds anything but the writers (dlt + producer): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
@@ -62,6 +64,15 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
     ):
         print(f"{dag_id}: alerts not wired (report task / failure callback)", file=sys.stderr)
         missing.add(dag_id)
+    for task_id in (ELEMENTARY, PRODUCER):
+        if task_id not in dag.task_ids:
+            continue
+        task = dag.get_task(task_id)
+        if "OLIST_AS_OF" not in (task.env or {}) or "custom_run_started_at" in (
+            f"{getattr(task, 'vars', None)} {getattr(task, 'bash_command', '')}"
+        ):
+            print(f"{dag_id}: {task_id} must get the clock as env OLIST_AS_OF", file=sys.stderr)
+            missing.add(dag_id)
     if dag_id == "olist_elt_duckdb":
         pooled = {t.task_id for t in dag.tasks if t.pool == "duckdb"}
         if pooled != DUCKDB_WRITERS:
