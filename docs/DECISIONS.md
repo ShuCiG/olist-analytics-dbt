@@ -345,5 +345,6 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 ## D51 · 2026-10-19 · Work tracked in GitHub Issues and a public Projects board
 - Planned work lives in GitHub Issues: one issue per change, labelled by type (`enhancement`, `bug`) and area (`area: dbt`, `area: airflow`, ...), plus `cost` / `performance` where that is the point. Issue forms (`.github/ISSUE_TEMPLATE/`) ask for context, the change and a "Done when" check; blank issues are off.
 - A public [Projects board](https://github.com/users/ShuCiG/projects/2) linked to the repo shows the state (Todo / In progress / Done). The board's built-in workflows add new issues and PRs from the repo and move closed or merged items to Done. A PR closes its issue with `Closes #N` (in the PR template), so the history reads issue → PR → decision.
+- The board replaces the phase roadmap that D5 kept in the README; the README's "Next" links to it.
 - Milestones: none for now. Phases 1–8 were finished before issues existed, and the open items are independent; a milestone comes with the next planned phase.
 - Wiki: off. Docs stay in the repo (README, `docs/RUNNING.md`, this file): versioned with the code and reviewed in PRs. A wiki would duplicate them outside review.

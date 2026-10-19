@@ -190,6 +190,10 @@ uv run sqlfluff lint transform/models transform/tests
 uv run pyright
 ```
 
+How a change goes: an issue (Task or Bug form) → a branch per issue → a PR whose description has `Closes #N`.
+New issues and PRs land on the [roadmap board](https://github.com/users/ShuCiG/projects/2) by themselves; merging
+the PR closes the issue and moves both to Done.
+
 ## Security review (`/audit`)
 
 In Claude Code, run `/audit`: four agents review the repo (D39) and write their reports to `.audit/<date>/`

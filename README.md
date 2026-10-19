@@ -63,7 +63,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, ELT, cross-database SQL
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
-  pre-commit, pyright, pytest
+  pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
 - **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, budget, quota, per-query byte caps), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
 - **BI:** Streamlit + Altair dashboard on both warehouses
@@ -352,7 +352,8 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
-`main` is protected; every change goes through a PR. The same lint, type check and tests run locally as pre-commit hooks.
+`main` is protected; every change starts as an [issue](https://github.com/ShuCiG/olist-analytics-dbt/issues) and
+goes through a PR that closes it, tracked on the [roadmap board](https://github.com/users/ShuCiG/projects/2). The same lint, type check and tests run locally as pre-commit hooks.
 
 The GCP side (datasets, service accounts, IAM grants, budget, BigQuery quota) is Terraform in [`infra/`](infra/),
 with state in a GCS bucket. It was imported from the hand-made setup without recreating anything; `plan` and `apply`
@@ -399,7 +400,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, budget, quota
-├── .github/workflows/ci-cd.yml  # CI on PRs, CD on merge
+├── .github/                     # workflows/ci-cd.yml (CI on PRs, CD on merge), issue forms, PR template
 └── docs/                        # DECISIONS.md (decision log), RUNNING.md, screenshots
 ```
 
