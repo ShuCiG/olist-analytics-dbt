@@ -184,6 +184,14 @@ one.
   not detached (the producer reports tests per model, a detached test sensor gets
   no status); freshness never skips nodes (`no_freshness_skips`: warn-only, D18);
   unit tests excluded (CI checks them).
+- Partial parse (D50): Elementary's clock changes every run (the month just
+  loaded). It reaches dbt as env `OLIST_AS_OF`, read by the var in
+  `dbt_project.yml`, not as `--vars`: changed `--vars` make dbt drop its partial
+  parse, and every dbt call of the run (elementary_tables, freshness, build) paid
+  a full parse (15–22 s). Cosmos keeps the producer's `partial_parse.msgpack` in
+  `/tmp/cosmos/<dag>__dbt` and elementary_tables in its own target path, both in
+  the container's filesystem: the first run after a container is recreated (new
+  image) parses fully, later runs in 2–6 s. Warm DuckDB run 3.4 → 2.75 min.
 - The DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
   `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse), built into the image; in dev
   mode `airflow-init` rebuilds it from the mounted repo.

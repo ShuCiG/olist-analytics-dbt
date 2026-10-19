@@ -63,7 +63,12 @@ CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
 # Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders.
 # `or ''`: a missing XCom renders as the string "None", which dbt can't parse as a
 # time (seen on a run started by the previous image); empty = the wall clock.
+# Passed as env OLIST_AS_OF (read by the var in dbt_project.yml), not `--vars`:
+# dbt drops its partial parse whenever `--vars` change, so a new month per run cost
+# a full project parse (~20 s) in each of the run's three dbt calls; a changed
+# env var read only in dbt_project.yml keeps it (D50).
 AS_OF = "{{ ti.xcom_pull(task_ids='has_new_orders', key='as_of') or '' }}"
+DBT_CLOCK_ENV = {"OLIST_AS_OF": AS_OF}
 
 
 @dataclass(frozen=True)
@@ -186,7 +191,8 @@ def build_dag(wh: Warehouse) -> DAG:
             project_config=ProjectConfig(
                 DBT_PROJECT_DIR,
                 manifest_path=DBT_MANIFEST,
-                env_vars=wh.env,
+                # Templated per task (`env` is a template field of Cosmos operators)
+                env_vars={**wh.env, **DBT_CLOCK_ENV},
                 # Packages are installed once by airflow-init, not per task
                 install_dbt_deps=False,
             ),
@@ -237,25 +243,22 @@ def build_dag(wh: Warehouse) -> DAG:
             ),
             operator_args={
                 "full_refresh": "{{ params.full_refresh }}",
-                # The replay's last order (empty: the wall clock). A new value each
-                # month makes dbt re-parse once (vars changed).
-                "vars": {"custom_run_started_at": AS_OF},
             },
         )
 
         # Elementary's tables (run/test history, metrics) before the build: on a fresh
         # warehouse its schema-change tests on sources would start before dbt creates
         # them. Incremental and filled by hooks, so a rebuild keeps the history (D38).
-        # Own target path: the producer's partial parse stays untouched.
+        # Own target path per warehouse: its partial parse is kept between runs (the
+        # container's filesystem) and never mixes with the producer's.
         elementary_tables = BashOperator(
             task_id="elementary_tables",
             bash_command=(
                 f"{DBT_EXECUTABLE} run --select package:elementary"
                 f" --target {wh.dbt_target} --target-path target_elementary_{wh.name}"
-                f" --vars '{{custom_run_started_at: \"{AS_OF}\"}}'"
             ),
             cwd=str(DBT_PROJECT_DIR),
-            env={**wh.env, "DBT_PROFILES_DIR": str(DBT_PROJECT_DIR)},
+            env={**wh.env, **DBT_CLOCK_ENV, "DBT_PROFILES_DIR": str(DBT_PROJECT_DIR)},
             append_env=True,
             **({"pool": wh.pool} if wh.pool else {}),
         )
