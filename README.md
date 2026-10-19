@@ -405,6 +405,6 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 
 ## Next
 
-- Drop `fct_orders` v1 after its deprecation date (2026-12-31)
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Next up: drop `fct_orders` v1 after its deprecation date (2026-12-31, #66).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

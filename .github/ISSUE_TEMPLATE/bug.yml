@@ -1,0 +1,26 @@
+name: Bug
+description: Something broke (a run, a test, the dashboard, a deploy)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Error message, failing task or job, link to the run.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options: [DuckDB (local), BigQuery prod, Airflow DuckDB DAG, Airflow BigQuery DAG, CI, Dashboard]
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce

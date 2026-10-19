@@ -1,0 +1,29 @@
+name: Task
+description: A planned change (feature, improvement, chore)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this is needed; links to decisions (D-numbers), runs or PRs.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What to change.
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How the result is checked (DuckDB, BigQuery, Airflow, numbers).
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options: [dbt, airflow, ingestion, ci, infra, dashboard, data-product]
