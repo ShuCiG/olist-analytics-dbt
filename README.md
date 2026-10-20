@@ -352,6 +352,9 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
+Docs-only changes (Markdown outside `transform/`, issue forms) run only the lint, type check and tests:
+the builds and the prod deploy skip ([D52](docs/DECISIONS.md)).
+
 `main` is protected; every change starts as an [issue](https://github.com/ShuCiG/olist-analytics-dbt/issues) and
 goes through a PR that closes it, tracked on the [roadmap board](https://github.com/users/ShuCiG/projects/2). The same lint, type check and tests run locally as pre-commit hooks.
 
