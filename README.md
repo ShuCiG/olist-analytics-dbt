@@ -323,7 +323,7 @@ when nothing new arrived, and otherwise runs the dbt project as a Cosmos task gr
 `dbt build` for the whole project, with one Airflow task per dbt node mirroring its result. The graph still shows
 every node, but dbt starts once per run instead of once per task: **~29 → ~6 min per month on DuckDB, ~19 → ~6–9 min
 on BigQuery**. The replay clock reaches dbt as an env var, not `--vars`, so dbt keeps its partial parse between
-runs: a warm DuckDB run **3.4 → 2.75 min**. Two DAGs from one factory: DuckDB and BigQuery (own `airflow_*` datasets; prod belongs to CD).
+runs: a warm DuckDB run **3.4 → 2.75 min**; with the caches on a volume, the first run after an image upgrade too (**6.4 → 3.8 min**). Two DAGs from one factory: DuckDB and BigQuery (own `airflow_*` datasets; prod belongs to CD).
 
 ```mermaid
 flowchart LR

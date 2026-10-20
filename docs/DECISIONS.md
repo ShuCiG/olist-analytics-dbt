@@ -374,3 +374,19 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - The pre-check now runs for every mode except `--full-refresh`: skip when the dump has no order month after the cursor (up to `--until` when given). Without a local cursor it calls `pipeline.sync_destination()` first: dlt's own restore of state and schema from the destination, the step a run starts with anyway, without the load. No cursor there either (first load) or pending packages → load as usual.
 - Measured with an empty dlt data dir against prod `raw` (what a CD runner sees): 3 jobs (state read, schema read, status query), 41.9 MB billed, against 40 jobs and 199 MB before. The CI DuckDB ingest (fresh file, no state) and the Airflow `--next` runs with a local cursor take the same path as before.
 - Kept: the deploy still runs the step, so a new month in the dump or a lost local state still loads; `pipeline.py --full-refresh` still drops and reloads everything. Same trade-off as D49: a skipped run does not reload the reference tables.
+
+## D55 · 2026-10-20 · Freshness skips Elementary's artifacts upload; dbt caches on a volume
+- After D50 two costs were left in every Airflow run. The watcher producer runs `dbt source freshness` as its own dbt call (Cosmos does this whenever source tasks are rendered), and Elementary's on-run-end hook re-uploaded the project's artifacts (models, tests, sources) there, right before the build uploads the same artifacts again. And the partial parse caches lived in the container's filesystem (`/tmp/cosmos`, `transform/target_elementary_*`): a recreated container (every image upgrade) parsed in full, three times in its first run (the freshness call does not write Cosmos' cache, so the build after it parsed in full too).
+- Freshness: `dbt_project.yml` sets `disable_dbt_artifacts_autoupload: "{{ flags.WHICH == 'freshness' }}"`. The freshness call still uploads its own results (Elementary's source freshness), run results and invocation; only the artifacts upload, ~4 s of the hook's ~5.5 s in an isolated benchmark, is skipped. Set per command in the project, not with `--vars`: different `--vars` between the freshness call and the build would drop the partial parse (D50); checked by alternating freshness and build, 0 full parses. Applies to CI and CD too, where freshness also runs next to Elementary's run and the build.
+- Caches: a named volume `dbt-cache` at `/opt/dbt-cache` holds Cosmos' cache (`AIRFLOW__COSMOS__CACHE_DIR`, the producer's `partial_parse.msgpack`) and the `elementary_tables` target path. dbt validates a partial parse by file checksums, dbt version, vars, profile and target, so a cache written by an older image is reused only for files that did not change.
+- Measured on the DuckDB DAG (manual runs with `until=2018-10`, same machine; first run after a recreated scheduler, then warm):
+
+  | | after recreate | warm |
+  |---|---|---|
+  | before: run | 6.36 min, 3 full parses (22–25 s each) | 4.33 min |
+  | before: freshness call | 70.8 s | 37.5 s (hook 12–21 s) |
+  | after: run | 3.79 min, 0 full parses | 3.51 min |
+  | after: freshness call | 13.8 s | 13.3 s (hook 1.5–2 s) |
+
+  The very first run on an empty volume still parses in full (6.55 min): once per new stack, not per image upgrade.
+- `tests/` checks that the Cosmos cache dir lies on a mounted volume and that the freshness override stays a per-command expression.

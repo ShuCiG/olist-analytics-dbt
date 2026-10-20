@@ -19,8 +19,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/project-venv \
 USER root
 # Named-volume mount points must exist and be owned by airflow, or Docker
 # creates them root-owned
-RUN mkdir -p /opt/project-venv /opt/project /home/airflow/.cache/kagglehub /home/airflow/.dlt \
-    && chown -R airflow: /opt/project-venv /home/airflow/.cache /home/airflow/.dlt \
+RUN mkdir -p /opt/project-venv /opt/project /home/airflow/.cache/kagglehub /home/airflow/.dlt /opt/dbt-cache \
+    && chown -R airflow: /opt/project-venv /home/airflow/.cache /home/airflow/.dlt /opt/dbt-cache \
     && chown airflow:0 /opt/project
 USER airflow
 COPY --chown=airflow: pyproject.toml uv.lock /tmp/project/
