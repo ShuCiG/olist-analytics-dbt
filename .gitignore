@@ -11,6 +11,7 @@ data/
 # dbt
 transform/target/
 transform/target_airflow/
+transform/target_elementary_*/
 transform/dbt_packages/
 transform/logs/
 transform/edr_target/
