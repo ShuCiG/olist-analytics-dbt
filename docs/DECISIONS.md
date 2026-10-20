@@ -349,3 +349,11 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - The board replaces the phase roadmap that D5 kept in the README; the README's "Next" links to it.
 - Milestones: none for now. Phases 1–8 were finished before issues existed, and the open items are independent; a milestone comes with the next planned phase.
 - Wiki: off. Docs stay in the repo (README, `docs/RUNNING.md`, this file): versioned with the code and reviewed in PRs. A wiki would duplicate them outside review.
+
+## D52 · 2026-10-20 · Docs-only changes skip the builds and the prod deploy
+- Every PR ran the full CI (DuckDB build after a fresh ingest, BigQuery slim CI, evaluator, Airflow image build) and every merge the full prod deploy (dlt → BigQuery, `dbt build --target prod`, Elementary, ~350 queries / ~4 GiB billed, D48), also when only README or `docs/` changed.
+- A first job, `changes`, diffs the PR (`base...head`) or the pushed commits (`before...sha`) and runs `.github/scripts/changed_paths.py`: `code=false` only when every path is Markdown outside `transform/` or an issue form. `transform/models/*.md` holds dbt docs blocks, so it counts as code. No paths, an unknown base or a manual run → build.
+- Skipped with job-level `if:`: evaluator, DAG parse, DuckDB build, BigQuery slim CI, prod deploy (Pages and the Airflow image follow it). Lint, pyright, pytest and terraform always run: they are cheap and catch a broken hook or test file. Not a workflow-level `paths:` filter: the run would never start and the required checks (`dbt build`, `sqlfluff lint`) would wait on "Expected"; a skipped job counts as passed.
+- Slim CI took the prod manifest from the last green run on main. A docs-only merge is green but deploys nothing and uploads no manifest, so slim CI would have fallen back to a full build. It now takes the newest `prod-manifest` artifact from main (uploaded only after a successful prod build).
+- Docs-only merges no longer refresh Pages: nothing Pages publishes comes from Markdown (README is rendered by GitHub).
+- Classifier replayed on the previous commits: #71, #73, #74 → skip; the D50 commit (code + docs) → build.
