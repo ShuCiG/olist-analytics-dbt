@@ -12,9 +12,10 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   `merge` on primary keys. The last loaded month is kept in dlt state, so each run
   loads only months after it, up to `--until YYYY-MM` (default: everything), or
   just the next month that has orders (`--next`: the scheduled Airflow "feed";
-  once the dump is used up it loads no orders). When the local dlt state already
-  shows the dump used up, `--next` skips the load and only reads the status: an idle
-  hourly run then costs one warehouse query instead of a dozen.
+  once the dump is used up it loads no orders). When the cursor shows no new month
+  in the dump, any mode but `--full-refresh` skips the load and only reads the
+  status: an idle hourly run or a deploy then costs one warehouse query (plus the
+  state read on a fresh runner) instead of a dozen.
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
@@ -193,24 +194,34 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         )
 
 
-def dump_used_up(pipeline: dlt.Pipeline, source_dir: Path) -> bool:
-    """True when the local dlt state shows no order month left after the cursor.
+def loaded_until(pipeline: dlt.Pipeline) -> str | None:
+    return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
-    Decided before the load, without the warehouse: dlt's run starts by reading its
-    state from the destination, and every empty merge is still a billed query
-    (BigQuery bills at least 10 MB each). Anything unclear means "load as usual":
-    no local state (fresh volume: dlt restores the cursor from the destination) or
+
+def nothing_to_load(pipeline: dlt.Pipeline, source_dir: Path, until: str | None) -> bool:
+    """True when the dump has no order month after the cursor (up to `until`).
+
+    Decided before the load: a dlt run reads its state from the destination, then
+    replaces the reference tables and runs four merges even for a chunk of 0 orders,
+    and every one is a billed query (BigQuery bills at least 10 MB each). The cursor
+    comes from the local dlt state; without one (fresh runner or volume) it is read
+    from the destination first, the same restore a run would do, but only that.
+    Anything unclear means "load as usual": no cursor anywhere (first load) or
     packages a failed run left behind (only a load retries them). Reference tables
     are not reloaded on a skipped run; in the dump they never change.
     """
     if pipeline.has_pending_data:
         return False
-    loaded_until = pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
-    if not loaded_until:
+    if not loaded_until(pipeline):
+        pipeline.sync_destination()
+    cursor = loaded_until(pipeline)
+    if not cursor:
         return False
-    orders = read_orders(source_dir)
-    left = orders.filter(pc.field("order_purchase_timestamp") >= next_month(loaded_until))
-    return left.num_rows == 0
+    purchased_at = pc.field("order_purchase_timestamp")
+    left = purchased_at >= next_month(cursor)
+    if until:
+        left &= purchased_at < next_month(until)
+    return read_orders(source_dir).filter(left).num_rows == 0
 
 
 def feed_status(pipeline: dlt.Pipeline, orders_loaded: int) -> dict[str, object]:
@@ -280,8 +291,8 @@ def main() -> None:
         destination=make_destination(args.destination, args.duckdb_path),
         dataset_name=args.dataset,
     )
-    if args.next and not args.full_refresh and dump_used_up(pipeline, source_dir):
-        print("Dump used up (local dlt state): nothing to load, load skipped")
+    if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until):
+        print(f"No new order months after {loaded_until(pipeline)}: load skipped")
         orders_loaded = 0
     else:
         source = olist_source(source_dir, until=args.until, next_only=args.next)

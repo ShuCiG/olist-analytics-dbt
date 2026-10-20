@@ -146,14 +146,33 @@ def test_full_refresh_next_on_used_up_dump_starts_over(run) -> None:
     assert (status["orders_loaded"], status["orders_total"]) == (2, 2)
 
 
-def test_next_loads_as_usual_without_local_state(run, tmp_path: Path) -> None:
+@pytest.mark.parametrize("args", [(), ("--next",), ("--until", "2016-12")])
+def test_used_up_dump_skips_the_load_without_local_state(run, tmp_path: Path, args) -> None:
     run()  # everything
     reloaded = loaded_at(run.db, "customers")
-    # Fresh volume: dlt restores the cursor from the destination during the run
+    # Fresh runner or volume (CD deploy): the cursor comes from the destination
     shutil.rmtree(tmp_path / "dlt")
-    status = run("--next")
+    status = run(*args)
     assert (status["orders_loaded"], status["orders_total"]) == (0, 4)
-    assert loaded_at(run.db, "customers") != reloaded
+    assert loaded_at(run.db, "customers") == reloaded
+
+
+def test_until_already_loaded_skips_the_load(run) -> None:
+    run("--until", "2016-10")
+    reloaded = loaded_at(run.db, "customers")
+    # 2016-12 is in the dump but after `--until`: nothing to load either
+    assert run("--until", "2016-11")["orders_loaded"] == 0
+    assert loaded_at(run.db, "customers") == reloaded
+    # A later `--until` loads again, from the restored cursor
+    status = run("--until", "2016-12")
+    assert (status["orders_loaded"], status["orders_total"]) == (1, 4)
+
+
+def test_new_month_in_the_dump_loads_without_local_state(run, tmp_path: Path) -> None:
+    run("--until", "2016-10")
+    shutil.rmtree(tmp_path / "dlt")
+    status = run()
+    assert (status["orders_loaded"], status["orders_total"]) == (1, 4)
 
 
 def test_next_loads_when_a_failed_run_left_packages(run, monkeypatch: pytest.MonkeyPatch) -> None:
