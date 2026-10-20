@@ -23,6 +23,13 @@ vars:
   # Default = the dump's last order (full loads: CI, prod); Airflow's replay passes
   # the last order of the months loaded so far (feed status `last_order_at`).
   custom_run_started_at: "{{ env_var('OLIST_AS_OF', '2018-10-17T17:30:18') }}"
+  # Elementary's on-run-end re-uploads the project's artifacts (models, tests,
+  # sources) after every dbt call: ~4 s of the freshness call's ~5 s hook. Every
+  # freshness run here (Airflow's producer, CI, CD) sits next to a build that uploads
+  # the same artifacts, so freshness only uploads its own results (D55). Per
+  # command, not via `--vars`: a changed `--vars` drops dbt's partial parse (D50).
+  # Elementary reads the rendered "True" / "False" as a boolean.
+  disable_dbt_artifacts_autoupload: "{{ flags.WHICH == 'freshness' }}"
   # dbt_project_evaluator lints this project's nodes, not Elementary's internal models
   exclude_packages: ["elementary"]
   # No failing-row samples in Elementary's tables or its public report (Pages): rows

@@ -57,6 +57,9 @@ DBT_EXECUTABLE = VENV_BIN / "dbt"
 # Built by `dbt parse` in airflow-init (and in CI). Rebuild after changing models:
 #   docker compose -f airflow/docker-compose.yml run --rm airflow-init
 DBT_MANIFEST = DBT_PROJECT_DIR / "target_airflow" / "manifest.json"
+# Volume for dbt's partial parse caches (docker-compose.yml; Cosmos' own cache dir
+# is set there too, AIRFLOW__COSMOS__CACHE_DIR): a recreated container keeps them
+DBT_CACHE_DIR = Path("/opt/dbt-cache")
 GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
 
 # Which orders to load: up to the `until` param if given, else the next month
@@ -324,13 +327,13 @@ def build_dag(wh: Warehouse) -> DAG:
         # Elementary's tables (run/test history, metrics) before the build: on a fresh
         # warehouse its schema-change tests on sources would start before dbt creates
         # them. Incremental and filled by hooks, so a rebuild keeps the history (D38).
-        # Own target path per warehouse: its partial parse is kept between runs (the
-        # container's filesystem) and never mixes with the producer's.
+        # Own target path per warehouse: its partial parse is kept between runs, also
+        # across recreated containers (volume, D55), and never mixes with the producer's.
         elementary_tables = BashOperator(
             task_id="elementary_tables",
             bash_command=(
                 f"{DBT_EXECUTABLE} run --select package:elementary"
-                f" --target {wh.dbt_target} --target-path target_elementary_{wh.name}"
+                f" --target {wh.dbt_target} --target-path {DBT_CACHE_DIR / f'elementary_{wh.name}'}"
             ),
             cwd=str(DBT_PROJECT_DIR),
             env={**wh.env, **DBT_CLOCK_ENV, "DBT_PROFILES_DIR": str(DBT_PROJECT_DIR)},

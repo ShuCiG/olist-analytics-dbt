@@ -200,10 +200,14 @@ one.
   loaded). It reaches dbt as env `OLIST_AS_OF`, read by the var in
   `dbt_project.yml`, not as `--vars`: changed `--vars` make dbt drop its partial
   parse, and every dbt call of the run (elementary_tables, freshness, build) paid
-  a full parse (15–22 s). Cosmos keeps the producer's `partial_parse.msgpack` in
-  `/tmp/cosmos/<dag>__dbt` and elementary_tables in its own target path, both in
-  the container's filesystem: the first run after a container is recreated (new
-  image) parses fully, later runs in 2–6 s. Warm DuckDB run 3.4 → 2.75 min.
+  a full parse (15–22 s). Warm DuckDB run 3.4 → 2.75 min.
+- Caches on a volume (D55): Cosmos keeps the producer's `partial_parse.msgpack` in
+  `/opt/dbt-cache/cosmos/<dag>__dbt` (`AIRFLOW__COSMOS__CACHE_DIR`), elementary_tables
+  in `/opt/dbt-cache/elementary_<warehouse>`, both on the `dbt-cache` volume: the
+  first run after a recreated container (new image) no longer parses in full
+  (6.4 → 3.8 min). Only a new stack's very first run does.
+- The producer's `dbt source freshness` call skips Elementary's artifacts upload
+  (`dbt_project.yml`, per command: the build right after uploads them): 37.5 → 13.3 s.
 - The DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
   `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse), built into the image; in dev
   mode `airflow-init` rebuilds it from the mounted repo.

@@ -28,3 +28,14 @@ def test_compose_files_found() -> None:
 def test_ports_bound_to_loopback(file: str, service: str, port: str) -> None:
     # "8080:8080" binds every interface: anyone on the network gets an admin UI
     assert port.startswith("127.0.0.1:"), f"{file} {service}: publish as 127.0.0.1:{port}"
+
+
+def test_cosmos_cache_on_a_volume() -> None:
+    # Default /tmp/cosmos is the container's filesystem: every recreated container
+    # (new image) paid a full dbt parse per call of its first run (D55)
+    common = yaml.safe_load((_AIRFLOW / "docker-compose.yml").read_text(encoding="utf-8"))[
+        "x-airflow-common"
+    ]
+    cache_dir = common["environment"]["AIRFLOW__COSMOS__CACHE_DIR"]
+    mounts = [v.split(":")[1] for v in common["volumes"]]
+    assert any(cache_dir.startswith(m.rstrip("/") + "/") for m in mounts), cache_dir

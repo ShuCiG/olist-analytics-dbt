@@ -45,6 +45,10 @@ x-airflow-common: &airflow-common
     # retried XCom push is not idempotent: when both DAGs start at :00 a push took
     # 6.2 s, the retry hit "Unique constraint violation" (409) and failed the task.
     AIRFLOW__WORKERS__EXECUTION_API_TIMEOUT: "30"
+    # dbt's partial parse survives a recreated container (new image): Cosmos keeps
+    # the producer's partial_parse.msgpack here (default /tmp/cosmos, container
+    # filesystem), elementary_tables its target path (D55)
+    AIRFLOW__COSMOS__CACHE_DIR: /opt/dbt-cache/cosmos
     # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
     # key, and the BigQuery DAG is not created.
     GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
@@ -58,6 +62,8 @@ x-airflow-common: &airflow-common
     - ${GCP_KEY_FILE:-./gcp-key.placeholder}:/opt/gcp/key.json:ro
     - kagglehub-cache:/home/airflow/.cache/kagglehub
     - dlt-pipelines:/home/airflow/.dlt
+    # dbt partial parse caches (see AIRFLOW__COSMOS__CACHE_DIR)
+    - dbt-cache:/opt/dbt-cache
     # Task logs written by the scheduler (LocalExecutor), read by the UI
     - airflow-logs:/opt/airflow/logs
   depends_on: &airflow-depends-on
@@ -183,4 +189,5 @@ volumes:
   postgres-db:
   kagglehub-cache:
   dlt-pipelines:
+  dbt-cache:
   airflow-logs:
