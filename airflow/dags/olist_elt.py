@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,6 +70,26 @@ CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
 # env var read only in dbt_project.yml keeps it (D50).
 AS_OF = "{{ ti.xcom_pull(task_ids='has_new_orders', key='as_of') or '' }}"
 DBT_CLOCK_ENV = {"OLIST_AS_OF": AS_OF}
+# Retries (warehouses with retries, D53): see wait_for_producer
+PRODUCER_TASK_ID = "dbt.dbt_producer_watcher"
+PRODUCER_TIMEOUT = pendulum.duration(minutes=20)
+# Final states of the producer (Cosmos' PRODUCER_TERMINAL_STATES, a private module)
+PRODUCER_DONE = {"success", "failed", "skipped", "upstream_failed", "removed"}
+RETRY_DELAY = pendulum.duration(minutes=1)
+# A retried node's own dbt run skips Elementary's on-run-end uploads: parallel runs
+# (two dims healing at once) collided on its tables ("Transaction is aborted due to
+# concurrent update", BigQuery DML). The producer's build still uploaded the run.
+FALLBACK_FLAGS = [
+    "--vars",
+    json.dumps(
+        {
+            "disable_dbt_artifacts_autoupload": True,
+            "disable_run_results": True,
+            "disable_tests_results": True,
+            "disable_dbt_invocation_autoupload": True,
+        }
+    ),
+]
 
 
 @dataclass(frozen=True)
@@ -78,6 +99,8 @@ class Warehouse:
     dlt_args: list[str]
     env: dict[str, str] = field(default_factory=dict)
     pool: str | None = None  # for every task that writes to the warehouse
+    # Airflow retries of every task: heals transient network errors (see build_dag)
+    retries: int = 0
 
 
 def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
@@ -87,6 +110,32 @@ def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
     order tables honestly stale, and their models must still run.
     """
     return []
+
+
+def wait_for_producer(context) -> None:
+    """Node sensors' `pre_execute`: on a retry, wait until the producer is over.
+
+    A retried sensor reruns its node only once the producer is in a final state;
+    while it still runs (or waits for its own retry) Cosmos reads the node's failed
+    status again and the retry is spent. A fixed retry delay can't fit: a node fails
+    while the producer still builds the rest, and the nodes dbt skipped behind it
+    start after the producer is over, one graph level after another. The producer
+    retries at once (attempt 2 skips itself) and is cut off after PRODUCER_TIMEOUT,
+    so the wait is bounded; after it Cosmos decides as before.
+    """
+    ti = context["ti"]
+    if ti.try_number == 1:
+        return
+    deadline = pendulum.now("UTC") + PRODUCER_TIMEOUT
+    while pendulum.now("UTC") < deadline:
+        states = ti.get_task_states(
+            dag_id=ti.dag_id, task_ids=[PRODUCER_TASK_ID], run_ids=[ti.run_id]
+        )
+        state = states.get(ti.run_id, {}).get(PRODUCER_TASK_ID)
+        if state in PRODUCER_DONE:
+            return
+        print(f"Retry: producer is {state}, waiting before this node's own dbt run")
+        time.sleep(15)
 
 
 def has_new_orders(ti, params) -> bool:
@@ -137,6 +186,11 @@ if GCP_KEY.is_file() and GCP_KEY.stat().st_size > 0:
             dbt_target="airflow",
             dlt_args=["--destination", "bigquery", "--dataset", "airflow_raw"],
             env={"DBT_RAW_SCHEMA": "airflow_raw"},
+            # Transient GCP errors (an HTML 403 from Google's front end, SSLEOFError on
+            # a job insert) failed whole runs. dlt is idempotent (merge + cursor), and
+            # dbt nodes heal via Cosmos' fallback (build_dag); the client libraries
+            # don't retry these (google-cloud-bigquery treats SSLError as permanent)
+            retries=1,
         )
     )
 
@@ -152,10 +206,16 @@ def build_dag(wh: Warehouse) -> DAG:
         catchup=False,
         # dlt's cursor moves forward month by month: runs must not overlap
         max_active_runs=1,
-        # No retries: a watcher producer never reruns (attempt > 1 is skipped), and
-        # retried node tasks run their own dbt command instead, outside the DuckDB
-        # pool (lock errors). Recover with a new run, not Clear (airflow/README.md).
-        default_args={"retries": 0},
+        # Retries: a watcher producer never reruns (attempt > 1 skips itself), so a
+        # retried node task runs its own `dbt run/test --select <node>` instead;
+        # nodes dbt skipped after a failed parent fail too and retry the same way.
+        # The producer needs the retry as well: it then ends skipped, not failed, and
+        # `report` (behind the producer, `none_failed`) can still run. A real failure
+        # (failing test, SQL error) fails again on the retry: one more dbt call, the
+        # run still fails with one email. Timing: wait_for_producer. DuckDB: 0,
+        # those node commands run outside the 1-slot pool (lock errors); recover
+        # with a new run (airflow/README.md).
+        default_args={"retries": wh.retries, "retry_delay": RETRY_DELAY},
         # One email per failed run (not per task: a failed producer fails ~50 sensors)
         on_failure_callback=on_dag_failure,
         params={
@@ -220,6 +280,15 @@ def build_dag(wh: Warehouse) -> DAG:
                     # Unit tests check logic on fixtures: CI's job, not the data pipeline's
                     "dbt_cmd_flags": ["--exclude-resource-type", "unit_test"],
                     **({"pool": wh.pool} if wh.pool else {}),
+                    **(
+                        {
+                            "retry_delay": pendulum.duration(0),
+                            "execution_timeout": PRODUCER_TIMEOUT,
+                            "pre_execute": None,
+                        }
+                        if wh.retries
+                        else {}
+                    ),
                 },
             ),
             render_config=RenderConfig(
@@ -243,6 +312,12 @@ def build_dag(wh: Warehouse) -> DAG:
             ),
             operator_args={
                 "full_refresh": "{{ params.full_refresh }}",
+                # Sensors (the producer overrides it above)
+                **(
+                    {"pre_execute": wait_for_producer, "dbt_cmd_flags": FALLBACK_FLAGS}
+                    if wh.retries
+                    else {}
+                ),
             },
         )
 

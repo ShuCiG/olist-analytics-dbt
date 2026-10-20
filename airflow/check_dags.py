@@ -8,7 +8,10 @@ feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
 failure callback), when a dbt-running task gets Elementary's clock as `--vars`
 instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
-a full parse per run, D50), or
+a full parse per run, D50), when retries are not as expected (BigQuery: every
+task retries once, transient GCP errors, D53, with the producer retrying at once
+and every node task waiting for it; DuckDB: none, a retried node task runs dbt
+outside the pool), or
 when the DuckDB pool holds anything but the writers (dlt + producer): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
@@ -27,6 +30,7 @@ PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
 ELEMENTARY = "elementary_tables"
 DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER}
+RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 
 bag = DagBag(dag_folder=DAG_FOLDER)
 
@@ -72,6 +76,27 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
             f"{getattr(task, 'vars', None)} {getattr(task, 'bash_command', '')}"
         ):
             print(f"{dag_id}: {task_id} must get the clock as env OLIST_AS_OF", file=sys.stderr)
+            missing.add(dag_id)
+    # All or nothing: a sensor that retries behind a producer that doesn't leaves the
+    # producer failed, and `report` never runs even when every node healed
+    wrong = sorted(t.task_id for t in dag.tasks if t.retries != RETRIES[dag_id])
+    if wrong:
+        print(f"{dag_id}: retries != {RETRIES[dag_id]} on {wrong[:5]}", file=sys.stderr)
+        missing.add(dag_id)
+    if RETRIES[dag_id] and PRODUCER in dag.task_ids:
+        producer = dag.get_task(PRODUCER)
+        no_wait = [
+            t.task_id
+            for t in dag.tasks
+            if t.task_id.startswith("dbt.") and t.task_id not in (PRODUCER, f"{PRODUCER}_done")
+            and getattr(t._pre_execute_hook, "__name__", None) != "wait_for_producer"
+        ]
+        if producer.retry_delay.total_seconds() or not producer.execution_timeout or no_wait:
+            print(
+                f"{dag_id}: retry timing (producer retry_delay 0 + timeout, node tasks"
+                f" wait for it) — not waiting: {no_wait[:5]}",
+                file=sys.stderr,
+            )
             missing.add(dag_id)
     if dag_id == "olist_elt_duckdb":
         pooled = {t.task_id for t in dag.tasks if t.pool == "duckdb"}

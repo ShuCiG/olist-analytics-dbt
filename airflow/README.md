@@ -144,7 +144,19 @@ and each node task then runs its own `dbt` command for its node. On DuckDB those
 run outside the 1-slot pool and fail on the file lock (the data is safe, the run
 is not). A new run starts at attempt 1. It is idempotent: dlt's cursor is already
 past that month (nothing is reloaded), dbt rebuilds tables/views and merges the
-incremental model. Retries are off (`retries=0`) for the same reason.
+incremental model. Retries are off (`retries=0`) on the DuckDB DAG for the same reason.
+
+The BigQuery DAG retries every task once (D53): transient GCP errors (an HTML 403
+from Google's front end, `SSLEOFError` on a job insert) used to fail whole runs,
+and the client libraries don't retry them. `dlt_ingest` reruns after 1 min (merge
++ cursor: idempotent). In dbt the same path as above is used on purpose: the
+producer skips its retry at once, and each failed node task (plus the nodes dbt
+skipped behind it) runs its own `dbt run/test --select <node>` on its retry. A
+node task retried while the producer still runs would read its old failed status
+again, so its retry first waits for the producer to finish (`wait_for_producer`;
+the producer is cut off after 20 min). These node runs skip Elementary's uploads:
+parallel ones collided on its tables. A real failure (failing test, SQL error)
+fails again on the retry: the run still fails, with one email, a few minutes later.
 
 ## BigQuery DAG
 
