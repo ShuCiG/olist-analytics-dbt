@@ -17,6 +17,12 @@ notify_failure = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(notify_failure)
 
 
+_spec = importlib.util.spec_from_file_location("changed_paths", ROOT / ".github" / "scripts" / "changed_paths.py")
+assert _spec and _spec.loader
+changed_paths = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(changed_paths)
+
+
 def _jobs() -> dict:
     return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
 
@@ -62,6 +68,45 @@ def test_notify_failure_runs_base_branch_code_on_prs() -> None:
     checkout = _jobs()["notify-failure"]["steps"][0]
     assert checkout["uses"].startswith("actions/checkout@")
     assert checkout["with"]["ref"].startswith("${{ github.event.pull_request.base.sha")
+
+
+@pytest.mark.parametrize(
+    ("paths", "build"),
+    [
+        (["README.md", "docs/DECISIONS.md", "airflow/README.md"], False),
+        ([".github/ISSUE_TEMPLATE/task.yml", ".github/pull_request_template.md"], False),
+        # dbt docs blocks: dbt docs reads them
+        (["transform/models/_docs.md"], True),
+        (["README.md", "transform/models/marts/fct_orders.sql"], True),
+        (["docs/RUNNING.md", ".github/workflows/ci-cd.yml"], True),
+        (["uv.lock"], True),
+        ([], True),
+    ],
+)
+def test_needs_build(paths: list[str], build: bool) -> None:
+    assert changed_paths.needs_build(paths) is build
+
+
+# Jobs that cost BigQuery bytes or minutes of image builds; they and their
+# dependants skip when `changes` says docs only
+GATED = {"dbt-project-evaluator", "airflow-dags", "dbt-build", "dbt-build-bigquery", "deploy-prod"}
+
+
+def test_expensive_jobs_skip_docs_only_changes() -> None:
+    jobs = _jobs()
+    for name in GATED:
+        needs = jobs[name]["needs"]
+        assert "changes" in ([needs] if isinstance(needs, str) else needs), name
+        assert "needs.changes.outputs.code == 'true'" in jobs[name]["if"], name
+    for name in ("deploy-docs", "publish-airflow-image"):
+        assert jobs[name]["needs"] == "deploy-prod"
+
+
+def test_required_checks_are_not_path_filtered() -> None:
+    # A workflow-level paths filter never starts the run: required checks hang on "Expected"
+    on = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]  # YAML 1.1 reads `on` as True
+    for event in ("pull_request", "push"):
+        assert not {"paths", "paths-ignore"} & set(on[event]), event
 
 
 GOOD_URI ="smtp://user%40gmail.com:pw@smtp.gmail.com:587?disable_ssl=true"
