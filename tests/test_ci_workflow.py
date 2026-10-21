@@ -40,6 +40,14 @@ def test_elementary_report_does_not_block_deploy() -> None:
     assert steps["edr"]["continue-on-error"] is True
 
 
+def test_prod_elementary_step_keeps_history_and_a_full_fallback() -> None:
+    steps = [s.get("name", "") for s in _jobs()["deploy-prod"]["steps"]]
+    step = _jobs()["deploy-prod"]["steps"][steps.index("dbt run (Elementary tables, target prod)")]
+    assert steps.index("Download prod manifest (last prod deploy)") < steps.index(step["name"])
+    assert "--full-refresh" not in step["run"], "Elementary's tables hold the run and test history (D38)"
+    assert "--select package:elementary\n" in step["run"], "no prod manifest: all of Elementary's models must run"
+
+
 def _secrets(job: dict) -> set[str]:
     return set(re.findall(r"secrets\.(\w+)", yaml.safe_dump(job)))
 

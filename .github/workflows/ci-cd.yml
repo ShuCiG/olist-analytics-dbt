@@ -406,6 +406,9 @@ jobs:
     environment:
       name: prod
       url: https://olist-analytics-dbt.streamlit.app/
+    permissions:
+      contents: read
+      actions: read  # download the previous prod manifest artifact
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -444,10 +447,38 @@ jobs:
         working-directory: transform
         run: uv run dbt source freshness --target prod
 
-      # Never with --full-refresh: the tables hold the run and test history (D38)
+      # Baseline for the Elementary step below: the last successful prod deploy's
+      # manifest, found as in slim CI
+      - name: Download prod manifest (last prod deploy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
+          if [ -z "$run_id" ] || ! gh run download "$run_id" --name prod-manifest --dir prod-state; then
+            echo "::notice::No prod manifest found, Elementary's models run in full"
+          fi
+
+      # Never with --full-refresh: the tables hold the run and test history (D38).
+      # Prod already has the tables: only Elementary's models changed since the last
+      # deploy run (package upgrade, config), else the step is skipped (D56). A manual
+      # run with full_refresh runs them all (e.g. a table dropped by hand).
       - name: dbt run (Elementary tables, target prod)
         working-directory: transform
-        run: uv run dbt run --target prod --select package:elementary
+        env:
+          ALL_MODELS: ${{ inputs.full_refresh && 'true' || '' }}
+        run: |
+          if [ -f ../prod-state/manifest.json ] && [ -z "$ALL_MODELS" ]; then
+            select='package:elementary,state:modified+'
+            changed=$(uv run dbt ls --target prod --resource-type model --select "$select" --state ../prod-state --output name -q)
+            if [ -z "$changed" ]; then
+              echo "Elementary models unchanged since the last prod deploy: step skipped" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            uv run dbt run --target prod --select "$select" --state ../prod-state
+          else
+            uv run dbt run --target prod --select package:elementary
+          fi
 
       - name: dbt build (target prod)
         working-directory: transform
