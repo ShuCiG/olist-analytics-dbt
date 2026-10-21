@@ -64,7 +64,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
-- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, budget, quota, per-query byte caps), Terraform
+- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, Workload Identity Federation, budget, quota, per-query byte caps), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
 - **BI:** Streamlit + Altair dashboard on both warehouses
 
@@ -358,7 +358,11 @@ the builds and the prod deploy skip ([D52](docs/DECISIONS.md)).
 `main` is protected; every change starts as an [issue](https://github.com/ShuCiG/olist-analytics-dbt/issues) and
 goes through a PR that closes it, tracked on the [roadmap board](https://github.com/users/ShuCiG/projects/2). The same lint, type check and tests run locally as pre-commit hooks.
 
-The GCP side (datasets, service accounts, IAM grants, budget, BigQuery quota) is Terraform in [`infra/`](infra/),
+GitHub Actions holds no GCP keys: jobs exchange their OIDC token for a service account through Workload Identity
+Federation. GCP lets only pull requests of this repo use the CI account and only the `prod` environment on `main` use
+the prod writer ([D57](docs/DECISIONS.md)).
+
+The GCP side (datasets, service accounts, IAM grants, keyless GitHub access, budget, BigQuery quota) is Terraform in [`infra/`](infra/),
 with state in a GCS bucket. It was imported from the hand-made setup without recreating anything; `plan` and `apply`
 run with the owner's account, CI checks format, config and policy rules (`terraform test` on mock providers: no table
 expiry, read-only grants, least privilege for CI, the dashboard can read what its data usage agreement names).

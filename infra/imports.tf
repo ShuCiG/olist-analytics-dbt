@@ -5,7 +5,7 @@
 # (state.tf) is new.
 
 import {
-  for_each = local.services
+  for_each = setsubtract(local.services, local.services_added)
   to       = google_project_service.this[each.value]
   id       = "${var.project_id}/${each.value}"
 }

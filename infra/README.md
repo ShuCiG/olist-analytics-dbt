@@ -6,6 +6,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 |---|---|
 | `datasets.tf` | 16 BigQuery datasets: prod (`raw`, `raw_staging`, `staging`, `intermediate`, `marts`, `seeds`, `snapshots`, `elementary`) and the same set for the Airflow DAG (`airflow_*`) |
 | `service_accounts.tf` | `dbt-runner`, `dashboard-reader`, `olist-ci` (no keys, see below) |
+| `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
 | `cost.tf` | monthly billing budget with email alerts, BigQuery "query usage per day" quota |
 | `apis.tf` | enabled APIs |
@@ -13,7 +14,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `imports.tf` | adoption of the resources that were made by hand before Terraform |
 
 Out of scope on purpose:
-- **Service account keys.** A key made by Terraform is stored in the state in plain text. Keys are created in the console and kept as GitHub / Streamlit secrets.
+- **Service account keys.** A key made by Terraform is stored in the state in plain text. GitHub Actions needs none (`wif.tf`); the local Airflow stack and Streamlit use keys created in the console.
 - **`ci_*` datasets.** Each lives for one PR CI run (`drop_isolated_datasets --target ci`).
 - **Tables.** dlt and dbt own everything inside the datasets.
 
@@ -37,7 +38,8 @@ terraform apply
 - the datasets are exactly the prod layers plus their `airflow_` twins, all in EU, with no default table or partition expiry;
 - dataset grants are read-only (`dataViewer`), no service account holds a basic role (`owner`, `editor`, `viewer`), and `olist-ci` has only `bigquery.user` and reads no `elementary` or `airflow_*` dataset (D45);
 - `dashboard-reader` can read the dataset that the dashboard's data usage agreement points to (consumer → contract server → dataset);
-- the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private.
+- the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private;
+- GitHub can impersonate only `dbt-runner` (from the `prod` environment) and `olist-ci` (from pull requests), by exact subjects of this repository; the provider accepts tokens of this repository only and prod tokens from `main` only; no project-level impersonation roles.
 
 `tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
 

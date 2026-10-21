@@ -1,6 +1,6 @@
 # Service accounts only. Their keys stay out of Terraform: a key created here
-# would sit in the state file in plain text. Keys are made in the console and
-# stored as GitHub secrets (GCP_SA_KEY, GCP_SA_KEY_CI) / Streamlit secrets.
+# would sit in the state file in plain text. GitHub Actions uses no keys
+# (wif.tf); the local Airflow stack and Streamlit keep keys made in the console.
 locals {
   service_accounts = {
     dbt-runner       = "Writes the warehouse: dlt loads, dbt builds (CD prod, Airflow)"
