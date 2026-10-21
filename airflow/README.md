@@ -70,8 +70,8 @@ state, empty months such as 2016-11 are skipped):
 | next ones | 2016-10, 2016-12, 2017-01, ... one month each | builds |
 | after 2018-10 (~25 runs, about a day) | nothing, `orders_loaded=0` | skipped by `has_new_orders` |
 
-Once the dump is used up the runs stay green, dbt is skipped (no rebuild for no
-data, no BigQuery cost) and the order tables' `_loaded_at` stops moving: source
+Once the dump is used up the runs stay green, the dlt load and dbt are skipped
+(D49: an idle run reads only the feed status, one cached BigQuery query) and the order tables' `_loaded_at` stops moving: source
 freshness goes stale, which the `STALE` email reports (see below).
 
 Catch up faster with a manual run that loads up to a month at once (the `until`

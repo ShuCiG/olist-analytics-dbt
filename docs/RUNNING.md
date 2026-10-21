@@ -1,6 +1,6 @@
 # Running the project
 
-Everything runs locally on DuckDB with no account or key; BigQuery and Airflow are optional.
+Everything runs locally on DuckDB with no account or key; BigQuery, Databricks and Airflow are optional.
 Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it), Docker for Airflow.
 
 - [Local build (DuckDB)](#local-build-duckdb)
@@ -12,6 +12,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Project evaluator](#project-evaluator)
 - [Dashboard](#dashboard)
 - [BigQuery](#bigquery)
+- [Databricks](#databricks)
 - [Airflow](#airflow)
 - [Development hooks](#development-hooks)
 - [Security review (`/audit`)](#security-review-audit)
@@ -169,6 +170,23 @@ export GCP_PROJECT_ID=<your-project>
 uv run python ingestion/pipeline.py --destination bigquery
 cd transform && uv run dbt build --target prod
 ```
+
+## Databricks
+
+Free Edition works (no cloud account, no card). Create a catalog `olist` (`CREATE CATALOG olist` in the SQL editor)
+and a personal access token, then set:
+
+```bash
+export DATABRICKS_HOST=dbc-xxxxxxxx-xxxx.cloud.databricks.com   # SQL warehouse → Connection details
+export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxxxxxxxxxxxxxx
+export DATABRICKS_TOKEN=...                                       # Settings → Developer → Access tokens
+uv run python ingestion/pipeline.py --destination databricks
+cd transform && uv run dbt run --target databricks --select package:elementary
+uv run dbt build --target databricks --exclude package:elementary
+```
+
+The scheduled CI (`.github/workflows/databricks.yml`, target `databricks_ci`) runs as a service principal with
+`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58.
 
 ## Airflow
 

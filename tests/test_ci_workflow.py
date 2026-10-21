@@ -174,3 +174,32 @@ def test_main_exits_1_without_secret(monkeypatch: pytest.MonkeyPatch, capsys: py
         notify_failure.main()
     assert exc.value.code == 1
     assert "::error::" in capsys.readouterr().out
+
+
+DATABRICKS = ROOT / ".github" / "workflows" / "databricks.yml"
+
+
+def _databricks() -> dict:
+    return yaml.safe_load(DATABRICKS.read_text(encoding="utf-8"))
+
+
+def test_databricks_runs_on_main_only() -> None:
+    # The service principal's secret is in environment databricks-ci (main only, D58):
+    # no pull_request trigger, so PR code never runs next to it
+    workflow = _databricks()
+    triggers = workflow[True]  # PyYAML reads the `on:` key as boolean True
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    job = workflow["jobs"]["dbt-build-databricks"]
+    assert job["environment"] == "databricks-ci"
+    assert MAIN_ONLY in job["if"]
+    holders = {name for name, j in workflow["jobs"].items() if "DATABRICKS_CLIENT_SECRET" in _secrets(j)}
+    assert holders == {"dbt-build-databricks"}
+
+
+def test_databricks_cleans_up_and_alerts() -> None:
+    jobs = _databricks()["jobs"]
+    steps = {s.get("name"): s for s in jobs["dbt-build-databricks"]["steps"]}
+    assert steps["Drop CI schemas"]["if"] == "always()"
+    assert steps["Drop guard refuses non-CI schemas"]["env"]["DBT_CI_SCHEMA"] == "marts_guard_check"
+    assert jobs["dbt-build-databricks"]["env"]["DBT_CI_SCHEMA"].startswith("ci_")
+    assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
