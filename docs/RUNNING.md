@@ -1,6 +1,6 @@
 # Running the project
 
-Everything runs locally on DuckDB with no account or key; BigQuery and Airflow are optional.
+Everything runs locally on DuckDB with no account or key; BigQuery, Databricks and Airflow are optional.
 Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it), Docker for Airflow.
 
 - [Local build (DuckDB)](#local-build-duckdb)
@@ -12,6 +12,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Project evaluator](#project-evaluator)
 - [Dashboard](#dashboard)
 - [BigQuery](#bigquery)
+- [Databricks](#databricks)
 - [Airflow](#airflow)
 - [Development hooks](#development-hooks)
 - [Security review (`/audit`)](#security-review-audit)

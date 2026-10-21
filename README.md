@@ -34,13 +34,13 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   mart numbers, through cross-database macros and per-adapter dispatch. → [Data model](#data-model)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets. Every merge: prod deploy, docs, Airflow image to GHCR.
-  Any failure is emailed. → [CI/CD](#cicd)
+  No cloud keys in GitHub (Workload Identity Federation); any failure is emailed. → [CI/CD](#cicd)
 - **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 62 Python tests; known
+- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 157 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -148,7 +148,7 @@ erDiagram
 | Model | Grain | Notes |
 |---|---|---|
 | `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`), v1 deprecated (`fct_orders_v1`) |
-| `fct_order_items` | order line | incremental (merge on `_loaded_at`, monthly partitions on BigQuery); reconciles exactly with `fct_orders.order_amount` |
+| `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English, fallback `unknown` |
 | `dim_sellers` | seller | zip-prefix centroid coordinates; history in snapshot `snap_sellers` (SCD2) |
@@ -238,7 +238,7 @@ flowchart LR
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **62 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **157 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -318,8 +318,8 @@ deliveries, 3.12 % repeat customers.
 
 ## Orchestration and alerts
 
-A local Airflow 3 replays the dump as a live feed. Each **hourly** run loads the next month with dlt, skips dbt
-when nothing new arrived, and otherwise runs the dbt project as a Cosmos task group in **watcher mode**: one
+A local Airflow 3 replays the dump as a live feed. Each **hourly** run loads the next month with dlt, skips the
+load and dbt when nothing new arrived (an idle run costs one cached BigQuery query), and otherwise runs the dbt project as a Cosmos task group in **watcher mode**: one
 `dbt build` for the whole project, with one Airflow task per dbt node mirroring its result. The graph still shows
 every node, but dbt starts once per run instead of once per task: **~29 → ~6 min per month on DuckDB, ~19 → ~6–9 min
 on BigQuery**. The replay clock reaches dbt as an env var, not `--vars`, so dbt keeps its partial parse between
@@ -398,7 +398,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ## Repository layout
 
 ```
-├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery raw, monthly chunks
+├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery / Databricks raw, monthly chunks
 ├── transform/                   # dbt project
 │   ├── models/staging/olist/    #   1:1 with sources: types, names
 │   ├── models/intermediate/     #   pivots, rollups, dedup
@@ -408,14 +408,14 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
-├── tests/                       # pytest: pipeline, dbt summary, alert decisions
-├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, budget, quota
-├── .github/                     # workflows/ci-cd.yml (CI on PRs, CD on merge), issue forms, PR template
+├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
+├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
+├── .github/                     # workflows: ci-cd.yml (CI on PRs, CD on merge), databricks.yml (weekly); issue forms, PR template
 └── docs/                        # DECISIONS.md (decision log), RUNNING.md, screenshots
 ```
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Next up: drop `fct_orders` v1 after its deprecation date (2026-12-31, #66).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open: a scheduled `terraform plan` that detects drift in live GCP (#86), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

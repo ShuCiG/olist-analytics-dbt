@@ -4,7 +4,7 @@
 ELT on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce):
 dlt loads the raw CSV files in monthly chunks, dbt builds staging → intermediate → marts (star schema).
 These docs are generated from the BigQuery prod build; the same project runs on DuckDB locally and in CI,
-and month by month in Airflow (Cosmos).
+on Databricks (weekly CI), and month by month in Airflow (Cosmos).
 
 - **Facts:** `fct_orders` (one row per order; versioned, v1 deprecated), `fct_order_items` (one row per line item)
 - **Dimensions:** `dim_customers`, `dim_sellers`, `dim_products`, `dim_date`
@@ -56,6 +56,6 @@ Longitude of the zip-prefix centroid. Null when the prefix is missing from the g
 {% enddocs %}
 
 {% docs loaded_at %}
-UTC time of the dlt run that wrote the raw row (TIMESTAMPTZ on DuckDB, TIMESTAMP on BigQuery).
+UTC time of the dlt run that wrote the raw row (TIMESTAMPTZ on DuckDB, TIMESTAMP on BigQuery and Databricks).
 Cursor for incremental models.
 {% enddocs %}
