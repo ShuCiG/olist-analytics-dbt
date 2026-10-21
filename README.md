@@ -1,6 +1,7 @@
 # Olist Analytics — an e-commerce data product on dbt
 
 [![CI/CD](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml)
+[![Databricks](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/databricks.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/databricks.yml)
 [![dbt docs](https://img.shields.io/badge/dbt_docs-lineage-FF694B?logo=dbt&logoColor=white)](https://shucig.github.io/olist-analytics-dbt/)
 [![Data product](https://img.shields.io/badge/data_product-contracts-2F6FDE)](https://shucig.github.io/olist-analytics-dbt/data-product/)
 [![Observability](https://img.shields.io/badge/observability-Elementary-6C47FF)](https://shucig.github.io/olist-analytics-dbt/elementary/)
@@ -413,6 +414,8 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── .github/                     # workflows: ci-cd.yml (CI on PRs, CD on merge), databricks.yml (weekly); issue forms, PR template
 └── docs/                        # DECISIONS.md (decision log), RUNNING.md, screenshots
 ```
+
+License: [MIT](LICENSE).
 
 ## Next
 
