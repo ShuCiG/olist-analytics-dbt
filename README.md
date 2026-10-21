@@ -9,7 +9,7 @@
 End-to-end analytics engineering on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables), run as a **data product**: an owner, data contracts on its input and
 output, declared consumers, and CI that enforces all of it. **dlt** loads the data, **dbt Core** models it into a
-tested star schema and a semantic layer on **DuckDB** (local) and **BigQuery** (prod), **Airflow + Cosmos** replays
+tested star schema and a semantic layer on **DuckDB** (local), **BigQuery** (prod) and **Databricks**, **Airflow + Cosmos** replays
 it hourly as a live feed, and a **Streamlit** dashboard reads the result.
 
 | | |
@@ -30,8 +30,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   ports), an ODCS data contract per port, ~370 contract checks on the data in every CI run. The dashboard's usage
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
-- **One codebase, two warehouses.** The same dbt models run on DuckDB and BigQuery with identical test results and
-  KPIs, through cross-database macros and per-adapter dispatch. → [Data model](#data-model)
+- **One codebase, three warehouses.** The same dbt models run on DuckDB, BigQuery and Databricks with identical
+  mart numbers, through cross-database macros and per-adapter dispatch. → [Data model](#data-model)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets. Every merge: prod deploy, docs, Airflow image to GHCR.
   Any failure is emailed. → [CI/CD](#cicd)
@@ -60,7 +60,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Data products and governance:** Open Data Product Standard, data usage agreements, contract versioning and
   breaking-change detection, dbt groups / access / model versions, dbt_project_evaluator, PII classification
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
-- **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, ELT, cross-database SQL
+- **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), ELT, cross-database SQL
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
@@ -94,8 +94,8 @@ flowchart LR
 
 | Layer | Tool |
 |---|---|
-| Ingestion | [dlt](https://dlthub.com/): Kaggle CSV → DuckDB / BigQuery `raw`, order tables in monthly chunks (`merge`, cursor in dlt state) |
-| Warehouse | DuckDB (local dev), BigQuery (EU): `prod` (CD), `ci` (per-PR datasets), `airflow` (live feed) |
+| Ingestion | [dlt](https://dlthub.com/): Kaggle CSV → DuckDB / BigQuery / Databricks `raw`, order tables in monthly chunks (`merge`, cursor in dlt state) |
+| Warehouse | DuckDB (local dev), BigQuery (EU): `prod` (CD), `ci` (per-PR datasets), `airflow` (live feed); Databricks Free Edition: catalog `olist` (local), `olist_ci` (weekly CI) |
 | Transformation | dbt Core 1.12, `dbt_utils`, `dbt_expectations`, `dbt_date` |
 | Data product | ODPS v1.1 descriptor, ODCS v3.1 contracts, `datacontract-cli`, data usage agreements |
 | Semantic layer | dbt Semantic Layer / MetricFlow |
@@ -157,7 +157,7 @@ erDiagram
 Layers: **staging** (8 views, 1:1 with sources: types, names; raw is loaded as all strings so casting is visible
 and tested), **intermediate** (6 views: pivots, rollups, dedup, the one orders ⨝ customers join), **marts** (tables
 with enforced contracts). Cross-database macros (`dbt.type_timestamp()`, `dbt.datediff`, ...) and `to_money()`
-via `adapter.dispatch` (`numeric(18, 2)` on DuckDB, `NUMERIC` on BigQuery) keep one codebase for both engines.
+via `adapter.dispatch` (`numeric(18, 2)` on DuckDB and Databricks, `NUMERIC` on BigQuery) keep one codebase for all three engines.
 
 <details>
 <summary>Lineage graph</summary>
@@ -351,6 +351,9 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed) |
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
+
+Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
+service principal limited to its own catalog, then drops the run's schemas ([D58](docs/DECISIONS.md)).
 
 Docs-only changes (Markdown outside `transform/`, issue forms) run only the lint, type check and tests:
 the builds and the prod deploy skip ([D52](docs/DECISIONS.md)).

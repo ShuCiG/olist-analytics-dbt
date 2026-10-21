@@ -170,6 +170,23 @@ uv run python ingestion/pipeline.py --destination bigquery
 cd transform && uv run dbt build --target prod
 ```
 
+## Databricks
+
+Free Edition works (no cloud account, no card). Create a catalog `olist` (`CREATE CATALOG olist` in the SQL editor)
+and a personal access token, then set:
+
+```bash
+export DATABRICKS_HOST=dbc-xxxxxxxx-xxxx.cloud.databricks.com   # SQL warehouse → Connection details
+export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxxxxxxxxxxxxxx
+export DATABRICKS_TOKEN=...                                       # Settings → Developer → Access tokens
+uv run python ingestion/pipeline.py --destination databricks
+cd transform && uv run dbt run --target databricks --select package:elementary
+uv run dbt build --target databricks --exclude package:elementary
+```
+
+The scheduled CI (`.github/workflows/databricks.yml`, target `databricks_ci`) runs as a service principal with
+`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58.
+
 ## Airflow
 
 ```bash

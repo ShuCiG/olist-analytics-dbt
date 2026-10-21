@@ -1,0 +1,121 @@
+name: Databricks
+
+# Third engine (D58): the same dlt load and dbt build on Databricks Free Edition,
+# weekly and on demand. Not on pull requests: the service principal's OAuth secret
+# lives in environment `databricks-ci`, which admits only main (Free Edition has no
+# GitHub OIDC federation, so no keyless login as in D57).
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dbt-build-databricks:
+    name: dbt build (Databricks)
+    if: github.ref == 'refs/heads/main'
+    environment: databricks-ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+      # Service principal olist-ci-dbx: may only create schemas in catalog olist_ci
+      DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      DATABRICKS_CATALOG: olist_ci
+      # run_id in the name: a cancelled run's cleanup can't drop a newer run's schemas
+      DBT_CI_SCHEMA: ci_dbx_${{ github.run_id }}
+      DBT_RAW_SCHEMA: ci_dbx_${{ github.run_id }}_raw
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      # A few months keep the run inside Free Edition's daily compute quota
+      - name: Ingest raw data (dlt → Databricks)
+        run: uv run python ingestion/pipeline.py --destination databricks --dataset "$DBT_RAW_SCHEMA" --until 2017-03
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      # The cleanup below must refuse a schema outside ci_*
+      - name: Drop guard refuses non-CI schemas
+        working-directory: transform
+        env:
+          DBT_CI_SCHEMA: marts_guard_check
+        run: |
+          if uv run dbt run-operation drop_isolated_datasets --target databricks_ci; then
+            echo "::error::drop_isolated_datasets accepted schema '$DBT_CI_SCHEMA'"
+            exit 1
+          fi
+
+      # Elementary's tables first, as in every fresh warehouse (D38)
+      - name: dbt run (Elementary tables)
+        working-directory: transform
+        run: uv run dbt run --target databricks_ci --select package:elementary
+
+      - name: dbt build (target databricks_ci)
+        working-directory: transform
+        run: uv run dbt build --target databricks_ci --exclude package:elementary
+
+      - name: Upload manifest (for the failure email)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ci-manifest
+          path: transform/target/manifest.json
+          retention-days: 3
+
+      - name: Drop CI schemas
+        if: always()
+        working-directory: transform
+        run: uv run dbt run-operation drop_isolated_datasets --target databricks_ci
+
+  notify-failure:
+    name: Email on failure
+    needs: [dbt-build-databricks]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # job list + logs of this run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download manifest (test descriptions)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name ci-manifest --dir ci-manifest
+      - name: Send email
+        env:
+          DBT_MANIFEST: ci-manifest/manifest.json
+          GH_TOKEN: ${{ github.token }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          EVENT_TITLE: "Databricks: ${{ github.event_name }} on ${{ github.ref_name }}"
+        run: python3 .github/scripts/notify_failure.py

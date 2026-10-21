@@ -1,7 +1,12 @@
 """Load Olist CSVs from Kaggle into schema/dataset `raw` (`--dataset`) with dlt.
 
-Destination: DuckDB (default, local dev) or BigQuery (`--destination bigquery`).
+Destination: DuckDB (default, local dev), BigQuery (`--destination bigquery`) or
+Databricks (`--destination databricks`).
 BigQuery auth = Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
+Databricks auth = DATABRICKS_HOST, DATABRICKS_HTTP_PATH (SQL warehouse) and either
+DATABRICKS_TOKEN (personal access token) or DATABRICKS_CLIENT_ID +
+DATABRICKS_CLIENT_SECRET (service principal, CI); tables go to catalog
+DATABRICKS_CATALOG (default `olist`).
 
 All source columns are loaded as strings: the raw layer mirrors the source exactly
 (e.g. zip prefixes keep leading zeros). Typing happens in dbt staging.
@@ -56,6 +61,7 @@ DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
+DATABRICKS_CATALOG = os.environ.get("DATABRICKS_CATALOG", "olist")
 STATE_KEY = "orders_loaded_until"  # last loaded purchase month, "YYYY-MM"
 # Olist purchase time, "2017-10-02 10:56:33" (optionally ISO "T", fractions)
 TIMESTAMP = r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?"
@@ -255,6 +261,19 @@ def make_destination(name: str, duckdb_path: Path):
         credentials = GcpServiceAccountCredentials()
         credentials.project_id = GCP_PROJECT_ID
         return dlt.destinations.bigquery(credentials=credentials, location=BQ_LOCATION)
+    if name == "databricks":
+        # Files are staged in a Unity Catalog volume dlt manages in the dataset's schema
+        credentials = {
+            "server_hostname": os.environ["DATABRICKS_HOST"],
+            "http_path": os.environ["DATABRICKS_HTTP_PATH"],
+            "catalog": DATABRICKS_CATALOG,
+        }
+        if os.environ.get("DATABRICKS_CLIENT_ID"):
+            credentials["client_id"] = os.environ["DATABRICKS_CLIENT_ID"]
+            credentials["client_secret"] = os.environ["DATABRICKS_CLIENT_SECRET"]
+        else:
+            credentials["access_token"] = os.environ["DATABRICKS_TOKEN"]
+        return dlt.destinations.databricks(credentials=credentials)
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     return dlt.destinations.duckdb(str(duckdb_path))
 
@@ -263,7 +282,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--destination", choices=["duckdb", "bigquery"], default="duckdb")
+    parser.add_argument("--destination", choices=["duckdb", "bigquery", "databricks"], default="duckdb")
     chunk = parser.add_mutually_exclusive_group()
     chunk.add_argument(
         "--until", type=month_key, help="load order months up to this one, YYYY-MM (default: all)"
@@ -272,7 +291,7 @@ def main() -> None:
         "--next", action="store_true", help="load only the next month that has orders"
     )
     parser.add_argument(
-        "--dataset", default="raw", help="target schema (DuckDB) / dataset (BigQuery)"
+        "--dataset", default="raw", help="target schema (DuckDB, Databricks) / dataset (BigQuery)"
     )
     parser.add_argument(
         "--duckdb-path", type=Path, default=DUCKDB_PATH, help="DuckDB file (default: %(default)s)"

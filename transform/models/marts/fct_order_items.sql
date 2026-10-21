@@ -17,6 +17,7 @@
             if target.type == 'bigquery' else none
         ),
         cluster_by=(['seller_id', 'product_id'] if target.type == 'bigquery' else none),
+        liquid_clustered_by=(['seller_id', 'product_id'] if target.type == 'databricks' else none),
     )
 }}
 

@@ -50,6 +50,31 @@ olist:
       job_retries: 1
       maximum_bytes_billed: 1000000000
       priority: interactive
+    # Databricks (Free Edition, third engine, D58): catalog `olist`, schemas named
+    # as in prod. Personal access token from the environment, never in the repo.
+    # No byte cap like BigQuery's: the SQL warehouse's auto-stop and size are the
+    # cost guards.
+    databricks:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', 'unset') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', 'unset') }}"
+      token: "{{ env_var('DATABRICKS_TOKEN', 'unset') }}"
+      catalog: "{{ env_var('DATABRICKS_CATALOG', 'olist') }}"
+      schema: main
+      threads: 4
+    # Scheduled CI on Databricks (.github/workflows/databricks.yml): service principal
+    # olist-ci-dbx (OAuth machine-to-machine), which can only create schemas in
+    # catalog olist_ci. Schemas are <DBT_CI_SCHEMA>_staging, ..._marts, dropped after.
+    databricks_ci:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', 'unset') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', 'unset') }}"
+      auth_type: oauth
+      client_id: "{{ env_var('DATABRICKS_CLIENT_ID', 'unset') }}"
+      client_secret: "{{ env_var('DATABRICKS_CLIENT_SECRET', 'unset') }}"
+      catalog: olist_ci
+      schema: "{{ env_var('DBT_CI_SCHEMA', 'ci_local') }}"
+      threads: 4
     # Used by sqlfluff's dbt templater: compiles without data or a DB file
     lint:
       type: duckdb

@@ -500,5 +500,5 @@ models:
         data_type: *money_type
       - name: _loaded_at
         description: "{{ doc('loaded_at') }} Latest of the item's and its order's raw load; incremental cursor."
-        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamp with time zone' }}"
+        data_type: "{{ 'timestamp' if target.type in ['bigquery', 'databricks'] else 'timestamp with time zone' }}"
         data_tests: [not_null]

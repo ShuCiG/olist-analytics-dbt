@@ -1,25 +1,27 @@
 {#
-    Cleans up the datasets of an isolated BigQuery target: <target.schema>_<custom>,
+    Cleans up the datasets (schemas) of an isolated target: <target.schema>_<custom>,
     <target.schema> itself and <target.schema>_raw + _raw_staging (dlt dataset and
     its merge staging dataset; Airflow DAG only).
     - ci: per-PR datasets, called by CI after the build (always); the datasets are
       dropped.
+    - databricks_ci: the scheduled Databricks CI run's schemas in catalog olist_ci
+      (D58), dropped with everything in them (dlt's staging volume included).
     - airflow: the Airflow BigQuery DAG's datasets, run by hand to reset it; the
       datasets are emptied (every table and view dropped), not dropped: Terraform
       owns them and their access grants (infra/), so a reset leaves no drift.
     Guarded twice: refuses any other target (never prod / dev), and a dataset name
-    outside the target's own namespace (ci: ci_*, airflow: airflow), so a prod name
+    outside the target's own namespace (ci, databricks_ci: ci_*; airflow: airflow), so a prod name
     in DBT_CI_SCHEMA or profiles.yml can't turn the cleanup into a prod drop.
-    Usage: dbt run-operation drop_isolated_datasets --target ci|airflow
+    Usage: dbt run-operation drop_isolated_datasets --target ci|airflow|databricks_ci
 #}
 {% macro drop_isolated_datasets() %}
-    {% set allowed = ['ci', 'airflow'] %}
+    {% set allowed = ['ci', 'airflow', 'databricks_ci'] %}
     {% if target.name not in allowed %}
         {{ exceptions.raise_compiler_error("drop_isolated_datasets runs only on targets " ~ allowed ~ ", got '" ~ target.name ~ "'") }}
     {% endif %}
-    {% set schema_ok = target.schema.startswith('ci_') if target.name == 'ci' else target.schema == 'airflow' %}
+    {% set schema_ok = target.schema == 'airflow' if target.name == 'airflow' else target.schema.startswith('ci_') %}
     {% if not schema_ok %}
-        {{ exceptions.raise_compiler_error("drop_isolated_datasets: dataset '" ~ target.schema ~ "' is outside target '" ~ target.name ~ "' (ci: ci_*, airflow: airflow)") }}
+        {{ exceptions.raise_compiler_error("drop_isolated_datasets: dataset '" ~ target.schema ~ "' is outside target '" ~ target.name ~ "' (ci, databricks_ci: ci_*; airflow: airflow)") }}
     {% endif %}
     {% set suffixes = ['', '_raw', '_raw_staging', '_staging', '_intermediate', '_marts', '_seeds', '_snapshots', '_elementary'] %}
     {% for suffix in suffixes %}
