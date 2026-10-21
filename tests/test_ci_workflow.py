@@ -1,5 +1,5 @@
 """CI workflow guards: every job is watched by the failure email, a broken alert setup
-fails loudly, and the prod key never reaches a PR job."""
+fails loudly, and the prod identity never reaches a PR job."""
 
 import importlib.util
 import re
@@ -53,23 +53,49 @@ def _secrets(job: dict) -> set[str]:
 
 
 MAIN_ONLY = "github.ref == 'refs/heads/main'"
+PROD_SA = "dbt-runner@"
+CI_SA = "olist-ci@"
 
 
-def test_prod_key_only_in_main_jobs_behind_environment() -> None:
+def _gcp_auth(job: dict) -> list[dict]:
+    return [s for s in job.get("steps", []) if s.get("uses", "").startswith("google-github-actions/auth@")]
+
+
+def test_no_gcp_key_secrets() -> None:
+    # Keys were replaced by Workload Identity Federation (D57)
+    for name, job in _jobs().items():
+        assert not {s for s in _secrets(job) if s.startswith("GCP_SA_KEY")}, f"{name} reads a GCP key secret"
+        for step in _gcp_auth(job):
+            assert "credentials_json" not in step["with"], f"{name}: authenticate with workload_identity_provider"
+
+
+def test_gcp_auth_uses_federation() -> None:
     jobs = _jobs()
-    holders = {name for name, job in jobs.items() if "GCP_SA_KEY" in _secrets(job)}
+    users = {name for name, job in jobs.items() if _gcp_auth(job)}
+    assert users == {"dbt-build-bigquery", "deploy-prod"}
+    for name in users:
+        (step,) = _gcp_auth(jobs[name])
+        assert step["with"]["workload_identity_provider"] == "${{ env.GCP_WIF_PROVIDER }}"
+        assert jobs[name]["permissions"].get("id-token") == "write", f"{name} needs id-token: write for OIDC"
+
+
+def test_prod_identity_only_in_main_job_behind_environment() -> None:
+    jobs = _jobs()
+    holders = {name for name, job in jobs.items() if PROD_SA in yaml.safe_dump(job)}
     assert holders == {"deploy-prod"}
     environment = jobs["deploy-prod"]["environment"]
+    # GCP trusts dbt-runner only for the prod environment's OIDC subject (infra/wif.tf)
     assert (environment["name"] if isinstance(environment, dict) else environment) == "prod"
     assert MAIN_ONLY in jobs["deploy-prod"]["if"]
 
 
-def test_pr_jobs_use_ci_key_only() -> None:
+def test_pr_jobs_use_ci_identity_only() -> None:
     for name, job in _jobs().items():
         if MAIN_ONLY in str(job.get("if", "")):
             continue
-        assert "GCP_SA_KEY" not in _secrets(job), f"{name} runs on PRs: use GCP_SA_KEY_CI"
-    assert "GCP_SA_KEY_CI" in _secrets(_jobs()["dbt-build-bigquery"])
+        assert PROD_SA not in yaml.safe_dump(job), f"{name} runs on PRs: use olist-ci"
+    (step,) = _gcp_auth(_jobs()["dbt-build-bigquery"])
+    assert step["with"]["service_account"].startswith(CI_SA)
 
 
 def test_notify_failure_runs_base_branch_code_on_prs() -> None:

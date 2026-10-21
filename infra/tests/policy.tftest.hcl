@@ -12,9 +12,10 @@ override_resource {
 }
 override_resource {
   target = google_service_account.this
-  values = { # the provider validates the IAM member format
-    email  = "mock@olist-analytics-dbt-472315.iam.gserviceaccount.com"
-    member = "serviceAccount:mock@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+  values = { # the provider validates the IAM member and account name formats
+    name   = "projects/olist-analytics-dbt-472315/serviceAccounts/mock-account@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    email  = "mock-account@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    member = "serviceAccount:mock-account@olist-analytics-dbt-472315.iam.gserviceaccount.com"
   }
 }
 override_resource {
@@ -132,5 +133,57 @@ run "cost_and_state" {
       && google_storage_bucket.tfstate.uniform_bucket_level_access
     )
     error_message = "State bucket must be versioned, private and use uniform access."
+  }
+}
+
+run "github_federation" {
+  command = plan
+
+  # One binding per account: prod writer from the prod environment, olist-ci
+  # from pull requests. Nothing else may impersonate either.
+  assert {
+    condition     = toset(keys(google_service_account_iam_member.github)) == toset(["dbt-runner", "olist-ci"])
+    error_message = "Only dbt-runner and olist-ci are reachable from GitHub Actions."
+  }
+
+  assert {
+    condition     = alltrue([for m in google_service_account_iam_member.github : m.role == "roles/iam.workloadIdentityUser"])
+    error_message = "GitHub bindings grant roles/iam.workloadIdentityUser only."
+  }
+
+  # The prod writer is never reachable from a pull request (D45)
+  assert {
+    condition = (
+      local.github_identities["dbt-runner"] == "${local.github_subject_prefix}:environment:prod"
+      && local.github_identities["olist-ci"] == "${local.github_subject_prefix}:pull_request"
+    )
+    error_message = "dbt-runner binds to the prod environment only, olist-ci to pull requests only."
+  }
+
+  # Exact subjects of this repository: no wildcard, no other repository
+  assert {
+    condition = alltrue([
+      for s in values(local.github_identities) :
+      startswith(s, "repo:ShuCiG@90512692/olist-analytics-dbt@1413000102:") && !strcontains(s, "*")
+    ])
+    error_message = "Subjects must be exact subjects of this repository."
+  }
+
+  assert {
+    condition = (
+      google_iam_workload_identity_pool_provider.github.oidc[0].issuer_uri == "https://token.actions.githubusercontent.com"
+      && strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "assertion.repository_id == '1413000102'")
+      && strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "assertion.ref == 'refs/heads/main'")
+    )
+    error_message = "The provider accepts GitHub tokens of this repository only, prod tokens from main only."
+  }
+
+  # Impersonation is granted per account above, never project-wide
+  assert {
+    condition = alltrue([
+      for m in google_project_iam_member.this :
+      !contains(["roles/iam.workloadIdentityUser", "roles/iam.serviceAccountTokenCreator", "roles/iam.serviceAccountUser"], m.role)
+    ])
+    error_message = "No project-level impersonation roles."
   }
 }

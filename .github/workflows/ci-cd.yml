@@ -20,6 +20,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # GitHub OIDC -> GCP (D57): `terraform output github_workload_identity_provider`.
+  # Not a secret: GCP decides which repo, event and environment may use it.
+  GCP_WIF_PROVIDER: projects/456327248425/locations/global/workloadIdentityPools/github/providers/olist-analytics-dbt
+
 jobs:
   # Docs-only changes (Markdown outside transform/, issue forms) skip the dbt
   # builds and the prod deploy (D52): `code` is false only then. Gated jobs skip
@@ -126,7 +131,7 @@ jobs:
 
   # GCP infrastructure as code (infra/, D46): format, config and policy tests
   # (terraform test on mock providers, D47). No credentials here: plan and apply
-  # run locally with the owner's account, the CI keys hold no IAM or billing rights
+  # run locally with the owner's account, the CI identities hold no IAM or billing rights
   terraform:
     name: terraform
     runs-on: ubuntu-24.04
@@ -318,6 +323,7 @@ jobs:
     permissions:
       contents: read
       actions: read  # download the prod manifest artifact
+      id-token: write  # OIDC token for Workload Identity Federation
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -336,14 +342,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      # Writes the key to a temp file and sets GOOGLE_APPLICATION_CREDENTIALS (ADC).
-      # PR key (service account olist-ci): reads the prod datasets slim CI defers
-      # to, writes only the ci_* datasets it creates. The prod key is in the
-      # `prod` environment, main only (D45).
+      # No key (D57): exchanges the job's OIDC token for service account olist-ci
+      # and sets GOOGLE_APPLICATION_CREDENTIALS (ADC). olist-ci reads the prod
+      # datasets slim CI defers to, writes only the ci_* datasets it creates. GCP
+      # lets only pull_request tokens of this repo impersonate it (infra/wif.tf).
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_CI }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: olist-ci@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
       - name: dbt deps
         working-directory: transform
@@ -401,7 +408,8 @@ jobs:
     name: Deploy to BigQuery prod
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     needs: [changes, dbt-build]
-    # Holds secret GCP_SA_KEY (prod writer); the environment admits only main.
+    # The prod writer (dbt-runner) trusts only OIDC tokens of this environment,
+    # which admits only main (D45, D57).
     # url: link on the deployment card, the public dashboard over prod marts
     environment:
       name: prod
@@ -409,6 +417,7 @@ jobs:
     permissions:
       contents: read
       actions: read  # download the previous prod manifest artifact
+      id-token: write  # OIDC token for Workload Identity Federation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -433,7 +442,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
       - name: Ingest raw data (dlt → BigQuery)
         run: uv run python ingestion/pipeline.py --destination bigquery

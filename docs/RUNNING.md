@@ -160,7 +160,8 @@ Streamlit Cloud workspace (saving them alone keeps the old values).
 Needs a GCP project with billing and a service account with *BigQuery Data Editor* + *BigQuery Job User*
 (+ *BigQuery Read Session User* for `datacontract test` on BigQuery). This project's datasets, service accounts,
 grants, budget and quota are Terraform in [`infra/`](../infra/README.md) (`terraform plan` / `apply` with your own
-Google account; for another project set `project_id`). Service account keys are made in the console.
+Google account; for another project set `project_id`). GitHub Actions authenticates without keys (Workload Identity
+Federation, `infra/wif.tf`); keys for local runs, Airflow and Streamlit are made in the console.
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json   # Application Default Credentials
