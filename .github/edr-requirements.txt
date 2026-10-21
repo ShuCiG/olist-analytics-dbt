@@ -65,9 +65,9 @@ botocore==1.43.114 \
     # via
     #   boto3
     #   s3transfer
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+certifi==2026.10.19 \
+    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
     # via
     #   google-cloud-aiplatform
     #   httpcore
@@ -443,7 +443,7 @@ dbt-bigquery==1.12.1 \
     --hash=sha256:71787ff4495999a26058dffe4da46558acf57bdc409cdb46565d9afb0391c75e \
     --hash=sha256:8f7e0eff7f4a5f8a9fea4db4fca65eef885df2f8c75b41699e061ad9b0efd745
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/dbc46dc9-4bfd-4b6f-960e-f20b32601f33/scratchpad/edr.in
+    #   -r C:/TEMP/edr.in
     #   elementary-data
 dbt-common==1.39.0 \
     --hash=sha256:30d63490b9ef2aad6f469ec841fb758430fcb1d997b79ff3df36fcb7b79a241f \
@@ -456,7 +456,7 @@ dbt-core==1.12.5 \
     --hash=sha256:77661a8c9ee1d1ec7a8ed904d15a0937289d12ba6fd2d86d6f36d3eea735ce3d \
     --hash=sha256:f17f662aed7b6a8b0d267ecf07448ad1ec03edf147a52abbdf5ee48d25999bb6
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/dbc46dc9-4bfd-4b6f-960e-f20b32601f33/scratchpad/edr.in
+    #   -r C:/TEMP/edr.in
     #   dbt-bigquery
     #   elementary-data
 dbt-core-experimental-parser==2.0.8 \
@@ -502,7 +502,7 @@ docstring-parser==0.18.0 \
 elementary-data==0.26.1 \
     --hash=sha256:cff88a9001d18fefc065e920a56ae6b2d21661f0298ae3fd6b7911063c56fdf4 \
     --hash=sha256:dbcd640eb9db8a25dbb30aa0e97b72e551daa1f0104212ae6a270d03e74b32b8
-    # via -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/dbc46dc9-4bfd-4b6f-960e-f20b32601f33/scratchpad/edr.in
+    # via -r C:/TEMP/edr.in
 fastjsonschema==2.22.2 \
     --hash=sha256:0fb3915616adac85ccfdd737d26be1089845d2019819505b42d39888458f74d4 \
     --hash=sha256:72064e12356a7d6ef02165be2946b9abadbdf238536e07eb587e3dbaa33099cf
