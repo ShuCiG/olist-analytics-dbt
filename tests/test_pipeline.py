@@ -7,6 +7,7 @@ replaced by CSVs written here.
 
 import csv
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -242,3 +243,54 @@ def test_empty_reference_file_stops_the_load(run, dump: Path) -> None:
     write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id", "zip_code_prefix"], [])
     with pytest.raises(ValueError, match="no rows"):
         run()
+
+
+def raw_columns(db: Path, table: str) -> list[str]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        rows = con.execute(
+            "select column_name from information_schema.columns where table_schema = 'raw' and table_name = ?",
+            [table],
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def test_new_source_column_lands_in_raw_and_is_reported(run, dump: Path) -> None:
+    # First load creates the tables: not a schema change
+    assert run("--until", "2016-09")["new_columns"] == {}
+    # The source gains a column (empty for the next chunk's orders, as when a
+    # field is introduced) and a reference table gains one too
+    write_csv(
+        dump / "olist_orders_dataset.csv",
+        ["order_id", "order_purchase_timestamp", "order_status", "order_channel"],
+        [(order_id, ts, "delivered", "") for order_id, ts in ORDERS],
+    )
+    write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id", "zip_code_prefix", "seller_tier"], [("r1", "01001", "gold")])
+    status = run("--next")
+    assert status["new_columns"] == {"orders": ["order_channel"], "sellers": ["seller_tier"]}
+    assert "order_channel" in raw_columns(run.db, "orders")
+    # Reported once: the next load knows the column
+    assert run("--next")["new_columns"] == {}
+
+
+def test_full_refresh_is_not_a_schema_change(run) -> None:
+    run("--until", "2016-09")
+    assert run("--full-refresh")["new_columns"] == {}
+
+
+def test_skipped_load_reports_no_new_columns(run) -> None:
+    run()  # everything: `--next` skips the load from here on
+    assert run("--next")["new_columns"] == {}
+
+
+STAGING = Path(__file__).resolve().parents[1] / "transform" / "models" / "staging"
+
+
+def test_staging_selects_source_columns_by_name() -> None:
+    # A new raw column must stop at raw (D61): the `source` CTE is only read through
+    # an explicit column list, never `select *` / `source.*`
+    models = sorted(STAGING.rglob("stg_*.sql"))
+    assert models
+    for model in models:
+        sql = model.read_text(encoding="utf-8").lower()
+        assert re.search(r"\{\{\s*source\(", sql), f"{model.name}: expected a source() CTE"
+        assert not re.search(r"select\s+\*\s+from\s+source\b|\bsource\.\*", sql), f"{model.name} passes source columns through"

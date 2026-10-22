@@ -20,9 +20,10 @@ cursor in dlt state): the whole history arrives in ~a day, then runs find nothin
 new and skip the load (one status query, D49) and dbt. A manual run with the `until` param loads up to that month and
 always runs dbt (catch-up, recovery). See airflow/README.md.
 
-Alerts (olist_alerts.py): one email per run at most — failed run, fresh data, or
-stale data (no new orders for a day, repeated daily). Recipients in the Airflow
-Variable `olist_alert_emails`.
+Alerts (olist_alerts.py): one report per run at most — failed run, fresh data, or
+stale data (no new orders for a day, repeated daily) — plus a SCHEMA email when the
+load added source columns to raw (D61). Recipients in the Airflow Variable
+`olist_alert_emails`.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ from cosmos.constants import (
     TestBehavior,
     TestIndirectSelection,
 )
-from olist_alerts import on_dag_failure, report
+from olist_alerts import on_dag_failure, report, schema_report
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
@@ -356,7 +357,16 @@ def build_dag(wh: Warehouse) -> DAG:
             trigger_rule=TriggerRule.NONE_FAILED,
         )
 
+        # Right after the load, beside the dbt branch: a dbt failure or a skipped
+        # dbt run doesn't hold it back
+        schema_email = PythonOperator(
+            task_id="schema_report",
+            python_callable=schema_report,
+            op_kwargs={"warehouse": wh.name},
+        )
+
         ingest >> new_orders >> elementary_tables >> dbt >> email_report
+        ingest >> schema_email
     return dag
 
 

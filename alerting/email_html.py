@@ -1,4 +1,4 @@
-"""HTML layout for the alert emails (Airflow and CI): one look for OK / STALE / FAILED.
+"""HTML layout for the alert emails (Airflow and CI): one look for OK / STALE / FAILED / SCHEMA.
 
 Email clients ignore <style> blocks and modern CSS (Gmail strips most of it), so the
 layout is tables + inline styles only, 640 px wide, system fonts.
@@ -13,6 +13,7 @@ STATUS = {
     "OK": ("#1a7f37", "#e9f6ec", "Fresh data"),
     "STALE": ("#9a6700", "#fff6dc", "Stale data"),
     "FAILED": ("#cf222e", "#ffebe9", "Failed"),
+    "SCHEMA": ("#0969da", "#ddf4ff", "Schema change"),
 }
 FONT = "-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
 MONO = "SFMono-Regular,Consolas,Menlo,monospace"
