@@ -7,6 +7,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `datasets.tf` | 16 BigQuery datasets: prod (`raw`, `raw_staging`, `staging`, `intermediate`, `marts`, `seeds`, `snapshots`, `elementary`) and the same set for the Airflow DAG (`airflow_*`) |
 | `service_accounts.tf` | `dbt-runner`, `dashboard-reader`, `olist-ci` (no keys, see below) |
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
+| `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
 | `cost.tf` | monthly billing budget with email alerts, BigQuery "query usage per day" quota |
 | `apis.tf` | enabled APIs |
@@ -20,7 +21,7 @@ Out of scope on purpose:
 
 ## Run
 
-Uses your own Google account through Application Default Credentials. The CI and dbt service accounts hold no IAM or billing rights, and CI only runs `fmt` and `validate`.
+Uses your own Google account through Application Default Credentials. The CI and dbt service accounts hold no IAM or billing rights; PR CI runs `fmt`, `validate` and `terraform test`. A daily workflow plans against live GCP as the read-only `terraform-plan` account and emails on drift (D60, `docs/RUNNING.md`); it never applies.
 
 ```bash
 gcloud auth login --update-adc
@@ -34,12 +35,13 @@ terraform apply
 
 ## Tests
 
-`terraform test` (`tests/policy.tftest.hcl`) plans the configuration on mock providers. It needs no credentials and makes no GCP calls; CI runs it on every PR. It checks the code, not the live project; for that, run `terraform plan` against GCP. It asserts:
+`terraform test` (`tests/policy.tftest.hcl`) plans the configuration on mock providers. It needs no credentials and makes no GCP calls; CI runs it on every PR. It checks the code, not the live project; the daily drift check (`drift.yml`) or a local `terraform plan` does that. It asserts:
 - the datasets are exactly the prod layers plus their `airflow_` twins, all in EU, with no default table or partition expiry;
 - dataset grants are read-only (`dataViewer`), no service account holds a basic role (`owner`, `editor`, `viewer`), and `olist-ci` has only `bigquery.user` and reads no `elementary` or `airflow_*` dataset (D45);
 - `dashboard-reader` can read the dataset that the dashboard's data usage agreement points to (consumer → contract server → dataset);
 - the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private;
-- GitHub can impersonate only `dbt-runner` (from the `prod` environment) and `olist-ci` (from pull requests), by exact subjects of this repository; the provider accepts tokens of this repository only and prod tokens from `main` only; no project-level impersonation roles.
+- GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests) and `terraform-plan` (from the `drift-check` environment), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
+- `terraform-plan` holds viewer-type roles only and reads only the state bucket and the billing account.
 
 `tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
 

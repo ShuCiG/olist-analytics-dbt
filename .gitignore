@@ -52,8 +52,9 @@ docs/PROGRESS.md
 # Claude Code per-user settings
 .claude/settings.local.json
 
-# Terraform (infra/): provider cache, local state, operator variables
+# Terraform (infra/): provider cache, local state, saved plans, operator variables
 infra/.terraform/
 *.tfstate
 *.tfstate.*
+*.tfplan
 infra/terraform.tfvars

@@ -203,3 +203,27 @@ def test_databricks_cleans_up_and_alerts() -> None:
     assert steps["Drop guard refuses non-CI schemas"]["env"]["DBT_CI_SCHEMA"] == "marts_guard_check"
     assert jobs["dbt-build-databricks"]["env"]["DBT_CI_SCHEMA"].startswith("ci_")
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
+
+
+DRIFT = ROOT / ".github" / "workflows" / "drift.yml"
+
+
+def test_drift_check_is_read_only_and_alerts() -> None:
+    # terraform-plan is trusted only for environment drift-check from main (infra/wif.tf, D60)
+    workflow = yaml.safe_load(DRIFT.read_text(encoding="utf-8"))
+    assert set(workflow[True]) == {"schedule", "workflow_dispatch"}
+    jobs = workflow["jobs"]
+    job = jobs["terraform-plan"]
+    assert job["environment"] == "drift-check"
+    assert MAIN_ONLY in job["if"]
+    (auth,) = _gcp_auth(job)
+    assert auth["with"]["service_account"].startswith("terraform-plan@")
+    assert auth["with"]["workload_identity_provider"] == "${{ env.GCP_WIF_PROVIDER }}"
+    assert workflow["env"]["GCP_WIF_PROVIDER"] == yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["env"]["GCP_WIF_PROVIDER"]
+    for name, j in jobs.items():
+        assert PROD_SA not in yaml.safe_dump(j), f"{name}: the drift check must not use the prod writer"
+    plan = next(s["run"] for s in job["steps"] if s.get("name") == "terraform plan")
+    # Read-only run: no state lock, drift (exit code 2) fails the job, nothing applied
+    assert "-lock=false" in plan and "-detailed-exitcode" in plan and 'exit "$code"' in plan
+    assert "apply" not in yaml.safe_dump(job)
+    assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}

@@ -224,3 +224,19 @@ uv run python .claude/skills/audit/audit_tools.py check                 # .audit
 uv run python .claude/skills/audit/audit_tools.py prepare .audit/<dir>  # context pack for the agents
 uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask secrets in the reports
 ```
+
+## Terraform drift alert
+
+`.github/workflows/drift.yml` plans `infra/` against live GCP daily (D60). A failure email titled
+*Terraform drift* means one of:
+
+- **Drift** — someone changed a managed resource in the console (an IAM grant, a dataset setting, the budget,
+  the quota). The email lists the resources; the run's job summary has the full plan. Either undo the change in
+  the console, or, if it should stay, put it into `infra/` through a PR and `terraform apply`.
+- **Unapplied code** — an `infra/` change was merged but not applied. Run `terraform plan` / `apply` locally
+  (`infra/README.md`).
+- **Error** (no resource list) — usually permissions or auth: the plan account `terraform-plan` lacks a viewer role
+  for a newly managed resource type (add it in `infra/drift.tf`), or the environment secret `BILLING_ACCOUNT` is
+  missing.
+
+Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.

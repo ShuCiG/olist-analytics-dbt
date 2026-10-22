@@ -130,8 +130,8 @@ jobs:
           uv run python data-product/check_compatibility.py origin/main
 
   # GCP infrastructure as code (infra/, D46): format, config and policy tests
-  # (terraform test on mock providers, D47). No credentials here: plan and apply
-  # run locally with the owner's account, the CI identities hold no IAM or billing rights
+  # (terraform test on mock providers, D47). No credentials here: apply runs locally
+  # with the owner's account, plan against live GCP daily in drift.yml (D60)
   terraform:
     name: terraform
     runs-on: ubuntu-24.04
