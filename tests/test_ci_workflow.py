@@ -222,6 +222,12 @@ def test_drift_check_is_read_only_and_alerts() -> None:
     assert workflow["env"]["GCP_WIF_PROVIDER"] == yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["env"]["GCP_WIF_PROVIDER"]
     for name, j in jobs.items():
         assert PROD_SA not in yaml.safe_dump(j), f"{name}: the drift check must not use the prod writer"
+    # The IAM comparison (D62) runs as the same read-only account, in the same environment
+    iam = jobs["iam-bindings"]
+    assert iam["environment"] == "drift-check" and MAIN_ONLY in iam["if"]
+    (auth,) = _gcp_auth(iam)
+    assert auth["with"]["service_account"].startswith("terraform-plan@")
+    assert "apply" not in yaml.safe_dump(iam)
     plan = next(s["run"] for s in job["steps"] if s.get("name") == "terraform plan")
     # Read-only run: no state lock, drift (exit code 2) fails the job, nothing applied
     assert "-lock=false" in plan and "-detailed-exitcode" in plan and 'exit "$code"' in plan

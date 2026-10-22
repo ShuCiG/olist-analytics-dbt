@@ -42,7 +42,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 169 Python tests; known
+- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 183 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -240,7 +240,7 @@ flowchart LR
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **169 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **183 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, IAM drift logic, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -375,7 +375,8 @@ with state in a GCS bucket. It was imported from the hand-made setup without rec
 run with the owner's account, CI checks format, config and policy rules (`terraform test` on mock providers: no table
 expiry, read-only grants, least privilege for CI, the dashboard can read what its data usage agreement names). A daily
 workflow runs `terraform plan` against live GCP as a read-only account (keyless, `main` only) and emails when the
-project drifts from the code ([D60](docs/DECISIONS.md)).
+project drifts from the code ([D60](docs/DECISIONS.md)); it also compares every live IAM binding with the state and
+an allowlist, so a role granted in the console next to Terraform's fails it too ([D62](docs/DECISIONS.md)).
 
 ## Dashboard
 
@@ -425,6 +426,6 @@ License: [MIT](LICENSE).
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open: dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open: alerts on old service account keys (#102) and on columns removed from a source (#101), Databricks as a data product server (#103), microbatch backfills (#104), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).
