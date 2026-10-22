@@ -1,0 +1,57 @@
+# IAM bindings that exist outside Terraform on purpose (D62). The daily drift check
+# (.github/workflows/drift.yml, job iam-bindings) fails on any other binding on what
+# infra/ manages: the project, its service accounts, the managed datasets, the state
+# bucket and the billing account. Bindings Terraform manages come from its state.
+#
+# Fields are fnmatch patterns over the normalized binding (.github/scripts/iam_drift.py):
+#   scope   project | serviceAccount/<email> | dataset/<id> | bucket/<name> | billingAccount
+#   role    an IAM role; dataset access entries map READER / WRITER / OWNER to
+#           roles/bigquery.dataViewer / dataEditor / dataOwner
+#   member  user:, serviceAccount:, group:, specialGroup:, projectOwner: ... as GCP prints it
+# Placeholders: ${OWNER} = the project owner's account (environment secret IAM_OWNER,
+# kept out of the repo), ${PROJECT} / ${PROJECT_NUMBER} from the Terraform state.
+
+- scope: project
+  role: roles/owner
+  member: user:${OWNER}
+  why: the project owner; runs terraform apply
+
+- scope: billingAccount
+  role: roles/billing.admin
+  member: user:${OWNER}
+  why: owns the billing account that holds the budget
+
+- scope: bucket/*
+  role: roles/storage.legacy*
+  member: project*:${PROJECT}
+  why: convenience bindings GCS adds to every bucket (project owners, editors, viewers)
+
+# BigQuery's default access entries on every dataset
+- scope: dataset/*
+  role: roles/bigquery.dataOwner
+  member: specialGroup:projectOwners
+  why: BigQuery default entry
+- scope: dataset/*
+  role: roles/bigquery.dataEditor
+  member: specialGroup:projectWriters
+  why: BigQuery default entry
+- scope: dataset/*
+  role: roles/bigquery.dataViewer
+  member: specialGroup:projectReaders
+  why: BigQuery default entry
+
+# The creator of a dataset owns it: dlt and dbt made them as dbt-runner before
+# Terraform adopted them (D46); a dataset Terraform creates is owned by the owner
+- scope: dataset/*
+  role: roles/bigquery.dataOwner
+  member: serviceAccount:dbt-runner@${PROJECT}.iam.gserviceaccount.com
+  why: dataset creator (dlt / dbt)
+- scope: dataset/*
+  role: roles/bigquery.dataOwner
+  member: user:${OWNER}
+  why: dataset creator (terraform apply)
+
+- scope: "*"
+  role: roles/*serviceAgent
+  member: serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-*.iam.gserviceaccount.com
+  why: Google-managed service agents, added when an API is enabled

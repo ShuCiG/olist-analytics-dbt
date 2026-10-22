@@ -3,8 +3,10 @@ name: Terraform drift
 # `terraform plan` of infra/ against the live GCP project, daily and on demand
 # (D60). A console change to anything Terraform manages (IAM, datasets, budget,
 # quota, WIF), or infra code merged but not applied, fails the run and sends the
-# failure email. Read-only: the plan account (terraform-plan, infra/drift.tf)
-# holds viewer roles only, and the plan takes no state lock.
+# failure email. The plan can't see grants added next to Terraform's (additive
+# `*_iam_member`): job iam-bindings compares the live IAM with the state and an
+# allowlist (D62). Read-only: both run as terraform-plan (infra/drift.tf, viewer
+# roles only), and nothing takes the state lock.
 on:
   schedule:
     - cron: "0 5 * * *"  # daily 05:00 UTC
@@ -82,9 +84,56 @@ jobs:
           fi
           exit "$code"
 
+  # Every live binding on what infra/ manages must be in the state or in
+  # infra/iam_allowlist.yaml; also no unmanaged service account, no dataset labels
+  iam-bindings:
+    name: IAM outside Terraform
+    if: github.ref == 'refs/heads/main'
+    environment: drift-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write  # OIDC token for Workload Identity Federation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: terraform-plan@olist-analytics-dbt-472315.iam.gserviceaccount.com
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      # What Terraform manages: read from the state (no refresh, no lock)
+      - name: Read the Terraform state
+        working-directory: infra
+        run: |
+          terraform init -input=false -lockfile=readonly
+          terraform show -json > "$RUNNER_TEMP/state.json"
+
+      - name: Compare live IAM with the state and the allowlist
+        env:
+          # The owner's account for the allowlist's ${OWNER}; kept out of the repo
+          IAM_OWNER: ${{ secrets.IAM_OWNER }}
+        run: uv run python .github/scripts/iam_drift.py "$RUNNER_TEMP/state.json"
+
   notify-failure:
     name: Email on failure
-    needs: [terraform-plan]
+    needs: [terraform-plan, iam-bindings]
     if: failure()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

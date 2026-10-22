@@ -239,9 +239,17 @@ uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask s
   for a newly managed resource type (add it in `infra/drift.tf`), or the environment secret `BILLING_ACCOUNT` is
   missing.
 
-Not caught: changes outside what Terraform owns. A label or an extra IAM grant added in the console keeps the run
-green (labels are non-authoritative in the provider, grants are additive `*_iam_member`); review those in the
-console's IAM page.
+Grants added next to Terraform's don't show in a plan (additive `*_iam_member`), so the second job,
+**IAM outside Terraform** (D62), compares the live IAM with the state and `infra/iam_allowlist.yaml`. Its lines:
+
+- `binding  <scope>  <role>  <member>` — a grant nobody declared. If it was a mistake or unknown, remove it in the
+  console (IAM page, dataset sharing, bucket permissions). If it should stay: as a Terraform grant in `infra/iam.tf`
+  (preferred), or, when Terraform can't own it, as an allowlist entry with a `why`.
+- `service account not in Terraform` — an account made in the console: delete it, or add it to
+  `infra/service_accounts.tf`.
+- `labels on dataset/<id>` — remove the label, or manage labels in `infra/datasets.tf`.
+
+User emails show masked (`user:s***@example.com`, the log is public); the console shows the full one.
 
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
 
