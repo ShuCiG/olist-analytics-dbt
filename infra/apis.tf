@@ -5,6 +5,7 @@ locals {
     "bigquery.googleapis.com",             # warehouse (dlt, dbt, dashboard)
     "bigquerystorage.googleapis.com",      # Storage Read API (datacontract-cli)
     "billingbudgets.googleapis.com",       # budget below
+    "cloudbilling.googleapis.com",         # billing account IAM (drift.tf)
     "cloudresourcemanager.googleapis.com", # project IAM, Terraform itself
     "iam.googleapis.com",                  # service accounts below
     "iamcredentials.googleapis.com",       # service account impersonation (wif.tf)
@@ -14,7 +15,7 @@ locals {
   ])
 
   # Enabled by Terraform, not adopted (imports.tf)
-  services_added = toset(["sts.googleapis.com"])
+  services_added = toset(["sts.googleapis.com", "cloudbilling.googleapis.com"])
 }
 
 resource "google_project_service" "this" {

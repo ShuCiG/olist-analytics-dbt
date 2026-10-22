@@ -50,4 +50,6 @@ resource "google_billing_account_iam_member" "terraform_plan" {
   billing_account_id = var.billing_account
   role               = "roles/billing.viewer"
   member             = google_service_account.terraform_plan.member
+
+  depends_on = [google_project_service.this]
 }
