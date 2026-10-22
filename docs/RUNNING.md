@@ -244,3 +244,17 @@ green (labels are non-authoritative in the provider, grants are additive `*_iam_
 console's IAM page.
 
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
+
+## SCHEMA email (new source columns)
+
+Sent when a load found columns the source didn't have before (D61): from Airflow's `schema_report` task, or from
+CD's `notify-schema` job after a prod deploy. The column is already in raw (as text); staging, marts and the
+dashboard are unchanged, so nothing is broken. To do:
+
+1. Ask the source owner what the column means and whether it stays.
+2. Add it to the input contract, `data-product/contracts/olist-raw.odcs.yaml`.
+3. If the business needs it: add it to the staging model (cast, rename) and its `.yml` in a PR, then further up as
+   needed.
+
+Each column is reported once: the next load knows it. The sellers snapshot keeps new `sellers` columns too (it
+reads the source).

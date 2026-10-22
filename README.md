@@ -38,11 +38,11 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   (`state:modified+ --defer` to prod) in throwaway datasets. Every merge: prod deploy, docs, Airflow image to GHCR.
   No cloud keys in GitHub (Workload Identity Federation); any failure is emailed. → [CI/CD](#cicd)
 - **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
-  dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED emails explain data-quality findings in business words.
+  dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 158 Python tests; known
+- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 169 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -240,7 +240,7 @@ flowchart LR
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **158 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **169 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -335,10 +335,13 @@ flowchart LR
     gate -. no: skip dbt .-> report
     producer -. node results .-> sensors[one sensor task<br/>per dbt node]
     sensors --> report[report<br/>email: OK / STALE]
+    ingest --> schema[schema_report<br/>email: SCHEMA]
 ```
 
-**Alerts:** at most one email per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
-orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). Warn-test
+**Alerts:** at most one report per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
+orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). A new column in
+a source file lands in raw only (staging selects by name) and sends `SCHEMA: 1 new source column in orders`, from
+Airflow and from the prod deploy ([D61](docs/DECISIONS.md)). Warn-test
 findings read in business words ("278 customers — zip code missing from the geolocation reference, so maps leave
 them out ..."). Failed GitHub Actions jobs are emailed too, with the failed step and a log excerpt.
 

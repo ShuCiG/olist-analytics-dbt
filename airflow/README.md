@@ -87,8 +87,9 @@ tables + dlt state and loads the first month (add `until` to load more).
 
 ## Email alerts
 
-At most one email per run. [dags/olist_alerts.py](dags/olist_alerts.py) is the
-Airflow side (callback, `report` task, Variables, SMTP); what an email says is decided
+At most one report email per run, plus a SCHEMA email when the load added source
+columns. [dags/olist_alerts.py](dags/olist_alerts.py) is the
+Airflow side (callback, `report` and `schema_report` tasks, Variables, SMTP); what an email says is decided
 in [alerting/airflow_emails.py](../alerting/airflow_emails.py), which has no Airflow
 imports and is unit-tested (`uv run pytest`, [tests/](../tests/)):
 
@@ -98,6 +99,7 @@ imports and is unit-tested (`uv run pytest`, [tests/](../tests/)):
 | new orders loaded (or a manual `until` / `full_refresh` rebuild) | `OK: +800 orders, data up to 2017-01, 3 dbt warnings` + summary table, dbt totals (`PASS=120 WARN=3 ...`) and each warn-level test with its row count | `report` task |
 | no new orders for `olist_stale_after_hours` (default 24, = source `warn_after`) | `STALE: no new orders for 25 h (data up to 2018-10)` | `report` task, then about once a day while stale |
 | nothing new, not stale yet | no email | |
+| the load added columns to a raw table (D61) | `SCHEMA: 1 new source column in orders` with each `raw.<table>.<column>` and the next steps | `schema_report` task, right after `dlt_ingest` (also when dbt fails or is skipped) |
 
 The summary comes from the feed status that `pipeline.py` prints as the ingest's
 last line (orders loaded, orders in raw, latest order, when orders last arrived).

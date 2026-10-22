@@ -1,4 +1,5 @@
-"""Email reports for the olist ELT DAGs (D28): run failed, fresh data, stale data.
+"""Email reports for the olist ELT DAGs (D28): run failed, fresh data, stale data,
+new source columns (D61).
 
 - Recipients: Airflow Variable `olist_alert_emails` (comma-separated, edit in the UI
   under Admin → Variables; no redeploy).
@@ -7,9 +8,10 @@
 - Transport: connection `smtp_default`. docker-compose points it at Mailpit (UI on
   :8025); a real SMTP server goes in airflow/.env (`SMTP_CONN`, see .env.example).
 
-One email per run at most: failures come from the DAG's `on_failure_callback` (not
+One report per run at most: failures come from the DAG's `on_failure_callback` (not
 per task: a dbt failure fails the producer and the failed node's sensors), with the
-failed task, its error and log tail; the rest from the `report` task.
+failed task, its error and log tail; the rest from the `report` task. A load that
+added source columns also gets a SCHEMA email from the `schema_report` task.
 
 This module is the Airflow side (context, XCom, Variables, SMTP); what the emails
 say is decided in alerting/airflow_emails.py (unit-tested, no Airflow imports).
@@ -91,3 +93,16 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
         _send(email)
     print(f"email: {email.kind} {email.subject}" if email else "email: none")
     return {"email": email.kind if email else "none", "hours_since_new_orders": round(age_h, 1)}
+
+
+def schema_report(ti, dag_run, warehouse: str) -> str:
+    """Email the source columns the load added to raw, if any (airflow_emails.schema_email)."""
+    email = airflow_emails.schema_email(
+        warehouse=warehouse,
+        run_id=dag_run.run_id,
+        status=json.loads(ti.xcom_pull(task_ids="dlt_ingest")),
+    )
+    if email:
+        _send(email)
+    print(f"email: {email.subject}" if email else "email: none (no new source columns)")
+    return email.kind if email else "none"

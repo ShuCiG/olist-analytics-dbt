@@ -18,7 +18,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
-from . import dbt_summary, email_html
+from . import dbt_summary, email_html, schema_changes
 
 UI_URL = "http://localhost:8080"
 LOG_TAIL_LINES = 15
@@ -31,7 +31,7 @@ ANSI = re.compile(r"\x1b\[[0-9;]*m")  # dbt colors its output
 
 @dataclass
 class Email:
-    kind: str  # OK | STALE | FAILED
+    kind: str  # OK | STALE | FAILED | SCHEMA
     subject: str
     html: str
     detail: str = ""  # one line for the task log
@@ -232,3 +232,24 @@ def report_email(
         footer=f"{dag_id} · local Airflow · settings: Admin → Variables",
     )
     return Email(kind, subject, html), age_h
+
+
+def schema_email(warehouse: str, run_id: str, status: dict) -> Email | None:
+    """SCHEMA email when the run's load added source columns to raw (D61), else None.
+
+    Its own email, not a line in OK: it calls for a person (source owner, contract,
+    staging PR), and it is sent right after the load, so a later dbt failure doesn't
+    swallow it. A feed status without the field (older pipeline) means no change.
+    """
+    dag_id = f"olist_elt_{warehouse}"
+    built = schema_changes.email(
+        status.get("new_columns") or {},
+        prefix=f"[{dag_id}]",
+        where=f"{warehouse} raw (Airflow)",
+        links=[("Open the run", run_url(dag_id, run_id))],
+        footer=f"{dag_id} · local Airflow · settings: Admin → Variables",
+    )
+    if built is None:
+        return None
+    subject, html = built
+    return Email("SCHEMA", subject, html)

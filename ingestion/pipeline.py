@@ -33,10 +33,15 @@ Examples:
     python ingestion/pipeline.py                   # loads the rest
     python ingestion/pipeline.py --full-refresh    # drop tables + state, reload
 
+A new column in a source file is stored in raw (dlt's default schema contract,
+`evolve`); staging lists its columns, so nothing above raw changes until a PR adds
+it. The run reports such columns as `new_columns` for the SCHEMA email (D61).
+
 Airflow (airflow/dags/olist_elt.py) passes `--duckdb-path` / `--dataset` to keep its
 runs apart from local dev and prod. The last output line is the feed status as JSON
-(`orders_loaded`, `orders_total`, `last_order_at`, `last_loaded_at`): Airflow reads it
-to skip dbt when nothing is new and for the email report.
+(`orders_loaded`, `orders_total`, `last_order_at`, `last_loaded_at`, `new_columns`):
+Airflow reads it to skip dbt when nothing is new and for the email reports, CD for
+the SCHEMA email.
 """
 
 import argparse
@@ -55,6 +60,8 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 from dlt.common.configuration.specs import GcpServiceAccountCredentials
+from dlt.common.pipeline import LoadInfo
+from dlt.common.schema import Schema
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
@@ -230,8 +237,30 @@ def nothing_to_load(pipeline: dlt.Pipeline, source_dir: Path, until: str | None)
     return read_orders(source_dir).filter(left).num_rows == 0
 
 
-def feed_status(pipeline: dlt.Pipeline, orders_loaded: int) -> dict[str, object]:
-    """This run's order count + the raw orders table as it is now (after the load).
+def new_columns(load_info: LoadInfo, schema: Schema) -> dict[str, list[str]]:
+    """Columns this load added to raw tables that existed before it: table -> names.
+
+    From each load package's schema update (what the load changed in dlt's schema,
+    restored from the destination on a fresh runner). A table the load created
+    (first load, `--full-refresh`) comes with all its columns and is not a change.
+    dlt's own tables and columns are skipped.
+    """
+    added: dict[str, list[str]] = {}
+    for package in load_info.load_packages:
+        for table, update in package.schema_update.items():
+            if table.startswith("_dlt"):
+                continue
+            columns = [c for c in update.get("columns", {}) if not c.startswith("_dlt")]
+            existing = [c for c in schema.tables[table].get("columns", {}) if not c.startswith("_dlt")]
+            if columns and len(columns) < len(existing):
+                added.setdefault(table, []).extend(columns)
+    return added
+
+
+def feed_status(
+    pipeline: dlt.Pipeline, orders_loaded: int, added_columns: dict[str, list[str]]
+) -> dict[str, object]:
+    """This run's order count and new columns + the raw orders table as it is now.
 
     `last_loaded_at` only moves when a run brings orders (merge of 0 rows writes
     nothing): the same signal as `dbt source freshness`.
@@ -252,6 +281,7 @@ def feed_status(pipeline: dlt.Pipeline, orders_loaded: int) -> dict[str, object]
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
+        "new_columns": added_columns,
     }
 
 
@@ -312,7 +342,7 @@ def main() -> None:
     )
     if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until):
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")
-        orders_loaded = 0
+        orders_loaded, added_columns = 0, {}
     else:
         source = olist_source(source_dir, until=args.until, next_only=args.next)
         if args.full_refresh:
@@ -323,8 +353,11 @@ def main() -> None:
         normalize_info = pipeline.last_trace.last_normalize_info if pipeline.last_trace else None
         assert normalize_info is not None, "pipeline.run() finished without a normalize step"
         orders_loaded = normalize_info.row_counts.get("orders", 0)
+        added_columns = new_columns(load_info, pipeline.default_schema)
+        for table, columns in added_columns.items():
+            print(f"New source columns in {table}: {', '.join(columns)} (stored in raw only)")
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(pipeline, orders_loaded)))
+    print(json.dumps(feed_status(pipeline, orders_loaded, added_columns)))
 
 
 if __name__ == "__main__":

@@ -202,3 +202,29 @@ def test_failure_without_task(tmp_path: Path, manifest: Path) -> None:
     email = failure(tmp_path, manifest, None)
     assert email.subject == f"[{DAG}] FAILED: ? in run {RUN}"
     assert "no failed task in the callback context" in email.detail
+
+
+# --- schema_report task (D61) ---------------------------------------------------------
+
+
+def test_new_source_columns_send_schema_email() -> None:
+    feed = {**status(loaded=10, hours_ago=0.05), "new_columns": {"orders": ["order_channel"], "sellers": ["a", "b"]}}
+    email = airflow_emails.schema_email("duckdb", RUN, feed)
+    assert email is not None and email.kind == "SCHEMA"
+    assert email.subject == f"[{DAG}] SCHEMA: 3 new source columns in orders, sellers"
+    assert "raw.orders.order_channel" in email.html and "raw.sellers.b" in email.html
+    assert "olist-raw.odcs.yaml" in email.html  # the next step names the input contract
+
+
+@pytest.mark.parametrize("feed", [status(loaded=10, hours_ago=0.05), {**status(loaded=0, hours_ago=3), "new_columns": {}}])
+def test_no_new_columns_no_schema_email(feed: dict) -> None:
+    # No field (an older pipeline's status) or an empty one: nothing to say
+    assert airflow_emails.schema_email("duckdb", RUN, feed) is None
+
+
+def test_schema_email_escapes_column_names() -> None:
+    # Column names come from the source files' headers
+    feed = {**status(loaded=1, hours_ago=0.05), "new_columns": {"orders": ["<script>x</script>"]}}
+    email = airflow_emails.schema_email("duckdb", RUN, feed)
+    assert email is not None
+    assert "<script>" not in email.html and "&lt;script&gt;" in email.html

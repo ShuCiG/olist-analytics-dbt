@@ -420,6 +420,9 @@ jobs:
       id-token: write  # OIDC token for Workload Identity Federation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Source columns the load added to raw, for notify-schema (D61)
+    outputs:
+      new_columns: ${{ steps.ingest.outputs.new_columns }}
     defaults:
       run:
         shell: bash
@@ -445,8 +448,12 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
           service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
+      # Last output line = feed status JSON; its new_columns goes to notify-schema
       - name: Ingest raw data (dlt → BigQuery)
-        run: uv run python ingestion/pipeline.py --destination bigquery
+        id: ingest
+        run: |
+          uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
+          echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
 
       - name: dbt deps
         working-directory: transform
@@ -620,6 +627,30 @@ jobs:
           done
           echo "Published \`$image:$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
 
+  # A prod load added source columns to raw (D61): a SCHEMA email, the deploy stays
+  # green (staging selects its columns by name, marts are unchanged). Own job, so
+  # the SMTP secret stays out of the prod writer's job. Runs after a later deploy
+  # step failed too: the columns are in raw either way.
+  notify-schema:
+    name: Email on new source columns
+    needs: deploy-prod
+    if: always() && needs.deploy-prod.outputs.new_columns != '' && needs.deploy-prod.outputs.new_columns != '{}'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Send email
+        env:
+          # Via env: column names come from the source files
+          NEW_COLUMNS: ${{ needs.deploy-prod.outputs.new_columns }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+        run: python3 .github/scripts/notify_schema.py
+
   # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
   # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
   # GitHub's own notification only reaches the person who triggered the run.
@@ -628,7 +659,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
