@@ -19,6 +19,14 @@ override_resource {
   }
 }
 override_resource {
+  target = google_service_account.terraform_plan
+  values = {
+    name   = "projects/olist-analytics-dbt-472315/serviceAccounts/terraform-plan@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    email  = "terraform-plan@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    member = "serviceAccount:terraform-plan@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+  }
+}
+override_resource {
   target = google_project_iam_member.this
 }
 override_resource {
@@ -140,10 +148,11 @@ run "github_federation" {
   command = plan
 
   # One binding per account: prod writer from the prod environment, olist-ci
-  # from pull requests. Nothing else may impersonate either.
+  # from pull requests, the drift check's reader from its environment. Nothing
+  # else may impersonate any of them.
   assert {
-    condition     = toset(keys(google_service_account_iam_member.github)) == toset(["dbt-runner", "olist-ci"])
-    error_message = "Only dbt-runner and olist-ci are reachable from GitHub Actions."
+    condition     = toset(keys(google_service_account_iam_member.github)) == toset(["dbt-runner", "olist-ci", "terraform-plan"])
+    error_message = "Only dbt-runner, olist-ci and terraform-plan are reachable from GitHub Actions."
   }
 
   assert {
@@ -156,8 +165,18 @@ run "github_federation" {
     condition = (
       local.github_identities["dbt-runner"] == "${local.github_subject_prefix}:environment:prod"
       && local.github_identities["olist-ci"] == "${local.github_subject_prefix}:pull_request"
+      && local.github_identities["terraform-plan"] == "${local.github_subject_prefix}:environment:drift-check"
     )
-    error_message = "dbt-runner binds to the prod environment only, olist-ci to pull requests only."
+    error_message = "dbt-runner binds to the prod environment only, olist-ci to pull requests only, terraform-plan to drift-check only."
+  }
+
+  # Environment subjects are accepted from main only
+  assert {
+    condition = alltrue([
+      for s in values(local.github_identities) :
+      contains(local.github_main_only_subjects, s) if strcontains(s, ":environment:")
+    ])
+    error_message = "Every environment subject must be in the main-only list of the provider condition."
   }
 
   # Exact subjects of this repository: no wildcard, no other repository
@@ -185,5 +204,27 @@ run "github_federation" {
       !contains(["roles/iam.workloadIdentityUser", "roles/iam.serviceAccountTokenCreator", "roles/iam.serviceAccountUser"], m.role)
     ])
     error_message = "No project-level impersonation roles."
+  }
+}
+
+run "drift_check" {
+  command = plan
+
+  # The drift check's account reads and never writes: viewer-type roles only
+  # (D60). serviceUsageConsumer lets it bill its API calls to the project.
+  assert {
+    condition = alltrue([
+      for m in google_project_iam_member.terraform_plan :
+      can(regex("(Viewer|Reviewer|serviceUsageConsumer)$", m.role))
+    ])
+    error_message = "terraform-plan may hold viewer roles only on the project."
+  }
+
+  assert {
+    condition = (
+      toset([for m in google_storage_bucket_iam_member.terraform_plan : m.role]) == toset(["roles/storage.legacyBucketReader", "roles/storage.objectViewer"])
+      && google_billing_account_iam_member.terraform_plan.role == "roles/billing.viewer"
+    )
+    error_message = "terraform-plan reads the state bucket and the billing account, nothing more."
   }
 }

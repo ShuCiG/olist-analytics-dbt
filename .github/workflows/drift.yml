@@ -1,0 +1,104 @@
+name: Terraform drift
+
+# `terraform plan` of infra/ against the live GCP project, daily and on demand
+# (D60). A console change to anything Terraform manages (IAM, datasets, budget,
+# quota, WIF), or infra code merged but not applied, fails the run and sends the
+# failure email. Read-only: the plan account (terraform-plan, infra/drift.tf)
+# holds viewer roles only, and the plan takes no state lock.
+on:
+  schedule:
+    - cron: "0 5 * * *"  # daily 05:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # GitHub OIDC -> GCP (D57), the same provider as in ci-cd.yml
+  GCP_WIF_PROVIDER: projects/456327248425/locations/global/workloadIdentityPools/github/providers/olist-analytics-dbt
+
+jobs:
+  terraform-plan:
+    name: terraform plan (drift)
+    if: github.ref == 'refs/heads/main'
+    # GCP trusts terraform-plan only for this environment's OIDC subject from
+    # main (infra/wif.tf); its deployment rule admits only main as well
+    environment: drift-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write  # OIDC token for Workload Identity Federation
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      # Environment secret; the local equivalent is infra/terraform.tfvars
+      TF_VAR_billing_account: ${{ secrets.BILLING_ACCOUNT }}
+      TF_IN_AUTOMATION: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: terraform-plan@olist-analytics-dbt-472315.iam.gserviceaccount.com
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init -input=false -lockfile=readonly
+
+      # -detailed-exitcode: 0 no changes, 1 error, 2 changes (drift or unapplied
+      # code). The changed resources go to the log before the error line (the
+      # failure email quotes the log up to it) and the full plan to the job summary.
+      - name: terraform plan
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -no-color -detailed-exitcode -out=drift.tfplan > plan.txt 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            grep -E '^  # |^Plan:' plan.txt
+            echo "::error::Live GCP differs from infra/ (console change or unapplied code), full plan in the job summary"
+            {
+              echo '## Terraform drift'
+              echo '```'
+              terraform show -no-color drift.tfplan
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat plan.txt
+          fi
+          exit "$code"
+
+  notify-failure:
+    name: Email on failure
+    needs: [terraform-plan]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # job list + logs of this run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Send email
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          EVENT_TITLE: "Terraform drift: ${{ github.event_name }} on ${{ github.ref_name }}"
+        run: python3 .github/scripts/notify_failure.py
