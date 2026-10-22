@@ -1,7 +1,9 @@
 # Streamlit Community Cloud installs this (it looks next to the entrypoint
 # first), not the root uv project: the deployed app needs no dbt, dlt or DuckDB.
 # Versions as in uv.lock; local dev and CI use `uv sync` instead.
-streamlit==1.65.0
+streamlit==1.66.1
+# Pinned here too: streamlit allows pillow<14, an older one has known flaws (D59)
+pillow==13.0.0
 altair==6.3.0
 google-cloud-bigquery==3.46.1
 db-dtypes==1.7.2
