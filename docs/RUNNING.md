@@ -239,4 +239,8 @@ uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask s
   for a newly managed resource type (add it in `infra/drift.tf`), or the environment secret `BILLING_ACCOUNT` is
   missing.
 
+Not caught: changes outside what Terraform owns. A label or an extra IAM grant added in the console keeps the run
+green (labels are non-authoritative in the provider, grants are additive `*_iam_member`); review those in the
+console's IAM page.
+
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
