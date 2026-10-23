@@ -6,7 +6,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-raw
 name: Olist raw e-commerce data
-version: 1.0.1
+version: 1.0.2
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -55,6 +55,15 @@ servers:
     description: Hourly replay by the local Airflow, feeds the dashboard.
     project: olist-analytics-dbt-472315
     dataset: airflow_raw
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: >-
+      Loaded by the weekly Databricks run (.github/workflows/databricks.yml, orders up to
+      2017-03) into a per-run schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_RAW_SCHEMA}
 
 slaProperties:
   - property: frequency

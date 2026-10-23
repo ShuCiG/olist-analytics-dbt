@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.0.1
+version: 1.0.2
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -66,6 +66,15 @@ servers:
     project: olist-analytics-dbt-472315
     dataset: airflow_marts
     schema: airflow_marts  # for `{schema}` in SQL rules (BigQuery needs dataset-qualified names)
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: >-
+      Built by the weekly Databricks run (.github/workflows/databricks.yml) in a per-run
+      schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_CI_SCHEMA}_marts
 
 slaProperties:
   - property: frequency
