@@ -9,6 +9,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
+| `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
 | `cost.tf` | monthly billing budget with email alerts, BigQuery "query usage per day" quota |
 | `apis.tf` | enabled APIs |
@@ -22,7 +23,7 @@ Out of scope on purpose:
 
 ## Run
 
-Uses your own Google account through Application Default Credentials. The CI and dbt service accounts hold no IAM or billing rights; PR CI runs `fmt`, `validate` and `terraform test`. A daily workflow plans against live GCP as the read-only `terraform-plan` account and emails on drift (D60, `docs/RUNNING.md`); it never applies. Its second job compares the live IAM with the state and `iam_allowlist.yaml`, which a plan can't do for additive grants (D62).
+Uses your own Google account through Application Default Credentials. The CI and dbt service accounts hold no IAM or billing rights; PR CI runs `fmt`, `validate` and `terraform test`. A daily workflow plans against live GCP as the read-only `terraform-plan` account and emails on drift (D60, `docs/RUNNING.md`); it never applies. Its second job compares the live IAM with the state and `iam_allowlist.yaml`, which a plan can't do for additive grants (D62); the third flags old or unexpected service account keys (D63).
 
 ```bash
 gcloud auth login --update-adc

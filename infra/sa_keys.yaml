@@ -1,0 +1,14 @@
+# Service accounts that may hold user-managed JSON keys (D63). GitHub Actions needs
+# none (Workload Identity Federation, D57); these keys serve runs outside Actions.
+# The daily drift check (.github/workflows/drift.yml, job sa-keys) fails on a key
+# older than max_age_days and on any key of an account not listed here.
+# Keys stay out of Terraform (service_accounts.tf): they would sit in the state.
+# How to rotate each one: docs/RUNNING.md, "Service account keys".
+
+max_age_days: 90
+
+# account id -> where its key is used
+accounts:
+  dbt-runner: local Airflow, BigQuery DAG (GCP_KEY_FILE in airflow/.env)
+  dashboard-reader: Streamlit Community Cloud app secrets ([gcp_service_account])
+  olist-ci: local BigQuery runs and tests (GOOGLE_APPLICATION_CREDENTIALS)

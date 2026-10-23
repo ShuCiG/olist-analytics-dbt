@@ -228,6 +228,11 @@ def test_drift_check_is_read_only_and_alerts() -> None:
     (auth,) = _gcp_auth(iam)
     assert auth["with"]["service_account"].startswith("terraform-plan@")
     assert "apply" not in yaml.safe_dump(iam)
+    # So does the key age check (D63)
+    keys = jobs["sa-keys"]
+    assert keys["environment"] == "drift-check" and MAIN_ONLY in keys["if"]
+    (auth,) = _gcp_auth(keys)
+    assert auth["with"]["service_account"].startswith("terraform-plan@")
     plan = next(s["run"] for s in job["steps"] if s.get("name") == "terraform plan")
     # Read-only run: no state lock, drift (exit code 2) fails the job, nothing applied
     assert "-lock=false" in plan and "-detailed-exitcode" in plan and 'exit "$code"' in plan
