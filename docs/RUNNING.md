@@ -251,7 +251,37 @@ Grants added next to Terraform's don't show in a plan (additive `*_iam_member`),
 
 User emails show masked (`user:s***@example.com`, the log is public); the console shows the full one.
 
+The third job, **Service account keys** (D63), lists the user-managed keys of every service account:
+
+- `key older than 90 days  <account>  <key id>  <age>` — rotate it (below).
+- `key on an account that should have none  <account>  <key id>` — a key nobody declared: delete it, or, if the
+  account really needs one, add it to `infra/sa_keys.yaml` with where it is used.
+
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
+
+## Service account keys
+
+GitHub Actions needs no keys (D57). Three accounts keep a JSON key made in the console, listed in
+`infra/sa_keys.yaml`; the drift check fails once one is older than 90 days. Rotation, the same for each:
+create a new key, switch the place that uses it, check it works, delete the old key.
+
+```bash
+P=olist-analytics-dbt-472315
+SA=dbt-runner@$P.iam.gserviceaccount.com          # or dashboard-reader@..., olist-ci@...
+gcloud iam service-accounts keys list --iam-account $SA --managed-by=user        # the old key's id
+gcloud iam service-accounts keys create ~/.gcp/$P-new.json --iam-account $SA     # keep it outside the repo
+# switch (table below) and check, then:
+gcloud iam service-accounts keys delete <old key id> --iam-account $SA
+```
+
+| Account | Used by | Switch | Check |
+|---|---|---|---|
+| `dbt-runner` | local Airflow, BigQuery DAG | `GCP_KEY_FILE` in `airflow/.env`, then `docker compose -f airflow/docker-compose.yml up -d` | trigger `olist_elt_bigquery` in the UI |
+| `dashboard-reader` | Streamlit Community Cloud | app settings → Secrets: replace the `[gcp_service_account]` fields with the new file's, then **Reboot app** | the app's pages load |
+| `olist-ci` | local BigQuery runs and tests | `GOOGLE_APPLICATION_CREDENTIALS` | `cd transform && uv run dbt debug --target ci` |
+
+Delete the old key file too. A key you can't place: disable it first (`keys disable`), wait a day for something to
+break, then delete it.
 
 ## SCHEMA email (new source columns)
 

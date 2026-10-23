@@ -240,7 +240,7 @@ flowchart LR
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **183 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, IAM drift logic, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **200 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, IAM drift and key age logic, supply-chain pins, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -376,7 +376,8 @@ run with the owner's account, CI checks format, config and policy rules (`terraf
 expiry, read-only grants, least privilege for CI, the dashboard can read what its data usage agreement names). A daily
 workflow runs `terraform plan` against live GCP as a read-only account (keyless, `main` only) and emails when the
 project drifts from the code ([D60](docs/DECISIONS.md)); it also compares every live IAM binding with the state and
-an allowlist, so a role granted in the console next to Terraform's fails it too ([D62](docs/DECISIONS.md)).
+an allowlist, so a role granted in the console next to Terraform's fails it too ([D62](docs/DECISIONS.md)), and
+fails on a service account key older than 90 days or on an account that should have none ([D63](docs/DECISIONS.md)).
 
 ## Dashboard
 
