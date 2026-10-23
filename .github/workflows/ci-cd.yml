@@ -420,9 +420,10 @@ jobs:
       id-token: write  # OIDC token for Workload Identity Federation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # Source columns the load added to raw, for notify-schema (D61)
+    # Source columns the load added to raw or found missing, for notify-schema (D61)
     outputs:
       new_columns: ${{ steps.ingest.outputs.new_columns }}
+      removed_columns: ${{ steps.ingest.outputs.removed_columns }}
     defaults:
       run:
         shell: bash
@@ -448,12 +449,13 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
           service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
-      # Last output line = feed status JSON; its new_columns goes to notify-schema
+      # Last output line = feed status JSON; new_columns / removed_columns go to notify-schema
       - name: Ingest raw data (dlt → BigQuery)
         id: ingest
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
           echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
+          echo "removed_columns=$(tail -n 1 ingest.log | jq -c '.removed_columns // {}')" >> "$GITHUB_OUTPUT"
 
       - name: dbt deps
         working-directory: transform
@@ -627,14 +629,18 @@ jobs:
           done
           echo "Published \`$image:$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
 
-  # A prod load added source columns to raw (D61): a SCHEMA email, the deploy stays
-  # green (staging selects its columns by name, marts are unchanged). Own job, so
-  # the SMTP secret stays out of the prod writer's job. Runs after a later deploy
-  # step failed too: the columns are in raw either way.
+  # A prod load added source columns to raw or found raw columns missing from the
+  # source (D61): a SCHEMA email, the deploy stays green (new columns stop at raw;
+  # a removed one gets nulls, which only a NOT NULL test fails). Own job, so the
+  # SMTP secret stays out of the prod writer's job. Runs after a later deploy step
+  # failed too: the load happened either way.
   notify-schema:
-    name: Email on new source columns
+    name: Email on source column changes
     needs: deploy-prod
-    if: always() && needs.deploy-prod.outputs.new_columns != '' && needs.deploy-prod.outputs.new_columns != '{}'
+    if: >-
+      always() && (
+      (needs.deploy-prod.outputs.new_columns != '' && needs.deploy-prod.outputs.new_columns != '{}') ||
+      (needs.deploy-prod.outputs.removed_columns != '' && needs.deploy-prod.outputs.removed_columns != '{}'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -647,6 +653,7 @@ jobs:
         env:
           # Via env: column names come from the source files
           NEW_COLUMNS: ${{ needs.deploy-prod.outputs.new_columns }}
+          REMOVED_COLUMNS: ${{ needs.deploy-prod.outputs.removed_columns }}
           SMTP_CONN: ${{ secrets.SMTP_CONN }}
           ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
         run: python3 .github/scripts/notify_schema.py

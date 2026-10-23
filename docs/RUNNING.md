@@ -283,7 +283,7 @@ gcloud iam service-accounts keys delete <old key id> --iam-account $SA
 Delete the old key file too. A key you can't place: disable it first (`keys disable`), wait a day for something to
 break, then delete it.
 
-## SCHEMA email (new source columns)
+## SCHEMA email (source column changes)
 
 Sent when a load found columns the source didn't have before (D61): from Airflow's `schema_report` task, or from
 CD's `notify-schema` job after a prod deploy. The column is already in raw (as text); staging, marts and the
@@ -296,3 +296,13 @@ dashboard are unchanged, so nothing is broken. To do:
 
 Each column is reported once: the next load knows it. The sellers snapshot keeps new `sellers` columns too (it
 reads the source).
+
+**Removed column** (`... source column removed in <table>`): raw has a column the source file lacks. dlt keeps it and
+loads nulls, so staging, marts and the dashboard show nulls for it; `dbt build` stays green unless a NOT NULL test
+covers the column. Every load reports it until fixed. To do:
+
+1. Ask the source owner whether it was dropped on purpose.
+2. By mistake: the source restores it. Rows loaded meanwhile keep their nulls until a reload
+   (`uv run python ingestion/pipeline.py --full-refresh`, plus `--destination` / `--dataset` as for that warehouse).
+3. On purpose: remove it from the staging model and its `.yml` and from the input contract in a PR, then reload with
+   `--full-refresh` so raw drops the column (until then the email repeats).

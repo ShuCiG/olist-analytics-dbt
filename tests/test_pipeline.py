@@ -282,6 +282,38 @@ def test_skipped_load_reports_no_new_columns(run) -> None:
     assert run("--next")["new_columns"] == {}
 
 
+def test_removed_source_column_is_reported_while_missing(run, dump: Path) -> None:
+    # Matching headers: nothing missing
+    assert run("--until", "2016-09")["removed_columns"] == {}
+    # The source drops a column of an order table and of a reference table
+    write_csv(
+        dump / "olist_orders_dataset.csv",
+        ["order_id", "order_purchase_timestamp"],
+        [(order_id, ts) for order_id, ts in ORDERS],
+    )
+    write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id"], [("r1",), ("r2",)])
+    status = run("--next")
+    assert status["removed_columns"] == {"orders": ["order_status"], "sellers": ["zip_code_prefix"]}
+    assert status["new_columns"] == {}
+    # dlt keeps the column in raw and loads nulls into the new rows
+    with duckdb.connect(str(run.db), read_only=True) as con:
+        assert con.execute("select order_id, order_status from raw.orders order by 1").fetchall() == [
+            ("o1", "delivered"),
+            ("o2", "delivered"),
+            ("o3", None),
+        ]
+        assert con.execute("select count(*) from raw.sellers where zip_code_prefix is null").fetchone() == (2,)
+    # Reported again on the next load: the file still lacks it
+    assert run("--next")["removed_columns"] == {"orders": ["order_status"], "sellers": ["zip_code_prefix"]}
+
+
+def test_skipped_load_reports_no_removed_columns(run, dump: Path) -> None:
+    run()
+    write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id"], [("r1",)])
+    # No load, no nulls written: nothing to report
+    assert run("--next")["removed_columns"] == {}
+
+
 STAGING = Path(__file__).resolve().parents[1] / "transform" / "models" / "staging"
 
 

@@ -244,17 +244,21 @@ def test_schema_email_after_prod_load_without_the_prod_job_holding_smtp() -> Non
     # New source columns in prod raw (D61): own job, keeps the deploy green
     jobs = _jobs()
     ingest = next(s for s in jobs["deploy-prod"]["steps"] if s.get("id") == "ingest")
-    assert "new_columns" in ingest["run"] and "$GITHUB_OUTPUT" in ingest["run"]
-    assert jobs["deploy-prod"]["outputs"]["new_columns"] == "${{ steps.ingest.outputs.new_columns }}"
+    assert "$GITHUB_OUTPUT" in ingest["run"]
+    for field in ("new_columns", "removed_columns"):
+        assert f".{field} // {{}}" in ingest["run"]
+        assert jobs["deploy-prod"]["outputs"][field] == f"${{{{ steps.ingest.outputs.{field} }}}}"
     assert "SMTP_CONN" not in _secrets(jobs["deploy-prod"])
     job = jobs["notify-schema"]
     assert job["needs"] == "deploy-prod"
-    assert job["if"].startswith("always()") and "!= '{}'" in job["if"]
+    assert job["if"].startswith("always()")
+    assert "new_columns != '{}'" in job["if"] and "removed_columns != '{}'" in job["if"]
     assert "id-token" not in job["permissions"]
     (step,) = [s for s in job["steps"] if s.get("run")]
     # Column names reach the script through env, never inlined into `run`
     assert "${{" not in step["run"]
     assert step["env"]["NEW_COLUMNS"] == "${{ needs.deploy-prod.outputs.new_columns }}"
+    assert step["env"]["REMOVED_COLUMNS"] == "${{ needs.deploy-prod.outputs.removed_columns }}"
 
 
 def _notify_schema(monkeypatch: pytest.MonkeyPatch):
@@ -266,15 +270,23 @@ def _notify_schema(monkeypatch: pytest.MonkeyPatch):
     return module
 
 
-@pytest.mark.parametrize(("new_columns", "sent"), [('{"orders": ["order_channel"]}', True), ("{}", False)])
-def test_notify_schema_sends_only_for_new_columns(
-    monkeypatch: pytest.MonkeyPatch, new_columns: str, sent: bool
+@pytest.mark.parametrize(
+    ("new_columns", "removed_columns", "subject"),
+    [
+        ('{"orders": ["order_channel"]}', "{}", "[olist prod] SCHEMA: 1 new source column in orders"),
+        ("{}", '{"sellers": ["seller_zip_code_prefix"]}', "[olist prod] SCHEMA: 1 source column removed in sellers"),
+        ("{}", "{}", None),
+    ],
+)
+def test_notify_schema_sends_only_for_column_changes(
+    monkeypatch: pytest.MonkeyPatch, new_columns: str, removed_columns: str, subject: str | None
 ) -> None:
     module = _notify_schema(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(module, "send", lambda _uri, _to, subject, _html: calls.append(subject))
     for name, value in {
         "NEW_COLUMNS": new_columns,
+        "REMOVED_COLUMNS": removed_columns,
         "SMTP_CONN": "smtp://u:p@smtp.example.com:587?disable_ssl=true",
         "ALERT_EMAILS": "a@example.com",
         "GITHUB_REPOSITORY": "o/r",
@@ -282,4 +294,4 @@ def test_notify_schema_sends_only_for_new_columns(
     }.items():
         monkeypatch.setenv(name, value)
     module.main()
-    assert calls == (["[olist prod] SCHEMA: 1 new source column in orders"] if sent else [])
+    assert calls == ([subject] if subject else [])

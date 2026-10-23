@@ -11,7 +11,8 @@ new source columns (D61).
 One report per run at most: failures come from the DAG's `on_failure_callback` (not
 per task: a dbt failure fails the producer and the failed node's sensors), with the
 failed task, its error and log tail; the rest from the `report` task. A load that
-added source columns also gets a SCHEMA email from the `schema_report` task.
+added source columns, or found raw columns missing from the source, also gets a
+SCHEMA email from the `schema_report` task.
 
 This module is the Airflow side (context, XCom, Variables, SMTP); what the emails
 say is decided in alerting/airflow_emails.py (unit-tested, no Airflow imports).
@@ -96,7 +97,7 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
 
 
 def schema_report(ti, dag_run, warehouse: str) -> str:
-    """Email the source columns the load added to raw, if any (airflow_emails.schema_email)."""
+    """Email the source columns the load added or found missing, if any (airflow_emails.schema_email)."""
     email = airflow_emails.schema_email(
         warehouse=warehouse,
         run_id=dag_run.run_id,
@@ -104,5 +105,5 @@ def schema_report(ti, dag_run, warehouse: str) -> str:
     )
     if email:
         _send(email)
-    print(f"email: {email.subject}" if email else "email: none (no new source columns)")
+    print(f"email: {email.subject}" if email else "email: none (no source column changes)")
     return email.kind if email else "none"
