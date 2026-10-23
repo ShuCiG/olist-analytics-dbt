@@ -205,7 +205,27 @@ def test_databricks_cleans_up_and_alerts() -> None:
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
 
 
-DRIFT = ROOT / ".github" / "workflows" / "drift.yml"
+def test_databricks_checks_both_contracts() -> None:
+    # D64: input contract on the fresh load (before dbt), output contract on the build
+    job = _databricks()["jobs"]["dbt-build-databricks"]
+    names = [s.get("name") for s in job["steps"]]
+
+    def step(contract: str) -> int:
+        (i,) = [i for i, s in enumerate(job["steps"]) if f"{contract}.odcs.yaml --server databricks-ci" in s.get("run", "")]
+        return i
+
+    assert names.index("Ingest raw data (dlt → Databricks)") < step("olist-raw") < names.index("dbt deps")
+    assert names.index("dbt build (target databricks_ci)") < step("olist-marts") < names.index("Drop CI schemas")
+    # The server's ${VAR} references are filled by the job, in the job's catalog
+    for contract in ("olist-raw", "olist-marts"):
+        doc = yaml.safe_load((ROOT / "data-product" / "contracts" / f"{contract}.odcs.yaml").read_text(encoding="utf-8"))
+        (server,) = [s for s in doc["servers"] if s["server"] == "databricks-ci"]
+        assert server["catalog"] == job["env"]["DATABRICKS_CATALOG"], contract
+        refs = set(re.findall(r"\$\{(\w+)\}", yaml.safe_dump(server)))
+        assert refs and refs <= set(job["env"]), f"{contract}: {sorted(refs - set(job['env']))}"
+
+
+DRIFT =ROOT / ".github" / "workflows" / "drift.yml"
 
 
 def test_drift_check_is_read_only_and_alerts() -> None:

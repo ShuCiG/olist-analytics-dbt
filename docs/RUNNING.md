@@ -186,7 +186,16 @@ uv run dbt build --target databricks --exclude package:elementary
 ```
 
 The scheduled CI (`.github/workflows/databricks.yml`, target `databricks_ci`) runs as a service principal with
-`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58.
+`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58. It also tests both data
+contracts against server `databricks-ci` (D64). To run that check on your own load, point the server's variables at it
+(datacontract-cli takes the warehouse and credentials from its own `DATACONTRACT_DATABRICKS_*` variables):
+
+```bash
+export DATACONTRACT_DATABRICKS_HTTP_PATH=$DATABRICKS_HTTP_PATH DATACONTRACT_DATABRICKS_TOKEN=$DATABRICKS_TOKEN
+export DBT_RAW_SCHEMA=ci_dbx_local_raw DBT_CI_SCHEMA=ci_dbx_local     # schemas in catalog olist_ci
+uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server databricks-ci
+uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server databricks-ci
+```
 
 ## Airflow
 

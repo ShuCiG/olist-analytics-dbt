@@ -116,7 +116,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | | Port | Contract / definition | What it says |
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
-| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 5 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live |
+| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 5 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__semantic_models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
 | Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 29 columns and 11 metrics it relies on |
 
@@ -359,7 +359,8 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
-service principal limited to its own catalog, then drops the run's schemas ([D58](docs/DECISIONS.md)).
+service principal limited to its own catalog, tests both data contracts on those tables, then drops the run's schemas
+([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md)).
 
 Docs-only changes (Markdown outside `transform/`, issue forms) run only the lint, type check and tests:
 the builds and the prod deploy skip ([D52](docs/DECISIONS.md)).

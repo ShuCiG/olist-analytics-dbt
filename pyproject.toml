@@ -18,7 +18,7 @@ dashboard = [
     "streamlit>=1.66.1",  # allows pillow 13 (D59)
 ]
 dev = [
-    "datacontract-cli[bigquery,duckdb]>=1.2.6",
+    "datacontract-cli[bigquery,databricks,duckdb]>=1.2.6",
     "dbt-metricflow>=0.15.0",
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",

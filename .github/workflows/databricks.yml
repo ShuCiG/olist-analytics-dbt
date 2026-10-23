@@ -36,6 +36,11 @@ jobs:
       # run_id in the name: a cancelled run's cleanup can't drop a newer run's schemas
       DBT_CI_SCHEMA: ci_dbx_${{ github.run_id }}
       DBT_RAW_SCHEMA: ci_dbx_${{ github.run_id }}_raw
+      # datacontract-cli reads its own variables; the contracts' server `databricks-ci`
+      # takes host and schemas from DATABRICKS_HOST, DBT_RAW_SCHEMA and DBT_CI_SCHEMA
+      DATACONTRACT_DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+      DATACONTRACT_DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      DATACONTRACT_DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -55,6 +60,10 @@ jobs:
       # A few months keep the run inside Free Edition's daily compute quota
       - name: Ingest raw data (dlt → Databricks)
         run: uv run python ingestion/pipeline.py --destination databricks --dataset "$DBT_RAW_SCHEMA" --until 2017-03
+
+      # Data product (D36, D64): the same contracts as in the DuckDB CI job
+      - name: Input data contract (raw)
+        run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server databricks-ci
 
       - name: dbt deps
         working-directory: transform
@@ -79,6 +88,9 @@ jobs:
       - name: dbt build (target databricks_ci)
         working-directory: transform
         run: uv run dbt build --target databricks_ci --exclude package:elementary
+
+      - name: Output data contract (marts)
+        run: uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server databricks-ci
 
       - name: Upload manifest (for the failure email)
         if: always()

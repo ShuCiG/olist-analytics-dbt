@@ -534,6 +534,12 @@ wheels = [
 bigquery = [
     { name = "ibis-framework", extra = ["bigquery"] },
 ]
+databricks = [
+    { name = "databricks-sdk" },
+    { name = "databricks-sql-connector" },
+    { name = "ibis-framework", extra = ["databricks"] },
+    { name = "packaging" },
+]
 duckdb = [
     { name = "duckdb" },
     { name = "ibis-framework", extra = ["duckdb"] },
@@ -1480,6 +1486,14 @@ bigquery = [
     { name = "pydata-google-auth" },
     { name = "rich" },
 ]
+databricks = [
+    { name = "databricks-sql-connector" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pyarrow-hotfix" },
+    { name = "rich" },
+]
 duckdb = [
     { name = "duckdb" },
     { name = "numpy" },
@@ -2020,7 +2034,7 @@ dashboard = [
     { name = "streamlit" },
 ]
 dev = [
-    { name = "datacontract-cli", extra = ["bigquery", "duckdb"] },
+    { name = "datacontract-cli", extra = ["bigquery", "databricks", "duckdb"] },
     { name = "dbt-metricflow" },
     { name = "pre-commit" },
     { name = "pyarrow-stubs" },
@@ -2047,7 +2061,7 @@ dashboard = [
     { name = "streamlit", specifier = ">=1.66.1" },
 ]
 dev = [
-    { name = "datacontract-cli", extras = ["bigquery", "duckdb"], specifier = ">=1.2.6" },
+    { name = "datacontract-cli", extras = ["bigquery", "databricks", "duckdb"], specifier = ">=1.2.6" },
     { name = "dbt-metricflow", specifier = ">=0.15.0" },
     { name = "pre-commit", specifier = ">=4.6.2" },
     { name = "pyarrow-stubs", specifier = ">=20.0.0.20260819" },
