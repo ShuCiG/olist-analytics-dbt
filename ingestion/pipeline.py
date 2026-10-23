@@ -35,11 +35,14 @@ Examples:
 
 A new column in a source file is stored in raw (dlt's default schema contract,
 `evolve`); staging lists its columns, so nothing above raw changes until a PR adds
-it. The run reports such columns as `new_columns` for the SCHEMA email (D61).
+it. The run reports such columns as `new_columns` for the SCHEMA email (D61). A column
+missing from a source file stays in raw and gets nulls; every load reports it as
+`removed_columns` until the file has it again or the column is dropped.
 
 Airflow (airflow/dags/olist_elt.py) passes `--duckdb-path` / `--dataset` to keep its
 runs apart from local dev and prod. The last output line is the feed status as JSON
-(`orders_loaded`, `orders_total`, `last_order_at`, `last_loaded_at`, `new_columns`):
+(`orders_loaded`, `orders_total`, `last_order_at`, `last_loaded_at`, `new_columns`,
+`removed_columns`):
 Airflow reads it to skip dbt when nothing is new and for the email reports, CD for
 the SCHEMA email.
 """
@@ -93,9 +96,13 @@ ORDER_TABLES = {
 }
 
 
-def read_csv_as_strings(path: Path) -> pa.Table:
+def csv_header(path: Path) -> list[str]:
     with path.open(newline="", encoding="utf-8") as f:
-        header = next(csv.reader(f))
+        return next(csv.reader(f))
+
+
+def read_csv_as_strings(path: Path) -> pa.Table:
+    header = csv_header(path)
     return pacsv.read_csv(
         path,
         convert_options=pacsv.ConvertOptions(
@@ -257,10 +264,38 @@ def new_columns(load_info: LoadInfo, schema: Schema) -> dict[str, list[str]]:
     return added
 
 
+def removed_columns(source_dir: Path, schema: Schema) -> dict[str, list[str]]:
+    """Raw columns the source file no longer has: table -> names.
+
+    dlt keeps such a column and loads nulls into it, so it is reported on every load
+    while the file lacks it, not only on the first: no extra state, and the problem
+    stays visible until it is fixed. Header names go through dlt's naming convention
+    first, as dlt does when it loads them. `_loaded_at` (added here) and dlt's own
+    columns are not in the file.
+    """
+    files = {**REFERENCE_TABLES, **{table: file for table, (file, _) in ORDER_TABLES.items()}}
+    removed: dict[str, list[str]] = {}
+    for table, file_name in files.items():
+        if table not in schema.tables:
+            continue
+        header = {schema.naming.normalize_identifier(name) for name in csv_header(source_dir / file_name)}
+        missing = [
+            column
+            for column in schema.tables[table].get("columns", {})
+            if column != "_loaded_at" and not column.startswith("_dlt") and column not in header
+        ]
+        if missing:
+            removed[table] = missing
+    return removed
+
+
 def feed_status(
-    pipeline: dlt.Pipeline, orders_loaded: int, added_columns: dict[str, list[str]]
+    pipeline: dlt.Pipeline,
+    orders_loaded: int,
+    added_columns: dict[str, list[str]],
+    dropped_columns: dict[str, list[str]],
 ) -> dict[str, object]:
-    """This run's order count and new columns + the raw orders table as it is now.
+    """This run's order count and column changes + the raw orders table as it is now.
 
     `last_loaded_at` only moves when a run brings orders (merge of 0 rows writes
     nothing): the same signal as `dbt source freshness`.
@@ -282,6 +317,7 @@ def feed_status(
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
         "new_columns": added_columns,
+        "removed_columns": dropped_columns,
     }
 
 
@@ -342,7 +378,7 @@ def main() -> None:
     )
     if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until):
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")
-        orders_loaded, added_columns = 0, {}
+        orders_loaded, added_columns, dropped_columns = 0, {}, {}
     else:
         source = olist_source(source_dir, until=args.until, next_only=args.next)
         if args.full_refresh:
@@ -356,8 +392,11 @@ def main() -> None:
         added_columns = new_columns(load_info, pipeline.default_schema)
         for table, columns in added_columns.items():
             print(f"New source columns in {table}: {', '.join(columns)} (stored in raw only)")
+        dropped_columns = removed_columns(source_dir, pipeline.default_schema)
+        for table, columns in dropped_columns.items():
+            print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(pipeline, orders_loaded, added_columns)))
+    print(json.dumps(feed_status(pipeline, orders_loaded, added_columns, dropped_columns)))
 
 
 if __name__ == "__main__":

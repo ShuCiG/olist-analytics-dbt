@@ -22,7 +22,8 @@ always runs dbt (catch-up, recovery). See airflow/README.md.
 
 Alerts (olist_alerts.py): one report per run at most — failed run, fresh data, or
 stale data (no new orders for a day, repeated daily) — plus a SCHEMA email when the
-load added source columns to raw (D61). Recipients in the Airflow Variable
+load added source columns to raw or found raw columns missing from the source (D61).
+Recipients in the Airflow Variable
 `olist_alert_emails`.
 """
 

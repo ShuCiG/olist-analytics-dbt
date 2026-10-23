@@ -340,7 +340,8 @@ flowchart LR
 
 **Alerts:** at most one report per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
 orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). A new column in
-a source file lands in raw only (staging selects by name) and sends `SCHEMA: 1 new source column in orders`, from
+a source file lands in raw only (staging selects by name) and sends `SCHEMA: 1 new source column in orders`; a column
+missing from a source file sends `SCHEMA: 1 source column removed in orders` on every load until fixed, from
 Airflow and from the prod deploy ([D61](docs/DECISIONS.md)). Warn-test
 findings read in business words ("278 customers — zip code missing from the geolocation reference, so maps leave
 them out ..."). Failed GitHub Actions jobs are emailed too, with the failed step and a log excerpt.

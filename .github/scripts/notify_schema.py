@@ -1,11 +1,14 @@
-"""Email the source columns a prod load added to raw (job `notify-schema` in ci-cd.yml, D61).
+"""Email the source columns a prod load added to raw or found missing from the source
+(job `notify-schema` in ci-cd.yml, D61).
 
-The deploy doesn't fail for them: dlt stored them in raw, staging selects its columns
-by name, so prod marts are unchanged. The email asks a person to decide.
+The deploy doesn't fail for them: dlt stored new columns in raw, staging selects its
+columns by name, so prod marts are unchanged; a removed column gets nulls, which pass
+every test but a NOT NULL one. The email asks a person to decide.
 
 Env:
     NEW_COLUMNS   `new_columns` of the feed status pipeline.py printed, JSON
                   ({"table": ["column", ...]}), via the deploy job's output
+    REMOVED_COLUMNS  `removed_columns` of the same status, same shape
     SMTP_CONN, ALERT_EMAILS, GITHUB_* as in notify_failure.py
 """
 
@@ -29,13 +32,14 @@ def main() -> None:
     run_url = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     built = schema_changes.email(
         json.loads(os.environ.get("NEW_COLUMNS") or "{}"),
+        json.loads(os.environ.get("REMOVED_COLUMNS") or "{}"),
         prefix="[olist prod]",
         where="BigQuery prod, dataset raw",
         links=[("Open the run", run_url)],
         footer=f"{repo} · GitHub Actions · recipients: repo variable ALERT_EMAILS",
     )
     if built is None:
-        print("No new source columns: no email")
+        print("No source column changes: no email")
         return
     subject, html = built
     send(os.environ["SMTP_CONN"], to, subject, html)

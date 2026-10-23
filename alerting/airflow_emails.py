@@ -235,15 +235,17 @@ def report_email(
 
 
 def schema_email(warehouse: str, run_id: str, status: dict) -> Email | None:
-    """SCHEMA email when the run's load added source columns to raw (D61), else None.
+    """SCHEMA email when the run's load added source columns to raw or found raw
+    columns missing from the source (D61), else None.
 
     Its own email, not a line in OK: it calls for a person (source owner, contract,
     staging PR), and it is sent right after the load, so a later dbt failure doesn't
-    swallow it. A feed status without the field (older pipeline) means no change.
+    swallow it. A feed status without the fields (older pipeline) means no change.
     """
     dag_id = f"olist_elt_{warehouse}"
     built = schema_changes.email(
         status.get("new_columns") or {},
+        status.get("removed_columns") or {},
         prefix=f"[{dag_id}]",
         where=f"{warehouse} raw (Airflow)",
         links=[("Open the run", run_url(dag_id, run_id))],

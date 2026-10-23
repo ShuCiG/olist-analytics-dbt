@@ -216,8 +216,36 @@ def test_new_source_columns_send_schema_email() -> None:
     assert "olist-raw.odcs.yaml" in email.html  # the next step names the input contract
 
 
-@pytest.mark.parametrize("feed", [status(loaded=10, hours_ago=0.05), {**status(loaded=0, hours_ago=3), "new_columns": {}}])
-def test_no_new_columns_no_schema_email(feed: dict) -> None:
+def test_removed_source_columns_send_schema_email() -> None:
+    feed = {**status(loaded=10, hours_ago=0.05), "new_columns": {}, "removed_columns": {"orders": ["order_status"]}}
+    email = airflow_emails.schema_email("duckdb", RUN, feed)
+    assert email is not None and email.kind == "SCHEMA"
+    assert email.subject == f"[{DAG}] SCHEMA: 1 source column removed in orders"
+    assert "raw.orders.order_status" in email.html and "nulls" in email.html
+    assert "--full-refresh" in email.html and "New column" not in email.html
+
+
+def test_added_and_removed_columns_in_one_schema_email() -> None:
+    feed = {
+        **status(loaded=10, hours_ago=0.05),
+        "new_columns": {"sellers": ["seller_tier"]},
+        "removed_columns": {"orders": ["order_status", "order_channel"]},
+    }
+    email = airflow_emails.schema_email("duckdb", RUN, feed)
+    assert email is not None
+    assert email.subject == f"[{DAG}] SCHEMA: 1 new source column and 2 source columns removed in orders, sellers"
+    assert "Next steps: new columns" in email.html and "Next steps: removed columns" in email.html
+
+
+@pytest.mark.parametrize(
+    "feed",
+    [
+        status(loaded=10, hours_ago=0.05),
+        {**status(loaded=0, hours_ago=3), "new_columns": {}},
+        {**status(loaded=0, hours_ago=3), "new_columns": {}, "removed_columns": {}},
+    ],
+)
+def test_no_column_changes_no_schema_email(feed: dict) -> None:
     # No field (an older pipeline's status) or an empty one: nothing to say
     assert airflow_emails.schema_email("duckdb", RUN, feed) is None
 
