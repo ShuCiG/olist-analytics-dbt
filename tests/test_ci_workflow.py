@@ -48,6 +48,22 @@ def test_prod_elementary_step_keeps_history_and_a_full_fallback() -> None:
     assert "--select package:elementary\n" in step["run"], "no prod manifest: all of Elementary's models must run"
 
 
+def test_prod_build_is_slim_only_on_a_trusted_baseline() -> None:
+    steps = _jobs()["deploy-prod"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    scope = steps[names.index("Build scope")]
+    build = steps[names.index("dbt build (target prod)")]
+    assert names.index("Download prod manifest (last prod deploy)") < names.index("Build scope") < names.index(build["name"])
+    # Each of these must force a full build (D66)
+    for condition in ("prod-state/manifest.json", "$MANUAL", "$ORDERS_LOADED", "uv.lock"):
+        assert condition in scope["run"], f"full-build condition missing: {condition}"
+    assert "steps.ingest.outputs.orders_loaded" in scope["env"]["ORDERS_LOADED"]
+    assert "--select state:modified+ --state ../prod-state" in build["run"]
+    assert '[ "$SCOPE" = slim ]' in build["run"], "the full build must stay the default"
+    checkout = steps[0]
+    assert checkout["with"]["fetch-depth"] == 0, "uv.lock is diffed against the last deploy's commit"
+
+
 def _secrets(job: dict) -> set[str]:
     return set(re.findall(r"secrets\.(\w+)", yaml.safe_dump(job)))
 
