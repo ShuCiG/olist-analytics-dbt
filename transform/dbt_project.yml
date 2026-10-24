@@ -30,6 +30,11 @@ vars:
   # command, not via `--vars`: a changed `--vars` drops dbt's partial parse (D50).
   # Elementary reads the rendered "True" / "False" as a boolean.
   disable_dbt_artifacts_autoupload: "{{ flags.WHICH == 'freshness' }}"
+  # Anomaly tests on incremental models (fct_order_items) recompute every bucket of
+  # the training window, as they do for tables. Otherwise Elementary computes only
+  # missing buckets but scores only metrics stored after the model's last full
+  # refresh: after two `--full-refresh` runs the training set shrank to 2-5 days (D68).
+  force_metrics_backfill: true
   # dbt_project_evaluator lints this project's nodes, not Elementary's internal models
   exclude_packages: ["elementary"]
   # No failing-row samples in Elementary's tables or its public report (Pages): rows
