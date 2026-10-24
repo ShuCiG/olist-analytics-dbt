@@ -96,3 +96,70 @@ unit_tests:
       rows:
         - {order_item_sk: i2, order_status: delivered, item_amount: 22.00, _loaded_at: 2026-02-01 00:00:00}
         - {order_item_sk: i3, order_status: canceled, item_amount: 33.00, _loaded_at: 2026-02-01 00:00:00}
+
+  - name: test_dim_sellers_history_validity_ranges
+    model: dim_sellers_history
+    description: >
+      Versions are numbered per seller in snapshot order. The first version is valid
+      from 1900-01-01 (orders older than the snapshot still find it), later ones from
+      their snapshot time; the open version ends at 9999-12-31 and is current, also
+      when it records a deletion.
+    given:
+      - input: ref('snap_sellers')
+        rows:
+          - {dbt_scd_id: v1, seller_id: s1, seller_zip_code_prefix: '01001', seller_city: sao paulo,
+             seller_state: SP, dbt_valid_from: 2026-01-01 00:00:00, dbt_valid_to: 2026-02-01 00:00:00,
+             dbt_is_deleted: 'False'}
+          - {dbt_scd_id: v2, seller_id: s1, seller_zip_code_prefix: '20000', seller_city: rio de janeiro,
+             seller_state: RJ, dbt_valid_from: 2026-02-01 00:00:00, dbt_valid_to: 2026-03-01 00:00:00,
+             dbt_is_deleted: 'False'}
+          - {dbt_scd_id: v3, seller_id: s1, seller_zip_code_prefix: '20000', seller_city: rio de janeiro,
+             seller_state: RJ, dbt_valid_from: 2026-03-01 00:00:00, dbt_valid_to: null,
+             dbt_is_deleted: 'True'}
+          - {dbt_scd_id: w1, seller_id: s2, seller_zip_code_prefix: '01001', seller_city: sao paulo,
+             seller_state: SP, dbt_valid_from: 2026-01-01 00:00:00, dbt_valid_to: null,
+             dbt_is_deleted: 'False'}
+      - input: ref('int_zip_codes_located')
+        rows:
+          - {zip_code_prefix: '01001', latitude: -23.55, longitude: -46.63}
+    expect:
+      rows:
+        - {seller_version_id: v1, version_number: 1, state: SP, latitude: -23.55,
+           valid_from: 1900-01-01 00:00:00, valid_to: 2026-02-01 00:00:00, is_current: false, is_deleted: false}
+        - {seller_version_id: v2, version_number: 2, state: RJ, latitude: null,
+           valid_from: 2026-02-01 00:00:00, valid_to: 2026-03-01 00:00:00, is_current: false, is_deleted: false}
+        - {seller_version_id: v3, version_number: 3, state: RJ, latitude: null,
+           valid_from: 2026-03-01 00:00:00, valid_to: 9999-12-31 00:00:00, is_current: true, is_deleted: true}
+        - {seller_version_id: w1, version_number: 1, state: SP, latitude: -23.55,
+           valid_from: 1900-01-01 00:00:00, valid_to: 9999-12-31 00:00:00, is_current: true, is_deleted: false}
+
+  - name: test_fct_order_items_seller_as_of_point_in_time
+    model: fct_order_items_seller_as_of
+    description: >
+      Each item gets the seller version whose [valid_from, valid_to) holds the
+      purchase: an old order gets the first version although the seller moved later,
+      a purchase at the exact moment of a change gets the new version (half-open
+      ranges, no double match), a purchase after a deletion gets the deletion version.
+    given:
+      - input: ref('fct_order_items')
+        rows:
+          - {order_item_sk: i1, seller_id: s1, purchased_at: 2017-05-01 10:00:00}
+          - {order_item_sk: i2, seller_id: s1, purchased_at: 2026-02-01 00:00:00}
+          - {order_item_sk: i3, seller_id: s1, purchased_at: 2026-04-01 10:00:00}
+          - {order_item_sk: i4, seller_id: s2, purchased_at: 2017-05-01 10:00:00}
+      - input: ref('dim_sellers_history')
+        rows:
+          - {seller_version_id: v1, seller_id: s1, state: SP, is_current: false,
+             valid_from: 1900-01-01 00:00:00, valid_to: 2026-02-01 00:00:00}
+          - {seller_version_id: v2, seller_id: s1, state: RJ, is_current: false,
+             valid_from: 2026-02-01 00:00:00, valid_to: 2026-03-01 00:00:00}
+          - {seller_version_id: v3, seller_id: s1, state: RJ, is_current: true,
+             valid_from: 2026-03-01 00:00:00, valid_to: 9999-12-31 00:00:00}
+          - {seller_version_id: w1, seller_id: s2, state: SP, is_current: true,
+             valid_from: 1900-01-01 00:00:00, valid_to: 9999-12-31 00:00:00}
+    expect:
+      rows:
+        - {order_item_sk: i1, seller_version_id: v1, seller_state: SP, is_seller_version_current: false}
+        - {order_item_sk: i2, seller_version_id: v2, seller_state: RJ, is_seller_version_current: false}
+        - {order_item_sk: i3, seller_version_id: v3, seller_state: RJ, is_seller_version_current: true}
+        - {order_item_sk: i4, seller_version_id: w1, seller_state: SP, is_seller_version_current: true}

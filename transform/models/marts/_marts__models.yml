@@ -118,6 +118,92 @@ models:
         description: "{{ doc('longitude') }}"
         data_type: *float_type
 
+  - name: dim_sellers_history
+    description: >
+      One row per seller version (SCD2, from snapshot `snap_sellers`): a new version
+      opens when the seller's zip, city or state changes, or when the seller disappears
+      from the source (`is_deleted`). Ranges [valid_from, valid_to) are half-open and,
+      per seller, contiguous; the first version starts at 1900-01-01 and the open one
+      ends at 9999-12-31, so a join on any business timestamp finds exactly one version.
+      Version boundaries are snapshot run times (`recorded_at`), not the time of the
+      real change. `dim_sellers` is the current state only.
+    config:
+      group: parties
+      contract:
+        enforced: true
+    data_tests:
+      # Per seller: no overlaps and no gaps between versions
+      - dbt_utils.mutually_exclusive_ranges:
+          arguments:
+            lower_bound_column: valid_from
+            upper_bound_column: valid_to
+            partition_by: seller_id
+            gaps: not_allowed
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [seller_id, version_number]
+    columns:
+      - name: seller_version_id
+        description: Version key (the snapshot's dbt_scd_id). Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+      - name: seller_id
+        description: "Seller key; not unique here, one row per version."
+        data_type: string
+        data_tests:
+          - not_null
+          # Exactly one open version per seller
+          - unique:
+              config:
+                where: is_current
+      - name: version_number
+        description: 1 for the seller's first version, then +1 per change.
+        data_type: integer
+        data_tests: [not_null]
+      - name: zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }}"
+        data_type: string
+      - name: city
+        description: Seller city in this version.
+        data_type: string
+      - name: state
+        description: Two-letter state code in this version.
+        data_type: string
+      - name: latitude
+        description: "{{ doc('latitude') }}"
+        data_type: *float_type
+      - name: longitude
+        description: "{{ doc('longitude') }}"
+        data_type: *float_type
+      - name: valid_from
+        description: Start of the version, inclusive; 1900-01-01 for the first version.
+        data_type: timestamp
+        data_tests: [not_null]
+      - name: valid_to
+        description: End of the version, exclusive; 9999-12-31 for the open version.
+        data_type: timestamp
+        data_tests:
+          - not_null
+          - is_not_before:
+              arguments:
+                earlier_column: valid_from
+      - name: is_current
+        description: True for the seller's latest version (also when that version records a deletion).
+        data_type: boolean
+        data_tests: [not_null]
+      - name: is_deleted
+        description: True on the version that records the seller disappearing from the source.
+        data_type: boolean
+        data_tests: [not_null]
+      - name: recorded_at
+        description: When the snapshot captured this version (its dbt_valid_from).
+        data_type: timestamp
+        data_tests: [not_null]
+
   - name: dim_products
     description: One row per product; category translated to English ('unknown' if missing).
     config:
@@ -502,3 +588,65 @@ models:
         description: "{{ doc('loaded_at') }} Latest of the item's and its order's raw load; incremental cursor."
         data_type: "{{ 'timestamp' if target.type in ['bigquery', 'databricks'] else 'timestamp with time zone' }}"
         data_tests: [not_null]
+
+  - name: fct_order_items_seller_as_of
+    description: >
+      One row per order line item with the seller as of the purchase: the version of
+      `dim_sellers_history` whose range holds `purchased_at`. Use it for "where was the
+      seller when the sale happened"; `fct_order_items` joins to `dim_sellers`, today's
+      state.
+    config:
+      group: orders
+      contract:
+        enforced: true
+    data_tests:
+      # The left join neither drops nor duplicates items
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('fct_order_items')
+    columns:
+      - name: order_item_sk
+        description: Surrogate key (order_id, order_item_number). Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_type: string
+      - name: seller_id
+        description: Seller of the line.
+        data_type: string
+      - name: purchased_at
+        description: Purchase timestamp of the order; the point in time of the join.
+        data_type: timestamp
+      - name: seller_version_id
+        description: Seller version current at the purchase.
+        data_type: string
+        data_tests:
+          # Every item finds a version: the ranges cover all time
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_sellers_history')
+                field: seller_version_id
+      - name: seller_zip_code_prefix
+        description: "{{ doc('zip_code_prefix') }} Seller's, as of the purchase."
+        data_type: string
+      - name: seller_city
+        description: Seller city as of the purchase.
+        data_type: string
+      - name: seller_state
+        description: Seller state as of the purchase.
+        data_type: string
+      - name: seller_latitude
+        description: "{{ doc('latitude') }}"
+        data_type: *float_type
+      - name: seller_longitude
+        description: "{{ doc('longitude') }}"
+        data_type: *float_type
+      - name: is_seller_version_current
+        description: False when the seller has changed (or disappeared) since the purchase.
+        data_type: boolean

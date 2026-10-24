@@ -25,7 +25,7 @@ uv run python ingestion/pipeline.py   # download Olist (Kaggle, no token needed)
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 21 models + snapshot + 108 data tests + 5 unit tests
+uv run dbt build                      # seed + 23 models + snapshot + 125 data tests + 7 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 cd ..
 uv run pytest                         # Python tests: pipeline, dbt summary parser, alert decisions (no data needed)
@@ -53,8 +53,9 @@ uv run dbt build        # after each chunk: fct_order_items merges only the new 
 ```bash
 # change a city and delete a seller in raw, then snapshot
 uv run python -c "import duckdb; c = duckdb.connect('data/olist.duckdb'); c.execute(\"update raw.sellers set seller_city = 'campinas' where seller_id = '0015a82c2db000af6aaaf3ae2ecb0532'\"); c.execute(\"delete from raw.sellers where seller_id = '001cca7ae9ae17fb1caed9dfb1094831'\")"
-cd transform && uv run dbt snapshot && cd ..
-uv run python ingestion/pipeline.py && cd transform && uv run dbt snapshot   # reload restores both
+cd transform && uv run dbt build -s snap_sellers+ && cd ..
+uv run python ingestion/pipeline.py --full-refresh   # reload restores both (without the flag: "load skipped", no new months)
+cd transform && uv run dbt build -s snap_sellers+    # snapshot + dim_sellers_history + the point-in-time fact
 ```
 
 | seller | city | dbt_valid_from | dbt_valid_to | dbt_is_deleted |
@@ -67,6 +68,21 @@ uv run python ingestion/pipeline.py && cd transform && uv run dbt snapshot   # r
 | 001cca… | cariacica | 08:29:23 | *null* | False |
 
 A reload with no changes adds no versions (dlt metadata columns are not compared).
+
+`dim_sellers_history` turns the snapshot into contiguous ranges (2026-10-24 run, times local):
+
+| seller | version | city | valid_from | valid_to | is_current | is_deleted |
+|---|---|---|---|---|---|---|
+| 0015a8… | 1 | santo andre | 1900-01-01 | 10:11:33 | false | false |
+| 0015a8… | 2 | campinas | 10:11:33 | 10:13:36 | false | false |
+| 0015a8… | 3 | santo andre | 10:13:36 | 9999-12-31 | true | false |
+| 001cca… | 1 | cariacica | 1900-01-01 | 10:11:33 | false | false |
+| 001cca… | 2 | cariacica | 10:11:33 | 10:13:36 | false | true |
+| 001cca… | 3 | cariacica | 10:13:36 | 9999-12-31 | true | false |
+
+The first version starts at 1900-01-01, not at the snapshot time (`recorded_at`): the snapshot started years after
+the orders. `fct_order_items_seller_as_of` gives the 242 items of these two sellers (orders from 2017–2018)
+version 1, with `is_seller_version_current = false`; `fct_order_items` → `dim_sellers` shows today's version.
 
 ## Data product checks
 

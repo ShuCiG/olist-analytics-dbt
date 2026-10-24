@@ -42,7 +42,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 107 data tests, 5 unit tests, enforced model contracts, 183 Python tests; known
+- **Data quality at every layer.** 125 data tests, 7 unit tests, enforced model contracts, 183 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -82,7 +82,7 @@ flowchart LR
     subgraph product[Data product olist-commerce · Product Owner]
         raw[raw<br/>8 tables] --> staging[staging<br/>8 views] --> intermediate[intermediate<br/>6 views] --> marts[marts<br/>star schema]
         marts --> metrics[semantic layer<br/>14 metrics]
-        raw --> snap[snapshot<br/>SCD2 sellers]
+        raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
 
     marts --> oc{{output contract<br/>olist-marts}}
@@ -144,6 +144,8 @@ erDiagram
     fct_order_items }o--|| dim_products : product_id
     fct_order_items }o--|| dim_sellers : seller_id
     fct_order_items }o--|| dim_customers : customer_unique_id
+    fct_order_items_seller_as_of |o--|| fct_order_items : order_item_sk
+    fct_order_items_seller_as_of }o--|| dim_sellers_history : seller_version_id
     fct_order_items }o--|| dim_date : purchase_date
 ```
 
@@ -153,7 +155,9 @@ erDiagram
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English, fallback `unknown` |
-| `dim_sellers` | seller | zip-prefix centroid coordinates; history in snapshot `snap_sellers` (SCD2) |
+| `dim_sellers` | seller | zip-prefix centroid coordinates; current state |
+| `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
+| `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 
 Layers: **staging** (8 views, 1:1 with sources: types, names; raw is loaded as all strings so casting is visible
@@ -195,6 +199,8 @@ flowchart LR
     fct_order_items:::mart
     dim_customers:::mart
     dim_sellers:::mart
+    dim_sellers_history:::mart
+    fct_order_items_seller_as_of:::mart
     dim_products:::mart
     dim_date:::mart
 
@@ -226,6 +232,10 @@ flowchart LR
     translation --> dim_products
 
     src_sellers --> snap_sellers
+    snap_sellers --> dim_sellers_history
+    int_zip --> dim_sellers_history
+    fct_order_items --> fct_order_items_seller_as_of
+    dim_sellers_history --> fct_order_items_seller_as_of
 ```
 
 </details>
@@ -234,8 +244,8 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **107 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, chronology (custom generic test `is_not_before`), 2 singular tests | every `dbt build` |
-| **5 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter | every `dbt build` |
+| **125 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 2 singular tests | every `dbt build` |
+| **7 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
