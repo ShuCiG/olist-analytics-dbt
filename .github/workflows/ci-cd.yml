@@ -428,7 +428,10 @@ jobs:
       run:
         shell: bash
     steps:
+      # Full history: the build scope diffs uv.lock against the last deploy's commit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
@@ -449,11 +452,13 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
           service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
-      # Last output line = feed status JSON; new_columns / removed_columns go to notify-schema
+      # Last output line = feed status JSON; new_columns / removed_columns go to
+      # notify-schema, orders_loaded to the build scope
       - name: Ingest raw data (dlt → BigQuery)
         id: ingest
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
+          echo "orders_loaded=$(tail -n 1 ingest.log | jq '.orders_loaded')" >> "$GITHUB_OUTPUT"
           echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
           echo "removed_columns=$(tail -n 1 ingest.log | jq -c '.removed_columns // {}')" >> "$GITHUB_OUTPUT"
 
@@ -466,16 +471,47 @@ jobs:
         working-directory: transform
         run: uv run dbt source freshness --target prod
 
-      # Baseline for the Elementary step below: the last successful prod deploy's
-      # manifest, found as in slim CI
+      # Baseline for the Elementary step and the build scope below: the last
+      # successful prod deploy's manifest, found as in slim CI, and its commit
       - name: Download prod manifest (last prod deploy)
+        id: baseline
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
-            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
-          if [ -z "$run_id" ] || ! gh run download "$run_id" --name prod-manifest --dir prod-state; then
-            echo "::notice::No prod manifest found, Elementary's models run in full"
+          read -r run_id sha < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0] // empty | "\(.workflow_run.id) \(.workflow_run.head_sha)"') || true
+          if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No prod manifest found, Elementary's models and the build run in full"
+          fi
+
+      # Slim deploy (D66). With no new data in raw, prod can only differ from the
+      # project where the project changed since the last successful deploy:
+      # state:modified+ against its manifest (changed models, seeds, snapshots, tests,
+      # the macros they call, configs, and everything downstream). Full build when
+      # that baseline isn't enough: no manifest, a manual run (the way to rebuild
+      # prod), orders loaded by this run (new data is no project change), or a changed
+      # uv.lock (a dbt or adapter upgrade changes materialization SQL, which the
+      # state comparison doesn't see).
+      - name: Build scope
+        id: scope
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          ORDERS_LOADED: ${{ steps.ingest.outputs.orders_loaded }}
+          BASELINE_SHA: ${{ steps.baseline.outputs.sha }}
+        run: |
+          if [ ! -f prod-state/manifest.json ]; then reason="no prod manifest"
+          elif [ "$MANUAL" = true ]; then reason="manual run"
+          elif [ "$ORDERS_LOADED" != 0 ]; then reason="the load brought ${ORDERS_LOADED:-an unknown number of} orders"
+          elif ! git diff --quiet "$BASELINE_SHA" HEAD -- uv.lock; then reason="uv.lock changed since ${BASELINE_SHA:0:7} (or that commit is unknown)"
+          fi
+          if [ -n "${reason:-}" ]; then
+            echo "scope=full" >> "$GITHUB_OUTPUT"
+            echo "Full prod build: $reason" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "scope=slim" >> "$GITHUB_OUTPUT"
+            echo "Slim prod build: state:modified+ since ${BASELINE_SHA:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
       # Never with --full-refresh: the tables hold the run and test history (D38).
@@ -499,11 +535,26 @@ jobs:
             uv run dbt run --target prod --select package:elementary
           fi
 
+      # Unselected parents are prod's own tables, so a slim build needs no --defer.
+      # Nothing selected: the step is skipped (an empty build would still run the
+      # on-run-end hooks). The manifest uploaded below covers the whole project either way.
       - name: dbt build (target prod)
         working-directory: transform
         env:
+          SCOPE: ${{ steps.scope.outputs.scope }}
           FULL_REFRESH: ${{ inputs.full_refresh && '--full-refresh' || '' }}
-        run: uv run dbt build --target prod --exclude-resource-type unit_test --exclude package:elementary $FULL_REFRESH
+        run: |
+          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary)
+          if [ "$SCOPE" = slim ]; then
+            args+=(--select state:modified+ --state ../prod-state)
+            selected=$(uv run dbt ls "${args[@]}" --output name -q)
+            if [ -z "$selected" ]; then
+              echo "No project changes since the last prod deploy: build skipped" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Slim build: $(wc -l <<< "$selected") nodes" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          uv run dbt build "${args[@]}" $FULL_REFRESH
 
       - name: dbt docs generate
         working-directory: transform
