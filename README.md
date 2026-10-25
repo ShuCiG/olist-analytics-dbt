@@ -152,7 +152,7 @@ erDiagram
 | Model | Grain | Notes |
 |---|---|---|
 | `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`), v1 deprecated (`fct_orders_v1`) |
-| `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks); reconciles exactly with `fct_orders.order_amount` |
+| `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English, fallback `unknown` |
 | `dim_sellers` | seller | zip-prefix centroid coordinates; current state |
@@ -445,11 +445,12 @@ Options that were tried or priced, then left out:
   7,505 MiB billed. Backfilling one month (143 MiB) cost more than rebuilding both facts (83 MiB), because each batch
   reads the unpartitioned raw tables in full again
   ([D65](docs/DECISIONS.md#d65--2026-10-23--microbatch-for-the-order-facts-evaluated-rejected)).
-- **Partitioned raw order tables on BigQuery.** Partitioned by purchase month, a one-month read processed 9.3 MiB
-  instead of 33 MiB but was billed the same 50 MiB: BigQuery bills at least 10 MiB per table read, and each raw
-  order table is 7–18 MiB. The incremental cursor (a subquery on the model itself) prunes no partition at all. At
-  10× the data a month would bill 97 instead of 346 MiB
-  ([D69](docs/DECISIONS.md#d69--2026-10-25--partitioned-raw-order-tables-on-bigquery-evaluated-rejected)).
+- **Raw order tables partitioned by purchase month on BigQuery.** A one-month read processed 9.3 MiB instead of
+  33 MiB but was billed the same 50 MiB: BigQuery bills at least 10 MiB per table read, and each raw order table is
+  7–18 MiB. At 10× the data a month would bill 97 instead of 346 MiB
+  ([D69](docs/DECISIONS.md#d69--2026-10-25--partitioning-the-raw-order-tables-on-bigquery-measured)). The raw order
+  tables are partitioned by load day instead, for the incremental path; that bills the same today too
+  ([D70](docs/DECISIONS.md#d70--2026-10-25--raw-order-tables-partitioned-by-load-day-incremental-filter-that-prunes)).
 - **One Airflow task per dbt node** (Cosmos' local mode). Each task paid dbt start-up and a project parse (~36 s):
   a month took ~29 min on DuckDB and ~19 min on BigQuery, against ~6 and ~6–9 min in watcher mode
   ([D25](docs/DECISIONS.md#d25--2026-10-12--cosmos-watcher-mode-airflow-speed-up)).

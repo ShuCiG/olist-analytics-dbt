@@ -24,7 +24,11 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
-  dbt models and the field for `dbt source freshness`.
+  dbt models and the field for `dbt source freshness`. An order and its items,
+  payments and reviews always load in the same chunk, so they share it.
+- On BigQuery the order tables are partitioned by day of `_loaded_at`, so an
+  incremental dbt run reads only the partitions since its cursor (D70). dlt sets
+  partitioning only when it creates a table; existing tables are migrated by hand.
 
 Examples:
     python ingestion/pipeline.py --until 2017-06   # first chunk: up to June 2017
@@ -65,6 +69,7 @@ import pyarrow.csv as pacsv
 from dlt.common.configuration.specs import GcpServiceAccountCredentials
 from dlt.common.pipeline import LoadInfo
 from dlt.common.schema import Schema
+from dlt.destinations.adapters import bigquery_adapter
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
@@ -156,7 +161,9 @@ def month_key(value: str) -> str:
 
 
 @dlt.source(name="olist")
-def olist_source(source_dir: Path, until: str | None = None, next_only: bool = False):
+def olist_source(
+    source_dir: Path, until: str | None = None, next_only: bool = False, partitioned: bool = False
+):
     loaded_at = datetime.now(UTC)
 
     for table_name, file_name in REFERENCE_TABLES.items():
@@ -206,12 +213,17 @@ def olist_source(source_dir: Path, until: str | None = None, next_only: bool = F
         yield with_loaded_at(with_required(table, primary_key), loaded_at)
 
     for table_name, (file_name, primary_key) in ORDER_TABLES.items():
-        yield dlt.resource(
+        resource = dlt.resource(
             order_rows(file_name, primary_key),
             name=table_name,
             write_disposition="merge",
             primary_key=primary_key,
         )
+        if partitioned:
+            # PARTITION BY DATE(_loaded_at): day, not hour, stays within BigQuery's
+            # 4,000 partitions per table for about 11 years of daily loads
+            bigquery_adapter(resource, partition="_loaded_at")
+        yield resource
 
 
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
@@ -380,7 +392,12 @@ def main() -> None:
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")
         orders_loaded, added_columns, dropped_columns = 0, {}, {}
     else:
-        source = olist_source(source_dir, until=args.until, next_only=args.next)
+        source = olist_source(
+            source_dir,
+            until=args.until,
+            next_only=args.next,
+            partitioned=args.destination == "bigquery",
+        )
         if args.full_refresh:
             load_info = pipeline.run(source, refresh="drop_sources")
         else:

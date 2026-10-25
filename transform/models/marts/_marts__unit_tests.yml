@@ -65,10 +65,12 @@ unit_tests:
   - name: test_fct_order_items_incremental_picks_new_loads
     model: fct_order_items
     description: >
-      Incremental run: only items whose item or order row was loaded at/after the
-      max `_loaded_at` already in the table (2026-01-15) are processed. i1 is old
-      (skipped), i2 is a new item, i3 is an old item whose order was reloaded
-      (status change).
+      Incremental run: only items loaded at/after the max `_loaded_at` already in
+      the table (2026-01-15), together with their order, are processed. i1 is old
+      (skipped), i2 is a new item. i3 is an old item whose order was reloaded alone
+      (status change): skipped too. The loader never does that (an order and its
+      items load in one chunk, assert_order_items_loaded_with_their_order); the
+      filter per table relies on it so BigQuery can prune partitions (D70).
     overrides:
       macros:
         is_incremental: true
@@ -95,7 +97,6 @@ unit_tests:
     expect:
       rows:
         - {order_item_sk: i2, order_status: delivered, item_amount: 22.00, _loaded_at: 2026-02-01 00:00:00}
-        - {order_item_sk: i3, order_status: canceled, item_amount: 33.00, _loaded_at: 2026-02-01 00:00:00}
 
   - name: test_dim_sellers_history_validity_ranges
     model: dim_sellers_history

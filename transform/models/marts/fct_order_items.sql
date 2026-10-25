@@ -1,8 +1,11 @@
 -- Grain: one row per order line item.
--- Incremental: each run merges only rows whose raw source was (re)loaded since the
--- last run, by `_loaded_at`. An item is reprocessed when the item or its order row
--- changes (e.g. a new order_status). Customers are replaced on every load, so they
--- are not part of the cursor; `--full-refresh` rebuilds everything. Trade-off: a
+-- Incremental: each run merges only items loaded since the last run, by `_loaded_at`.
+-- An order and its items always load together (one chunk, one `_loaded_at`), so a
+-- reloaded order (e.g. a new order_status) brings its items with it. A source that
+-- reloaded an order alone would leave its items on the old status until a full
+-- refresh: assert_order_items_loaded_with_their_order fails first (D70).
+-- Customers are replaced on every load, so they are not part of the cursor;
+-- `--full-refresh` rebuilds everything. Trade-off: a
 -- changed customer (customer_unique_id, zip) reaches existing rows here only on a
 -- full refresh, while fct_orders (a table) has it on the next build. The dump is
 -- static, so customers never change after their orders load.
@@ -49,10 +52,13 @@ final as (
     inner join orders
         on order_items.order_id = orders.order_id
     {% if is_incremental() %}
+        {% set cursor = incremental_cursor() %}
+        -- A filter per table: on BigQuery each reads only its partitions since the
+        -- cursor (D70); an `or` across the two would read both in full.
         -- >= not >: rows of the last run are re-merged (idempotent) rather than missed
         where
-            order_items._loaded_at >= (select max(this_run._loaded_at) from {{ this }} as this_run)
-            or orders._loaded_at >= (select max(this_run._loaded_at) from {{ this }} as this_run)
+            order_items._loaded_at >= {{ cursor }}
+            and orders._loaded_at >= {{ cursor }}
     {% endif %}
 )
 
