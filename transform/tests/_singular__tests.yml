@@ -19,3 +19,13 @@ data_tests:
       build; check the latest change to fct_orders / fct_order_items.
     config:
       meta: {alert_unit: orders}
+
+  - name: assert_order_items_loaded_with_their_order
+    description: >-
+      Order lines whose load time differs from their order's. The loader brings an
+      order and its lines in one batch; the incremental fct_order_items relies on it
+      and skips lines whose order was reloaded alone. A failure means order lines
+      in fct_order_items may show an outdated order status: run a full refresh of
+      fct_order_items and check the loader.
+    config:
+      meta: {alert_unit: order lines}
