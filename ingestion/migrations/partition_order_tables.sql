@@ -12,6 +12,14 @@
 DECLARE ds STRING DEFAULT 'raw';
 DECLARE partitioned BOOL;
 
+-- The console picks the job location from the tables a script names, and names
+-- inside EXECUTE IMMEDIATE strings don't count: without this statement it runs in
+-- the console's default location and fails with "dataset not found in location".
+-- COUNT(*) is answered from metadata, no bytes billed.
+SELECT
+    (SELECT COUNT(*) FROM `raw.orders`) AS raw_orders,
+    (SELECT COUNT(*) FROM `airflow_raw.orders`) AS airflow_raw_orders;
+
 FOR t IN (
     SELECT table_name
     FROM UNNEST(['orders', 'order_items', 'order_payments', 'order_reviews']) AS table_name
