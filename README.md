@@ -444,8 +444,12 @@ Options that were tried or priced, then left out:
 - **Microbatch for the order facts.** With monthly batches, a whole `dbt build` on BigQuery went from 2,420 to
   7,505 MiB billed. Backfilling one month (143 MiB) cost more than rebuilding both facts (83 MiB), because each batch
   reads the unpartitioned raw tables in full again
-  ([D65](docs/DECISIONS.md#d65--2026-10-23--microbatch-for-the-order-facts-evaluated-rejected)). Partitioned raw
-  (#116) would reopen the question.
+  ([D65](docs/DECISIONS.md#d65--2026-10-23--microbatch-for-the-order-facts-evaluated-rejected)).
+- **Partitioned raw order tables on BigQuery.** Partitioned by purchase month, a one-month read processed 9.3 MiB
+  instead of 33 MiB but was billed the same 50 MiB: BigQuery bills at least 10 MiB per table read, and each raw
+  order table is 7–18 MiB. The incremental cursor (a subquery on the model itself) prunes no partition at all. At
+  10× the data a month would bill 97 instead of 346 MiB
+  ([D69](docs/DECISIONS.md#d69--2026-10-25--partitioned-raw-order-tables-on-bigquery-evaluated-rejected)).
 - **One Airflow task per dbt node** (Cosmos' local mode). Each task paid dbt start-up and a project parse (~36 s):
   a month took ~29 min on DuckDB and ~19 min on BigQuery, against ~6 and ~6–9 min in watcher mode
   ([D25](docs/DECISIONS.md#d25--2026-10-12--cosmos-watcher-mode-airflow-speed-up)).
@@ -458,6 +462,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open: partitioning the raw order tables on BigQuery by purchase month (#116), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open: dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).
