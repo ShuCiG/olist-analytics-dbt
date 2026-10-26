@@ -75,6 +75,9 @@ def test_prod_job_costs_step_runs_every_deploy_after_the_build() -> None:
     assert "--select +fct_dbt_job_costs" in costs["run"]
     assert "if" not in costs and "state:modified" not in costs["run"], "new jobs are new data: build it on every deploy"
     assert "--full-refresh" not in costs["run"] and "FULL_REFRESH" not in costs["run"], "its rows outlive the 180-day job history"
+    # BigQuery refuses to list the tables of `region-eu` (INFORMATION_SCHEMA): the catalog fails on that source
+    docs = steps[names.index("dbt docs generate")]
+    assert "--exclude source:bigquery" in docs["run"]
 
 
 def _secrets(job: dict) -> set[str]:
