@@ -569,12 +569,15 @@ jobs:
           uv run dbt build --target prod --select +fct_dbt_job_costs --exclude-resource-type unit_test \
             --vars '{disable_dbt_artifacts_autoupload: true, disable_run_results: true, disable_tests_results: true, disable_dbt_invocation_autoupload: true}'
 
+      # The catalog checks every schema of the project's relations; the job-history
+      # source's schema is `region-eu` (INFORMATION_SCHEMA), whose tables BigQuery
+      # refuses to list, so it stays out of the catalog (D71). The manifest keeps it.
       - name: dbt docs generate
         working-directory: transform
         env:
           # dbt-bigquery's catalog query: agate warns about a missing table_owner column, harmless
           PYTHONWARNINGS: ignore::RuntimeWarning:agate.type_tester
-        run: uv run dbt docs generate --target prod --static
+        run: uv run dbt docs generate --target prod --static --exclude source:bigquery
 
       - name: Upload prod manifest (state for slim CI)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
