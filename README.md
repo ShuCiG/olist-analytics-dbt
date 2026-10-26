@@ -419,6 +419,8 @@ latest deploys. Only the prod writer can read the job history, through a custom 
 |---|---|
 | ![Sales overview](docs/images/dashboard-overview.png) | ![Customers & sellers](docs/images/dashboard-customers.png) |
 
+![dbt cost on BigQuery](docs/images/dashboard-costs.png)
+
 ## Quickstart
 
 Needs only [uv](https://docs.astral.sh/uv/); no Kaggle or cloud account.
