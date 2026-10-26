@@ -11,6 +11,13 @@ snapshot-paths: ["snapshots"]
 
 clean-targets: ["target", "dbt_packages"]
 
+# JSON comment on every query; on BigQuery its keys become job labels (target,
+# node), so INFORMATION_SCHEMA.JOBS can tell which model or test a job ran (D71).
+# Other engines only see the comment.
+query-comment:
+  comment: "{{ query_comment(node) }}"
+  job-label: true
+
 flags:
   # Future dbt default: a package's ref() looks in the package first, then in the
   # root project. dbt_project_evaluator's ref to its exceptions seed then finds
@@ -49,6 +56,9 @@ models:
     staging:
       +materialized: view
       +schema: staging
+      # The job history behind the cost mart, enabled with it (marts/platform below)
+      bigquery:
+        +enabled: &job_costs_enabled "{{ (var('job_costs', target.name in ['prod', 'lint']) | string | lower == 'true') | as_bool }}"
     intermediate:
       +materialized: view
       +schema: intermediate
@@ -57,6 +67,14 @@ models:
       +schema: marts
       # Consumed outside the project (dashboard, other teams): groups and access in models/_groups.yml
       +access: public
+      # BigQuery cost per dbt node from the job history (D71). Prod only: it reads
+      # region-wide INFORMATION_SCHEMA.JOBS_BY_PROJECT, which only dbt-runner may
+      # list (infra/job_history.tf); the deploy builds it in a step of its own.
+      # Also on for `lint` (sqlfluff only renders it, never runs it).
+      # `--vars '{job_costs: true}'` turns it on elsewhere for a check as the owner.
+      platform:
+        +enabled: *job_costs_enabled
+        +group: platform
   # Project linter, off by default: CI runs it as its own step with
   # DBT_PROJECT_EVALUATOR=true (D32). Off, its nodes stay out of every build,
   # Airflow's manifest and the warn-test list of the alert emails.

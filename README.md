@@ -66,7 +66,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
-- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, Workload Identity Federation, budget, quota, per-query byte caps), Terraform
+- **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, custom IAM roles, Workload Identity Federation, budget, quota, per-query byte caps, cost per dbt node from job labels and `INFORMATION_SCHEMA.JOBS`), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
 - **BI:** Streamlit + Altair dashboard on both warehouses
 
@@ -364,7 +364,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | On every pull request | On every merge to `main` |
 |---|---|
 | sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
-| full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed) |
+| full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
@@ -397,6 +397,12 @@ Three pages over the marts (sales, delivery & reviews, customers & sellers), a s
 showing how fresh the data is. It runs on DuckDB or BigQuery with the same SQL, and the deployed app reads the
 Airflow-fed marts with a service account that can only read `marts` and `airflow_marts`. Declared in dbt as an
 exposure, so it appears in the lineage.
+
+On BigQuery a fourth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
+package, node name), and each prod deploy turns BigQuery's job history into `fct_dbt_job_costs`, one row per job, for
+prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes and the
+latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
+([D71](docs/DECISIONS.md)).
 
 | Sales overview | Customers & sellers |
 |---|---|

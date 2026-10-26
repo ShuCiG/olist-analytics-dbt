@@ -538,13 +538,14 @@ jobs:
       # Unselected parents are prod's own tables, so a slim build needs no --defer.
       # Nothing selected: the step is skipped (an empty build would still run the
       # on-run-end hooks). The manifest uploaded below covers the whole project either way.
+      # The cost mart has a step of its own, after this one.
       - name: dbt build (target prod)
         working-directory: transform
         env:
           SCOPE: ${{ steps.scope.outputs.scope }}
           FULL_REFRESH: ${{ inputs.full_refresh && '--full-refresh' || '' }}
         run: |
-          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary)
+          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary +fct_dbt_job_costs)
           if [ "$SCOPE" = slim ]; then
             args+=(--select state:modified+ --state ../prod-state)
             selected=$(uv run dbt ls "${args[@]}" --output name -q)
@@ -555,6 +556,18 @@ jobs:
             echo "Slim build: $(wc -l <<< "$selected") nodes" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           uv run dbt build "${args[@]}" $FULL_REFRESH
+
+      # Cost per dbt node (D71): after the build, so the job history already holds
+      # this deploy's jobs (still-running ones are picked up by the next deploy).
+      # Every deploy, slim or not: new jobs are new data, not a project change.
+      # Elementary's uploads are off here: the build above already uploaded this
+      # deploy's artifacts and results (~170 MiB a time, D56).
+      # The model ignores --full-refresh (its rows outlive the 180 days of history).
+      - name: dbt build (job costs, target prod)
+        working-directory: transform
+        run: |
+          uv run dbt build --target prod --select +fct_dbt_job_costs --exclude-resource-type unit_test \
+            --vars '{disable_dbt_artifacts_autoupload: true, disable_run_results: true, disable_tests_results: true, disable_dbt_invocation_autoupload: true}'
 
       - name: dbt docs generate
         working-directory: transform

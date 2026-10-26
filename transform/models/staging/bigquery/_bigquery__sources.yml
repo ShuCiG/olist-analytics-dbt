@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: bigquery
+    description: >
+      BigQuery's own metadata for this project, in the EU multi-region where every
+      dataset lives. Enabled with the cost mart (prod only, D71).
+    schema: region-eu
+    config:
+      enabled: "{{ (var('job_costs', target.name in ['prod', 'lint']) | string | lower == 'true') | as_bool }}"
+    tables:
+      - name: jobs_by_project
+        identifier: INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        description: >
+          One row per job of the project in the last 180 days, from every service
+          account and user, with its labels, bytes billed and slot time.
+          Partitioned by `creation_time`. Reading it needs `bigquery.jobs.listAll`
+          (dbt-runner's custom role jobHistoryViewer, infra/job_history.tf).
+        columns:
+          - name: job_id
+            description: Job ID, unique within the project.
+          - name: creation_time
+            description: When the job was created (partition column).
+          - name: labels
+            description: Job labels, `array<struct<key, value>>`; dbt sets them from its query comment.

@@ -207,6 +207,22 @@ run "github_federation" {
   }
 }
 
+run "job_history" {
+  command = plan
+
+  # The cost mart's reader lists jobs and nothing else, and only the prod writer
+  # holds it (D71)
+  assert {
+    condition     = google_project_iam_custom_role.job_history_viewer.permissions == toset(["bigquery.jobs.listAll"])
+    error_message = "jobHistoryViewer holds bigquery.jobs.listAll only."
+  }
+
+  assert {
+    condition     = google_project_iam_member.job_history_viewer.member == google_service_account.this["dbt-runner"].member
+    error_message = "Only dbt-runner holds jobHistoryViewer."
+  }
+}
+
 run "drift_check" {
   command = plan
 

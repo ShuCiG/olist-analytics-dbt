@@ -34,6 +34,8 @@ REPO = PRODUCT_DIR.parent
 TRANSFORM = REPO / "transform"
 DESCRIPTOR = PRODUCT_DIR / "olist-commerce.odps.yaml"
 ODPS_SCHEMA = PRODUCT_DIR / "odps-json-schema-v1.1.0.json"
+# dbt groups outside the Olist product: `platform` = how the platform runs (cost mart, D71)
+NOT_PRODUCT_GROUPS = {"platform"}
 
 # dbt column data types (DuckDB and BigQuery spellings) → ODCS logical types
 LOGICAL_TYPES = {
@@ -117,7 +119,8 @@ def test_product_owner_owns_the_dbt_groups(
         assert owners(contract) == {owner}, contract_id
     groups = {g["name"]: g["owner"]["name"] for g in manifest["groups"].values()}
     (declared,) = [p["value"] for p in product["customProperties"] if p["property"] == "dbtGroups"]
-    assert set(declared) == set(groups)
+    # A new group is either declared by the product or listed here on purpose
+    assert set(declared) == set(groups) - NOT_PRODUCT_GROUPS
     assert set(groups.values()) == {owner}
 
 

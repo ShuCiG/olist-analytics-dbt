@@ -13,3 +13,7 @@ groups:
     description: The people on both sides of an order, customers and sellers, located by zip code.
     owner:
       name: Aliaksandr Letsko
+  - name: platform
+    description: How the data platform itself runs, e.g. what each dbt node costs on BigQuery. Not part of the Olist data product.
+    owner:
+      name: Aliaksandr Letsko

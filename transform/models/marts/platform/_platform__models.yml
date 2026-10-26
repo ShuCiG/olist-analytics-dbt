@@ -1,0 +1,96 @@
+version: 2
+
+models:
+  - name: fct_dbt_job_costs
+    description: >
+      One row per BigQuery job dbt ran, labelled with the dbt target and node:
+      what each model, test and seed costs in bytes billed and slot time, per
+      deploy (`dbt_invocation_id`) and per day. Built in prod only, after the main
+      build of every deploy, from the project-wide job history, so it covers prod
+      deploys, the Airflow replay and PR CI (D71). Incremental, merge on `job_id`.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: job_id
+        description: BigQuery job ID. Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+      - name: dbt_invocation_id
+        description: The dbt command that ran the job (one deploy step, one Airflow run, ...).
+        data_type: string
+        data_tests: [not_null]
+      - name: dbt_target
+        description: Profile target the job ran under.
+        data_type: string
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [prod, airflow, ci, dev]
+      - name: dbt_resource_type
+        description: Type of the node (model, test, seed, snapshot), or `run` for queries outside a node (hooks, dbt's introspection, Elementary's uploads).
+        data_type: string
+        data_tests: [not_null]
+      - name: dbt_package
+        description: Package of the node (olist, elementary, ...); null for run-level queries.
+        data_type: string
+      - name: dbt_node
+        description: Node name as a BigQuery label value (lowercase, cut to 63 characters, `_v<n>` for a versioned model); null for run-level queries.
+        data_type: string
+      - name: principal
+        description: Service account (or user) that ran the job.
+        data_type: string
+      - name: statement_type
+        description: SELECT, CREATE_TABLE_AS_SELECT, MERGE, SCRIPT, ...
+        data_type: string
+      - name: created_at
+        description: When the job was created.
+        data_type: timestamp
+        data_tests: [not_null]
+      - name: created_date
+        description: Day the job was created (UTC). Partition column.
+        data_type: date
+      - name: duration_ms
+        description: Run time from start to end.
+        data_type: int64
+      - name: is_cache_hit
+        description: Answered from the result cache, 0 bytes billed.
+        data_type: boolean
+      - name: is_failed
+        description: The job ended with an error.
+        data_type: boolean
+      - name: bytes_processed
+        description: Bytes read.
+        data_type: int64
+      - name: bytes_billed
+        description: Bytes billed; at least 10 MiB per table a query reads, 0 on a cache hit.
+        data_type: int64
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: slot_ms
+        description: Slot milliseconds used.
+        data_type: int64
+
+exposures:
+  - name: olist_dashboard_costs
+    label: Dashboard page "dbt cost on BigQuery"
+    type: dashboard
+    maturity: low
+    url: https://olist-analytics-dbt.streamlit.app/
+    description: >
+      Page of the Streamlit app (`dashboard/views/costs.py`), shown on the BigQuery
+      backend only: the last 30 days' bytes billed per dbt target, the most
+      expensive prod nodes and the latest prod dbt commands. Reads prod `marts`
+      whatever `MARTS_DATASET` says (setting `COSTS_DATASET`).
+    owner:
+      name: Aliaksandr Letsko
+    config:
+      enabled: "{{ (var('job_costs', target.name in ['prod', 'lint']) | string | lower == 'true') | as_bool }}"
+    depends_on:
+      - ref('fct_dbt_job_costs')

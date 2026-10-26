@@ -64,6 +64,19 @@ def test_prod_build_is_slim_only_on_a_trusted_baseline() -> None:
     assert checkout["with"]["fetch-depth"] == 0, "uv.lock is diffed against the last deploy's commit"
 
 
+def test_prod_job_costs_step_runs_every_deploy_after_the_build() -> None:
+    steps = _jobs()["deploy-prod"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    build = steps[names.index("dbt build (target prod)")]
+    costs = steps[names.index("dbt build (job costs, target prod)")]
+    # After the build: the job history must already hold the deploy's jobs (D71)
+    assert names.index(build["name"]) < names.index(costs["name"]) < names.index("dbt docs generate")
+    assert "+fct_dbt_job_costs" in build["run"].split("args=(", 1)[1].split(")", 1)[0], "the main build leaves the cost mart out"
+    assert "--select +fct_dbt_job_costs" in costs["run"]
+    assert "if" not in costs and "state:modified" not in costs["run"], "new jobs are new data: build it on every deploy"
+    assert "--full-refresh" not in costs["run"] and "FULL_REFRESH" not in costs["run"], "its rows outlive the 180-day job history"
+
+
 def _secrets(job: dict) -> set[str]:
     return set(re.findall(r"secrets\.(\w+)", yaml.safe_dump(job)))
 
