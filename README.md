@@ -64,7 +64,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
 - **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), ELT, cross-database SQL
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
-- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, GHCR images, branch protection,
+- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
 - **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, custom IAM roles, Workload Identity Federation, budget, quota, per-query byte caps, cost per dbt node from job labels and `INFORMATION_SCHEMA.JOBS`), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
@@ -98,7 +98,7 @@ flowchart LR
 |---|---|
 | Ingestion | [dlt](https://dlthub.com/): Kaggle CSV → DuckDB / BigQuery / Databricks `raw`, order tables in monthly chunks (`merge`, cursor in dlt state) |
 | Warehouse | DuckDB (local dev), BigQuery (EU): `prod` (CD), `ci` (per-PR datasets), `airflow` (live feed); Databricks Free Edition: catalog `olist` (local), `olist_ci` (weekly CI) |
-| Transformation | dbt Core 1.12, `dbt_utils`, `dbt_expectations`, `dbt_date` |
+| Transformation | dbt Core 1.12, `dbt_utils`, `dbt_expectations`, `dbt_date`, `audit_helper` |
 | Data product | ODPS v1.1 descriptor, ODCS v3.1 contracts, `datacontract-cli`, data usage agreements |
 | Semantic layer | dbt Semantic Layer / MetricFlow |
 | Orchestration | Airflow 3 + Astronomer Cosmos (watcher mode) in Docker Compose; image published to GHCR |
@@ -365,7 +365,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 |---|---|
 | sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
-| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; a PR comment with the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
+| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
@@ -406,6 +406,9 @@ latest deploys. Only the prod writer can read the job history, through a custom 
 Every PR gets one comment, updated on each push, with what its BigQuery CI build billed: the total and the most
 expensive nodes, each next to its last prod build. CI finds its own jobs by a run label in `JOBS_BY_USER`, without the
 prod writer's role ([D72](docs/DECISIONS.md)).
+A second comment shows what the PR does to the data: every mart the CI build made is compared with its prod table
+row by row on the primary key (`dbt-labs/audit_helper`), as rows modified / added / removed, the columns that differ
+and schema changes; a refactor shows no differences ([D73](docs/DECISIONS.md)).
 
 | Sales overview | Customers & sellers |
 |---|---|
