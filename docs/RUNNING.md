@@ -11,11 +11,14 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Observability report (Elementary)](#observability-report-elementary)
 - [Project evaluator](#project-evaluator)
 - [Dashboard](#dashboard)
-- [BigQuery](#bigquery)
+- [BigQuery](#bigquery) (cost per dbt node, PR data diff)
 - [Databricks](#databricks)
 - [Airflow](#airflow)
 - [Development hooks](#development-hooks)
 - [Security review (`/audit`)](#security-review-audit)
+- [Terraform drift alert](#terraform-drift-alert)
+- [Service account keys](#service-account-keys)
+- [SCHEMA email (source column changes)](#schema-email-source-column-changes)
 
 ## Local build (DuckDB)
 
@@ -25,7 +28,7 @@ uv run python ingestion/pipeline.py   # download Olist (Kaggle, no token needed)
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 23 models + snapshot + 125 data tests + 7 unit tests
+uv run dbt build                      # seed + 23 models + snapshot + 126 data tests + 13 Elementary tests + 7 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 cd ..
 uv run pytest                         # Python tests: pipeline, dbt summary parser, alert decisions (no data needed)
@@ -206,6 +209,24 @@ cd transform && uv run dbt run-operation drop_isolated_datasets --target ci   # 
 ```
 
 The model ignores `--full-refresh` (its rows outlive the 180 days of job history); drop the table to rebuild it.
+
+### PR data diff
+
+What slim CI posts on a PR (D73), run locally as `olist-ci`: build the changed models into throwaway datasets
+deferred to the last prod deploy's manifest, compare the marts that built with prod, drop the datasets.
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/olist-ci.json DBT_CI_SCHEMA=ci_diff_check
+run_id=$(gh api "repos/ShuCiG/olist-analytics-dbt/actions/artifacts?name=prod-manifest" \n  --jq '[.artifacts[] | select(.workflow_run.head_branch == "main")][0].workflow_run.id')
+gh run download "$run_id" --name prod-manifest --dir prod-state
+cd transform && uv run dbt run --target ci --select package:elementary
+uv run dbt build --target ci --select state:modified+ --exclude package:elementary --defer --state ../prod-state
+cd .. && uv run python .github/scripts/data_diff.py prod-state/manifest.json data-diff.md   # Markdown of the comment
+cd transform && uv run dbt run-operation drop_isolated_datasets --target ci
+```
+
+The macro behind it (`dbt run-operation data_diff`, `macros/data_diff.sql`) also runs on DuckDB, e.g. against a
+hand-edited copy of a mart in another schema.
 
 ## Databricks
 
