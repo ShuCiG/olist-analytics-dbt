@@ -1,3 +1,4 @@
+-- (data diff demo: comment only)
 -- Grain: one row per order line item.
 -- Incremental: each run merges only items loaded since the last run, by `_loaded_at`.
 -- An order and its items always load together (one chunk, one `_loaded_at`), so a

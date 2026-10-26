@@ -6,7 +6,7 @@ zip_codes as (
     select * from {{ ref('int_zip_codes_located') }}
 ),
 
-final as (
+joined as (
     select
         sellers.seller_id,
         sellers.zip_code_prefix,
@@ -19,4 +19,4 @@ final as (
         on sellers.zip_code_prefix = zip_codes.zip_code_prefix
 )
 
-select * from final
+select * from joined
