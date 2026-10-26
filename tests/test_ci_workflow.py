@@ -80,7 +80,7 @@ def test_prod_job_costs_step_runs_every_deploy_after_the_build() -> None:
     assert "--exclude source:bigquery" in docs["run"]
 
 
-def test_pr_cost_comment_never_meets_pr_code() -> None:
+def test_pr_comments_never_meet_pr_code() -> None:
     jobs = _jobs()
     steps = jobs["dbt-build-bigquery"]["steps"]
     names = [s.get("name", "") for s in steps]
@@ -88,7 +88,13 @@ def test_pr_cost_comment_never_meets_pr_code() -> None:
     # After the build (its jobs are in the history), before the datasets go; a report never fails the PR (D72)
     assert names.index("dbt build (target ci)") < names.index(cost["name"]) < names.index("Drop CI datasets")
     assert cost["continue-on-error"] is True
-    job = jobs["cost-comment"]
+    # Right after the build (its run_results.json), also after failed tests; before the cost step (counts its bytes) (D73)
+    diff = steps[names.index("Data diff vs prod")]
+    assert names.index("dbt build (target ci)") + 1 == names.index(diff["name"]) < names.index(cost["name"])
+    assert diff["continue-on-error"] is True and diff["if"] == "${{ !cancelled() && env.SLIM_CI == 'true' }}"
+    upload = steps[names.index("Upload PR comments")]
+    assert "ci-cost.md" in upload["with"]["path"] and "data-diff.md" in upload["with"]["path"]
+    job = jobs["pr-comments"]
     assert job["needs"] == "dbt-build-bigquery" and "result != 'skipped'" in job["if"]
     assert job["permissions"] == {"actions": "read", "pull-requests": "write"}
     # The token that writes PR comments runs no code of the PR

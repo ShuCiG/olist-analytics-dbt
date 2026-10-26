@@ -16,3 +16,7 @@ packages:
   # anomaly + schema-change tests. Report: `edr report` (CLI, not in uv.lock, D38).
   - package: elementary-data/elementary
     version: [">=0.26.0", "<0.27.0"]
+  # Data diff of a PR's marts against prod (D73): macros only, called by
+  # .github/scripts/data_diff.py through `dbt run-operation data_diff`.
+  - package: dbt-labs/audit_helper
+    version: [">=0.14.0", "<0.15.0"]

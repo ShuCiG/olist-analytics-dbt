@@ -18,6 +18,12 @@ query-comment:
   comment: "{{ query_comment(node) }}"
   job-label: true
 
+# audit_helper (data diff, D73) looks in this project first: macros/data_diff.sql
+# adds the DuckDB version of a macro the package has no DuckDB version of.
+dispatch:
+  - macro_namespace: audit_helper
+    search_order: ["olist", "audit_helper"]
+
 flags:
   # Future dbt default: a package's ref() looks in the package first, then in the
   # root project. dbt_project_evaluator's ref to its exceptions seed then finds
