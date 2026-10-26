@@ -162,6 +162,9 @@ def test_notify_failure_runs_base_branch_code_on_prs() -> None:
     [
         (["README.md", "docs/DECISIONS.md", "airflow/README.md"], False),
         ([".github/ISSUE_TEMPLATE/task.yml", ".github/pull_request_template.md"], False),
+        # README screenshots
+        (["README.md", "docs/images/dashboard-costs.png"], False),
+        (["dashboard/app.py", "docs/images/dashboard-costs.png"], True),
         # dbt docs blocks: dbt docs reads them
         (["transform/models/_docs.md"], True),
         (["README.md", "transform/models/marts/fct_orders.sql"], True),
