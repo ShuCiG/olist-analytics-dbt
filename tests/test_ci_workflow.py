@@ -80,6 +80,21 @@ def test_prod_job_costs_step_runs_every_deploy_after_the_build() -> None:
     assert "--exclude source:bigquery" in docs["run"]
 
 
+def test_pr_cost_comment_never_meets_pr_code() -> None:
+    jobs = _jobs()
+    steps = jobs["dbt-build-bigquery"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    cost = steps[names.index("BigQuery cost of this run")]
+    # After the build (its jobs are in the history), before the datasets go; a report never fails the PR (D72)
+    assert names.index("dbt build (target ci)") < names.index(cost["name"]) < names.index("Drop CI datasets")
+    assert cost["continue-on-error"] is True
+    job = jobs["cost-comment"]
+    assert job["needs"] == "dbt-build-bigquery" and "result != 'skipped'" in job["if"]
+    assert job["permissions"] == {"actions": "read", "pull-requests": "write"}
+    # The token that writes PR comments runs no code of the PR
+    assert not [s for s in job["steps"] if "uses" in s], "no checkout or action in the comment job"
+
+
 def _secrets(job: dict) -> set[str]:
     return set(re.findall(r"secrets\.(\w+)", yaml.safe_dump(job)))
 

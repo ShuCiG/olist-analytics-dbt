@@ -397,10 +397,57 @@ jobs:
             uv run dbt build --target ci --exclude package:elementary
           fi
 
+      # Bytes billed by this run's dbt jobs (job label github_run, D72), for the
+      # PR comment of job cost-comment. Never fails the build: it is a report.
+      - name: BigQuery cost of this run
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          uv run python .github/scripts/ci_cost.py olist-analytics-dbt-472315 "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" ci-cost.md             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          cat ci-cost.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload cost summary
+        if: ${{ !cancelled() && hashFiles('ci-cost.md') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ci-cost
+          path: ci-cost.md
+          retention-days: 7
+
       - name: Drop CI datasets
         if: always()
         working-directory: transform
         run: uv run dbt run-operation drop_isolated_datasets --target ci
+
+  # One PR comment with the BigQuery cost of the CI build, updated on every push
+  # (D72); none when the BigQuery build skipped (docs only, Dependabot). A job of
+  # its own: the token that writes PR comments never meets PR code (no checkout,
+  # the body is the Markdown the build job uploaded).
+  cost-comment:
+    name: BigQuery cost comment
+    if: ${{ !cancelled() && needs.dbt-build-bigquery.result != 'skipped' }}
+    needs: dbt-build-bigquery
+    permissions:
+      actions: read  # download the cost summary of this run
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+        run: |
+          if ! gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name ci-cost; then
+            echo "::warning::No cost summary in this run: see step 'BigQuery cost of this run'"
+            exit 0
+          fi
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments"             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- bigquery-cost -->"))) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@ci-cost.md > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@ci-cost.md > /dev/null
+          fi
 
   # CD: main → ingest raw + build prod on BigQuery, publish docs and the manifest
   # that slim CI defers to. Unit tests already ran in the PR (see D13).
@@ -733,7 +780,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, cost-comment, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

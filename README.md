@@ -365,7 +365,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 |---|---|
 | sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main` | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
-| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
+| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; a PR comment with the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages; manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
@@ -403,6 +403,9 @@ package, node name), and each prod deploy turns BigQuery's job history into `fct
 prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes and the
 latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
 ([D71](docs/DECISIONS.md)).
+Every PR gets one comment, updated on each push, with what its BigQuery CI build billed: the total and the most
+expensive nodes, each next to its last prod build. CI finds its own jobs by a run label in `JOBS_BY_USER`, without the
+prod writer's role ([D72](docs/DECISIONS.md)).
 
 | Sales overview | Customers & sellers |
 |---|---|
