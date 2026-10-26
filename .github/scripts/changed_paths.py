@@ -3,14 +3,15 @@
 Reads changed paths (one per line, `git diff --name-only`) from stdin and prints
 `code=true` or `code=false` for $GITHUB_OUTPUT. `false` only when every path is
 documentation that no build reads: Markdown outside transform/ (dbt docs blocks
-live in transform/models/*.md and feed dbt docs) and the issue forms. Anything
+live in transform/models/*.md and feed dbt docs), the issue forms and the README
+screenshots in docs/images/. Anything
 else, or no paths at all, counts as code: when in doubt, build.
 """
 
 import sys
 from pathlib import PurePosixPath
 
-DOCS_DIRS = (".github/ISSUE_TEMPLATE/",)
+DOCS_DIRS = (".github/ISSUE_TEMPLATE/", "docs/images/")
 BUILD_DIRS = ("transform/",)
 
 
