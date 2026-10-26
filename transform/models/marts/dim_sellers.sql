@@ -10,7 +10,7 @@ joined as (
     select
         sellers.seller_id,
         sellers.zip_code_prefix,
-        sellers.city,
+        upper(sellers.city) as city,
         sellers.state,
         zip_codes.latitude,
         zip_codes.longitude
