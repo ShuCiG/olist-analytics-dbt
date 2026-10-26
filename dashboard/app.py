@@ -6,13 +6,15 @@ import warehouse
 
 st.set_page_config(page_title="Olist analytics", page_icon=":bar_chart:", layout="wide")
 
-page = st.navigation(
-    [
-        st.Page("views/overview.py", title="Sales overview", icon=":material/payments:", default=True),
-        st.Page("views/delivery.py", title="Delivery & reviews", icon=":material/local_shipping:"),
-        st.Page("views/customers.py", title="Customers & sellers", icon=":material/storefront:"),
-    ]
-)
+pages = [
+    st.Page("views/overview.py", title="Sales overview", icon=":material/payments:", default=True),
+    st.Page("views/delivery.py", title="Delivery & reviews", icon=":material/local_shipping:"),
+    st.Page("views/customers.py", title="Customers & sellers", icon=":material/storefront:"),
+]
+# The cost mart exists on BigQuery only (D71)
+if warehouse.BACKEND == "bigquery":
+    pages.append(st.Page("views/costs.py", title="dbt cost on BigQuery", icon=":material/savings:"))
+page = st.navigation(pages)
 
 lo, hi = warehouse.date_bounds()
 default = warehouse.default_period(lo, hi)

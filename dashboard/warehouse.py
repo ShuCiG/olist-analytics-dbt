@@ -32,6 +32,9 @@ def _setting(name: str, default: str) -> str:
 BACKEND = _setting("DASHBOARD_BACKEND", "duckdb")
 GCP_PROJECT = _setting("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 MARTS_DATASET = _setting("MARTS_DATASET", "marts")
+# The cost mart (fct_dbt_job_costs, D71) is built in prod only, so the cost page
+# reads prod `marts` also when the order pages read the Airflow feed
+COSTS_DATASET = _setting("COSTS_DATASET", "marts")
 # Same default and env var as transform/profiles.yml, resolved from the repo root
 DUCKDB_PATH = os.environ.get(
     "DBT_DUCKDB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "olist.duckdb")
@@ -57,6 +60,11 @@ def table(name: str) -> str:
     if BACKEND == "bigquery":
         return f"`{GCP_PROJECT}.{MARTS_DATASET}.{name}`"
     return f"{MARTS_DATASET}.{name}"
+
+
+def costs_table() -> str:
+    """The cost mart on BigQuery (dataset `COSTS_DATASET`); no DuckDB twin."""
+    return f"`{GCP_PROJECT}.{COSTS_DATASET}.fct_dbt_job_costs`"
 
 
 def source_label() -> str:

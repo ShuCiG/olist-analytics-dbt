@@ -162,6 +162,7 @@ App secrets:
 ```toml
 DASHBOARD_BACKEND = "bigquery"
 MARTS_DATASET = "airflow_marts"   # default "marts" (prod)
+# COSTS_DATASET = "marts"         # cost page (BigQuery only): where fct_dbt_job_costs lives, default prod "marts"
 
 [gcp_service_account]   # fields of the service account's JSON key
 type = "service_account"
@@ -186,6 +187,25 @@ export GCP_PROJECT_ID=<your-project>
 uv run python ingestion/pipeline.py --destination bigquery
 cd transform && uv run dbt build --target prod
 ```
+
+### Cost per dbt node
+
+Every query dbt sends to BigQuery carries job labels (`dbt_target`, `dbt_resource_type`, `dbt_package`, `dbt_node`;
+`macros/query_comment.sql`). The prod deploy builds `fct_dbt_job_costs` from the project's job history after the
+main build (D71); the dashboard's cost page reads it. The models are enabled only for target `prod`: reading
+`INFORMATION_SCHEMA.JOBS_BY_PROJECT` needs `bigquery.jobs.listAll`, which `dbt-runner` holds through the custom role
+`jobHistoryViewer` (`infra/job_history.tf`) and the project owner holds anyway. To try it as the owner in throwaway
+datasets:
+
+```bash
+unset GOOGLE_APPLICATION_CREDENTIALS          # your own account (ADC), not a service account key
+export DBT_CI_SCHEMA=ci_cost_check            # datasets ci_cost_check_staging / _marts
+cd transform && uv run dbt build --target ci --select +fct_dbt_job_costs --vars '{job_costs: true}'
+cd .. && DASHBOARD_BACKEND=bigquery COSTS_DATASET=ci_cost_check_marts uv run streamlit run dashboard/app.py
+cd transform && uv run dbt run-operation drop_isolated_datasets --target ci   # drop them afterwards
+```
+
+The model ignores `--full-refresh` (its rows outlive the 180 days of job history); drop the table to rebuild it.
 
 ## Databricks
 

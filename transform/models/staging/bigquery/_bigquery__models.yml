@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_bigquery__jobs
+    description: >
+      Every job of the project in the last 180 days (JOBS_BY_PROJECT), with dbt's
+      job labels as columns. BigQuery only, enabled with the cost mart (D71). The
+      key tests look at the last day only: the view is partitioned by
+      `created_at`, so each reads one day of history instead of 180.
+    columns:
+      - name: job_id
+        description: Job ID, unique within the project. Primary key.
+        data_tests:
+          - unique: &last_day
+              config:
+                where: "created_at >= timestamp_sub(current_timestamp(), interval 1 day)"
+          - not_null: *last_day
+      - name: parent_job_id
+        description: The script job this one is a statement of; null for a top-level job.
+      - name: created_at
+        description: When the job was created (partition column of the source view).
+      - name: started_at
+        description: When the job started running.
+      - name: ended_at
+        description: When the job finished; null while it runs.
+      - name: principal
+        description: Who ran the job (service account or user email).
+      - name: job_type
+        description: QUERY, LOAD, EXTRACT, COPY.
+      - name: statement_type
+        description: SELECT, CREATE_TABLE_AS_SELECT, MERGE, SCRIPT, ... (query jobs).
+      - name: state
+        description: PENDING, RUNNING or DONE.
+      - name: is_failed
+        description: The job ended with an error.
+      - name: is_cache_hit
+        description: Answered from BigQuery's result cache (0 bytes billed).
+      - name: bytes_processed
+        description: Bytes the job read.
+      - name: bytes_billed
+        description: Bytes billed (on-demand pricing; at least 10 MiB per table a query reads).
+      - name: slot_ms
+        description: Slot milliseconds the job used.
+      - name: dbt_invocation_id
+        description: Label set by dbt-bigquery on every job it runs, one value per dbt command.
+      - name: dbt_target
+        description: Label from dbt's query comment (macros/query_comment.sql), the profile target (prod, airflow, ci).
+      - name: dbt_resource_type
+        description: Label from dbt's query comment, the node's type (model, test, seed, snapshot); null for run-level queries.
+      - name: dbt_package
+        description: Label from dbt's query comment, the node's package (olist, elementary, ...).
+      - name: dbt_node
+        description: Label from dbt's query comment, the node's name (plus `_v<n>` for a versioned model), lowercased and cut to 63 characters.

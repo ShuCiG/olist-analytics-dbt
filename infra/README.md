@@ -8,6 +8,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `service_accounts.tf` | `dbt-runner`, `dashboard-reader`, `olist-ci` (no keys, see below) |
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
+| `job_history.tf` | custom role `jobHistoryViewer` (`bigquery.jobs.listAll` only) for `dbt-runner`: the cost mart reads the project's job history (D71) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
 | `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
@@ -44,6 +45,7 @@ terraform apply
 - the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private;
 - GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests) and `terraform-plan` (from the `drift-check` environment), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
 - `terraform-plan` holds viewer-type roles only and reads only the state bucket and the billing account.
+- `jobHistoryViewer` holds `bigquery.jobs.listAll` only, and only `dbt-runner` holds it.
 
 `tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
 
