@@ -7,9 +7,16 @@
     type, package and name run together. Separate keys keep them apart. Run-level
     queries (hooks, introspection) have no node: only `dbt_target`.
     dbt-bigquery adds `dbt_invocation_id` to every job by itself.
+    In GitHub Actions `github_run` (run id, attempt) ties the jobs of every dbt
+    command in one workflow run together: the PR cost comment sums them (D72).
 #}
 {% macro query_comment(node) -%}
     {%- set labels = {'app': 'dbt', 'dbt_target': target.name} -%}
+    {%- if env_var('GITHUB_RUN_ID', '') -%}
+        {%- do labels.update({
+            'github_run': env_var('GITHUB_RUN_ID') ~ '-' ~ env_var('GITHUB_RUN_ATTEMPT', '1'),
+        }) -%}
+    {%- endif -%}
     {%- if node is not none -%}
         {#- Only models have versions; other nodes give an empty value, not none -#}
         {%- do labels.update({
