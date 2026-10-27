@@ -6,7 +6,8 @@ name: Databricks
 # GitHub OIDC federation, so no keyless login as in D57).
 on:
   schedule:
-    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+    # Off the full hour: GitHub delays or drops schedules at :00 (the first one fired 6 h late)
+    - cron: "17 6 * * 1"  # Mondays 06:17 UTC
   workflow_dispatch:
 
 concurrency:
@@ -22,7 +23,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment: databricks-ci
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 55  # up to 20 min waiting for the warehouse, then the run
     defaults:
       run:
         shell: bash
@@ -57,20 +58,32 @@ jobs:
           path: ~/.cache/kagglehub
           key: kagglehub-olistbr-brazilian-ecommerce-v2
 
+      # Free Edition's warehouse sometimes can't start for a while ("Cannot create the
+      # resource"): wait for it, and when it stays down skip the run instead of
+      # failing it (no failure email, D78). Every later step needs available == true;
+      # an error of ours (auth, permissions) fails here as before.
+      - name: Wait for the SQL warehouse
+        id: warehouse
+        run: uv run python .github/scripts/databricks_warehouse.py
+
       # A few months keep the run inside Free Edition's daily compute quota
       - name: Ingest raw data (dlt → Databricks)
+        if: steps.warehouse.outputs.available == 'true'
         run: uv run python ingestion/pipeline.py --destination databricks --dataset "$DBT_RAW_SCHEMA" --until 2017-03
 
       # Data product (D36, D64): the same contracts as in the DuckDB CI job
       - name: Input data contract (raw)
+        if: steps.warehouse.outputs.available == 'true'
         run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server databricks-ci
 
       - name: dbt deps
+        if: steps.warehouse.outputs.available == 'true'
         working-directory: transform
         run: uv run dbt deps
 
       # The cleanup below must refuse a schema outside ci_*
       - name: Drop guard refuses non-CI schemas
+        if: steps.warehouse.outputs.available == 'true'
         working-directory: transform
         env:
           DBT_CI_SCHEMA: marts_guard_check
@@ -82,18 +95,21 @@ jobs:
 
       # Elementary's tables first, as in every fresh warehouse (D38)
       - name: dbt run (Elementary tables)
+        if: steps.warehouse.outputs.available == 'true'
         working-directory: transform
         run: uv run dbt run --target databricks_ci --select package:elementary
 
       - name: dbt build (target databricks_ci)
+        if: steps.warehouse.outputs.available == 'true'
         working-directory: transform
         run: uv run dbt build --target databricks_ci --exclude package:elementary
 
       - name: Output data contract (marts)
+        if: steps.warehouse.outputs.available == 'true'
         run: uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server databricks-ci
 
       - name: Upload manifest (for the failure email)
-        if: always()
+        if: always() && steps.warehouse.outputs.available == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ci-manifest
@@ -101,7 +117,7 @@ jobs:
           retention-days: 3
 
       - name: Drop CI schemas
-        if: always()
+        if: always() && steps.warehouse.outputs.available == 'true'
         working-directory: transform
         run: uv run dbt run-operation drop_isolated_datasets --target databricks_ci
 
