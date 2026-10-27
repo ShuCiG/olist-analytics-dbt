@@ -176,6 +176,33 @@ def test_new_month_in_the_dump_loads_without_local_state(run, tmp_path: Path) ->
     assert (status["orders_loaded"], status["orders_total"]) == (1, 4)
 
 
+@pytest.mark.parametrize("args", [(), ("--next",)])
+def test_new_duckdb_file_loads_from_the_start_with_local_state(run, tmp_path: Path, args) -> None:
+    run()  # everything; the local cursor now says 2016-12
+    # The pipeline name is per destination and dataset, not per file (#152)
+    status = run("--duckdb-path", str(tmp_path / "other.duckdb"), *args)
+    assert status["orders_loaded"] == (4 if not args else 2)
+    assert status["last_order_at"][:7] == ("2016-12" if not args else "2016-09")
+
+
+def test_deleted_duckdb_file_loads_from_the_start(run) -> None:
+    run()
+    run.db.unlink()
+    status = run("--next")
+    assert (status["orders_loaded"], status["orders_total"]) == (2, 2)
+
+
+def test_older_copy_of_duckdb_file_loads_from_its_own_cursor(run) -> None:
+    run("--until", "2016-09")
+    backup = run.db.with_name("backup.duckdb")
+    shutil.copy(run.db, backup)
+    run()  # everything
+    shutil.copy(backup, run.db)
+    # dlt keeps a local state newer than the destination's: it must not win here
+    status = run()
+    assert (status["orders_loaded"], status["orders_total"]) == (2, 4)
+
+
 def test_next_loads_when_a_failed_run_left_packages(run, monkeypatch: pytest.MonkeyPatch) -> None:
     run()  # everything
     reloaded = loaded_at(run.db, "customers")

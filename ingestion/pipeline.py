@@ -20,7 +20,9 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   once the dump is used up it loads no orders). When the cursor shows no new month
   in the dump, any mode but `--full-refresh` skips the load and only reads the
   status: an idle hourly run or a deploy then costs one warehouse query (plus the
-  state read on a fresh runner) instead of a dozen.
+  state read on a fresh runner) instead of a dozen. The local cursor is trusted only
+  while the destination's raw orders end in the same month: a new, deleted or
+  replaced DuckDB file (or a dropped dataset) resets it from the destination.
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
@@ -70,6 +72,7 @@ from dlt.common.configuration.specs import GcpServiceAccountCredentials
 from dlt.common.pipeline import LoadInfo
 from dlt.common.schema import Schema
 from dlt.destinations.adapters import bigquery_adapter
+from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
@@ -230,21 +233,54 @@ def loaded_until(pipeline: dlt.Pipeline) -> str | None:
     return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
 
-def nothing_to_load(pipeline: dlt.Pipeline, source_dir: Path, until: str | None) -> bool:
+OrdersStatus = tuple[int, str | None, datetime | None]
+
+
+def orders_status(pipeline: dlt.Pipeline) -> OrdersStatus | None:
+    """Count, last purchase time and last `_loaded_at` of raw orders; None without the table."""
+    try:
+        with pipeline.sql_client() as client:
+            orders = client.make_qualified_table_name("orders")
+            rows = client.execute_sql(
+                f"select count(*), max(order_purchase_timestamp), max(_loaded_at) from {orders}"
+            )
+    except DatabaseUndefinedRelation:
+        return None
+    assert rows, "no result from the orders status query"
+    total, last_order_at, last_loaded_at = rows[0]
+    return total, last_order_at, last_loaded_at
+
+
+def nothing_to_load(
+    pipeline: dlt.Pipeline, source_dir: Path, until: str | None, status: OrdersStatus | None
+) -> bool:
     """True when the dump has no order month after the cursor (up to `until`).
 
     Decided before the load: a dlt run reads its state from the destination, then
     replaces the reference tables and runs four merges even for a chunk of 0 orders,
     and every one is a billed query (BigQuery bills at least 10 MB each). The cursor
-    comes from the local dlt state; without one (fresh runner or volume) it is read
-    from the destination first, the same restore a run would do, but only that.
+    comes from the local dlt state when it matches the last purchase month of raw
+    orders (`status`, the query the feed status needs anyway). Otherwise it is read
+    from the destination, the same restore a run would do, but only that: no local
+    cursor (fresh runner or volume), or one the destination doesn't have (a new,
+    deleted or replaced DuckDB file, a dropped dataset; the pipeline name is not
+    per file). Such a local state is dropped first: dlt keeps a local state that is
+    newer than the destination's, and the load would then start after its cursor.
     Anything unclear means "load as usual": no cursor anywhere (first load) or
     packages a failed run left behind (only a load retries them). Reference tables
     are not reloaded on a skipped run; in the dump they never change.
     """
     if pipeline.has_pending_data:
         return False
-    if not loaded_until(pipeline):
+    local_cursor = loaded_until(pipeline)
+    last_order_at = status[1] if status else None
+    if local_cursor != (last_order_at[:7] if last_order_at else None):
+        if local_cursor:
+            print(
+                f"Local dlt state has orders until {local_cursor}, the destination "
+                f"until {last_order_at[:7] if last_order_at else 'none'}: state reset from the destination"
+            )
+            pipeline.drop()
         pipeline.sync_destination()
     cursor = loaded_until(pipeline)
     if not cursor:
@@ -302,7 +338,7 @@ def removed_columns(source_dir: Path, schema: Schema) -> dict[str, list[str]]:
 
 
 def feed_status(
-    pipeline: dlt.Pipeline,
+    status: OrdersStatus | None,
     orders_loaded: int,
     added_columns: dict[str, list[str]],
     dropped_columns: dict[str, list[str]],
@@ -312,13 +348,8 @@ def feed_status(
     `last_loaded_at` only moves when a run brings orders (merge of 0 rows writes
     nothing): the same signal as `dbt source freshness`.
     """
-    with pipeline.sql_client() as client:
-        orders = client.make_qualified_table_name("orders")
-        rows = client.execute_sql(
-            f"select count(*), max(order_purchase_timestamp), max(_loaded_at) from {orders}"
-        )
-    assert rows, "no result from the orders status query"
-    total, last_order_at, last_loaded_at = rows[0]
+    assert status is not None, "no raw orders table after the run"
+    total, last_order_at, last_loaded_at = status
     # Airflow renders it into a dbt command line (Elementary's clock): a value from
     # the dump that isn't a plain timestamp must stop the run, not reach a shell
     if last_order_at is not None and not re.fullmatch(TIMESTAMP, last_order_at):
@@ -382,13 +413,15 @@ def main() -> None:
     source_dir = Path(kagglehub.dataset_download(KAGGLE_DATASET))
     pipeline = dlt.pipeline(
         # Separate state per destination and dataset. Not per DuckDB file: Airflow's
-        # file has its own dlt state dir (container volume), so names don't clash.
+        # file has its own dlt state dir (container volume); a local cursor from
+        # another file is caught by nothing_to_load().
         pipeline_name=f"olist_{args.destination}"
         + ("" if args.dataset == "raw" else f"_{args.dataset}"),
         destination=make_destination(args.destination, args.duckdb_path),
         dataset_name=args.dataset,
     )
-    if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until):
+    status = None if args.full_refresh else orders_status(pipeline)
+    if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until, status):
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")
         orders_loaded, added_columns, dropped_columns = 0, {}, {}
     else:
@@ -412,8 +445,9 @@ def main() -> None:
         dropped_columns = removed_columns(source_dir, pipeline.default_schema)
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
+        status = orders_status(pipeline)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(pipeline, orders_loaded, added_columns, dropped_columns)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns)))
 
 
 if __name__ == "__main__":
