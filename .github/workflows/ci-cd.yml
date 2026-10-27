@@ -640,18 +640,50 @@ jobs:
       # The catalog checks every schema of the project's relations; the job-history
       # source's schema is `region-eu` (INFORMATION_SCHEMA), whose tables BigQuery
       # refuses to list, so it stays out of the catalog (D71). The manifest keeps it.
+      # A catalog query bills 50 MiB per dataset, 350 MiB for the full one (D77). A
+      # slim deploy can only change the relations of state:modified+ (as the build):
+      # it reads the catalog of those (by relation, in their datasets only), takes
+      # the rest from the last deploy's catalog and inlines it into the page itself
+      # (docs_catalog.py). Full catalog on a full build, a new or removed raw column
+      # (the sources' columns change without a project change) or no baseline catalog.
       - name: dbt docs generate
         working-directory: transform
         env:
           # dbt-bigquery's catalog query: agate warns about a missing table_owner column, harmless
           PYTHONWARNINGS: ignore::RuntimeWarning:agate.type_tester
-        run: uv run dbt docs generate --target prod --static --exclude source:bigquery
+          SCOPE: ${{ steps.scope.outputs.scope }}
+          NEW_COLUMNS: ${{ steps.ingest.outputs.new_columns }}
+          REMOVED_COLUMNS: ${{ steps.ingest.outputs.removed_columns }}
+          BASELINE_SHA: ${{ steps.baseline.outputs.sha }}
+        run: |
+          args=(--target prod --exclude source:bigquery)
+          if [ "$SCOPE" != slim ] || [ ! -f ../prod-state/catalog.json ] || [ "$NEW_COLUMNS" != '{}' ] || [ "$REMOVED_COLUMNS" != '{}' ]; then
+            uv run dbt docs generate "${args[@]}" --static
+            echo "Docs catalog: full" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sel=(--select state:modified+ --state ../prod-state)
+          uv run dbt ls "${args[@]}" "${sel[@]}" --resource-type model seed snapshot source \
+            --output json --output-keys unique_id -q | jq -r .unique_id > "$RUNNER_TEMP/catalog-selected.txt"
+          if [ -s "$RUNNER_TEMP/catalog-selected.txt" ]; then
+            uv run dbt docs generate "${args[@]}" "${sel[@]}"
+            cp target/catalog.json "$RUNNER_TEMP/catalog-partial.json"
+          else
+            echo '{"nodes": {}, "sources": {}}' > "$RUNNER_TEMP/catalog-partial.json"
+          fi
+          uv run dbt docs generate "${args[@]}" --empty-catalog
+          uv run python ../.github/scripts/docs_catalog.py ../prod-state/catalog.json \
+            "$RUNNER_TEMP/catalog-partial.json" "$RUNNER_TEMP/catalog-selected.txt" \
+            | sed "s/\$/ (${BASELINE_SHA:0:7})/" | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # The catalog is the next slim deploy's baseline (step above)
       - name: Upload prod manifest (state for slim CI)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: prod-manifest
-          path: transform/target/manifest.json
+          path: |
+            transform/target/manifest.json
+            transform/target/catalog.json
           retention-days: 90
 
       - name: Prepare docs site
