@@ -6,12 +6,14 @@
     (lowercase, [a-z0-9_-], 63 characters) turn into `model_olist_fct_orders_v2`:
     type, package and name run together. Separate keys keep them apart. Run-level
     queries (hooks, introspection) have no node: only `dbt_target`.
+    `dbt_command` (build, run-operation, generate for `docs generate`, ...) tells
+    apart what a run-level query belongs to (#147).
     dbt-bigquery adds `dbt_invocation_id` to every job by itself.
     In GitHub Actions `github_run` (run id, attempt) ties the jobs of every dbt
     command in one workflow run together: the PR cost comment sums them (D72).
 #}
 {% macro query_comment(node) -%}
-    {%- set labels = {'app': 'dbt', 'dbt_target': target.name} -%}
+    {%- set labels = {'app': 'dbt', 'dbt_target': target.name, 'dbt_command': flags.WHICH} -%}
     {%- if env_var('GITHUB_RUN_ID', '') -%}
         {%- do labels.update({
             'github_run': env_var('GITHUB_RUN_ID') ~ '-' ~ env_var('GITHUB_RUN_ATTEMPT', '1'),

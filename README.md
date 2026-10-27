@@ -380,8 +380,9 @@ service principal limited to its own catalog, tests both data contracts on those
 Two PR comments, updated on each push, come from the BigQuery build. The **data diff** compares every mart the build
 made with its prod table row by row on the primary key (`dbt-labs/audit_helper`): rows modified / added / removed,
 the columns that differ, schema changes; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
-comment lists what the build billed, the most expensive nodes each next to its last prod build; CI finds its own
-jobs by a run label in `JOBS_BY_USER`, without the prod writer's role ([D72](docs/DECISIONS.md)).
+comment lists what the build billed, the most expensive nodes each next to its last prod build, Elementary's uploads
+apart from dbt's own queries; CI finds its own jobs by a run label in `JOBS_BY_USER`, without the prod writer's role
+([D72](docs/DECISIONS.md)).
 
 Docs-only changes (Markdown outside `transform/`, issue forms) run only the lint, type check and tests:
 the builds and the prod deploy skip ([D52](docs/DECISIONS.md)).
@@ -411,8 +412,8 @@ exposure, so it appears in the lineage.
 
 On BigQuery a fourth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
 package, node name), and each prod deploy turns BigQuery's job history into `fct_dbt_job_costs`, one row per job, for
-prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes and the
-latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
+prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes (queries
+outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
 ([D71](docs/DECISIONS.md)).
 
 | Sales overview | Customers & sellers |

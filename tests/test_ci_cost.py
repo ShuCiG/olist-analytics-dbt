@@ -51,3 +51,19 @@ def test_no_jobs() -> None:
     body = ci_cost.render([], {})
     assert body.startswith(ci_cost.MARKER)
     assert "No dbt jobs found for this run." in body
+
+
+def test_run_level_split_by_origin() -> None:
+    ci = [
+        NodeCost(None, None, 12, 180 * MIB, origin="elementary"),
+        NodeCost(None, None, 5, 40 * MIB, origin="build"),
+        NodeCost(None, None, 3, 30 * MIB, origin="run-operation"),
+        NodeCost(None, None, 1, 10 * MIB, origin=""),
+    ]
+    rows = [line for line in ci_cost.render(ci, {}).splitlines() if line.startswith("| run-level")]
+    assert rows == [
+        "| run-level: Elementary uploads | run | 12 | 180 MiB | – |",
+        "| run-level: dbt build (hooks, introspection) | run | 5 | 40 MiB | – |",
+        "| run-level: dbt run-operation | run | 3 | 30 MiB | – |",
+        "| run-level: dbt (hooks, introspection) | run | 1 | 10 MiB | – |",
+    ]

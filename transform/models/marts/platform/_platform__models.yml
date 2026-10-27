@@ -41,6 +41,20 @@ models:
       - name: dbt_node
         description: Node name as a BigQuery label value (lowercase, cut to 63 characters, `_v<n>` for a versioned model); null for run-level queries.
         data_type: string
+      - name: dbt_command
+        description: dbt command that ran the job (build, run-operation, generate for `docs generate`, ...); null for jobs from before the label (#147).
+        data_type: string
+      - name: run_origin
+        description: >
+          Run-level queries only (null for a node's jobs): `elementary` for Elementary's
+          on-run-end uploads (the job or one of its statements reads or writes a
+          table of Elementary), `dbt` for the rest (introspection, hooks, the catalog of
+          `docs generate`, run-operations).
+        data_type: string
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [elementary, dbt]
       - name: principal
         description: Service account (or user) that ran the job.
         data_type: string
@@ -86,7 +100,8 @@ exposures:
     description: >
       Page of the Streamlit app (`dashboard/views/costs.py`), shown on the BigQuery
       backend only: the last 30 days' bytes billed per dbt target, the most
-      expensive prod nodes and the latest prod dbt commands. Reads prod `marts`
+      expensive prod nodes (run-level queries split by origin) and the latest
+      prod dbt commands. Reads prod `marts`
       whatever `MARTS_DATASET` says (setting `COSTS_DATASET`).
     owner:
       name: Aliaksandr Letsko

@@ -22,19 +22,52 @@ MARKER = "<!-- bigquery-cost -->"
 TOP = 15
 MIB = 1024 * 1024
 
+# Run-level jobs (no node) split by origin as in the cost mart (#147): `elementary` when
+# the job or one of its statements (child jobs) touches an Elementary dataset, else the
+# dbt command (`build`, `run-operation`, ...)
 CI_JOBS_SQL = """
+with run_jobs as (
+    select
+        job_id,
+        parent_job_id,
+        state,
+        total_bytes_billed,
+        (select l.value from unnest(labels) as l where l.key = 'dbt_resource_type') as resource_type,
+        (select l.value from unnest(labels) as l where l.key = 'dbt_node') as node,
+        (select l.value from unnest(labels) as l where l.key = 'dbt_command') as command,
+        exists (
+            select 1 from unnest(array_concat(referenced_tables, [destination_table])) as t
+            where
+                ends_with(t.dataset_id, 'elementary')
+                and not starts_with(t.table_id, '__')
+                and not starts_with(t.table_id, 'INFORMATION_SCHEMA')
+        ) as touches_elementary
+    from `region-eu`.INFORMATION_SCHEMA.JOBS_BY_USER
+    where
+        creation_time >= timestamp_sub(current_timestamp(), interval 1 day)
+        and exists (select 1 from unnest(labels) as l where l.key = 'github_run' and l.value = @run)
+),
+statements as (
+    select parent_job_id as job_id, logical_or(touches_elementary) as touches_elementary
+    from run_jobs
+    where parent_job_id is not null
+    group by parent_job_id
+)
 select
-    (select l.value from unnest(labels) as l where l.key = 'dbt_resource_type') as resource_type,
-    (select l.value from unnest(labels) as l where l.key = 'dbt_node') as node,
+    j.resource_type,
+    j.node,
+    case
+        when j.node is not null then null
+        when j.touches_elementary or coalesce(s.touches_elementary, false) then 'elementary'
+        else coalesce(j.command, '')
+    end as origin,
     count(*) as jobs,
-    countif(state != 'DONE') as unfinished,
-    sum(coalesce(total_bytes_billed, 0)) as bytes_billed
-from `region-eu`.INFORMATION_SCHEMA.JOBS_BY_USER
-where
-    creation_time >= timestamp_sub(current_timestamp(), interval 1 day)
-    and parent_job_id is null
-    and exists (select 1 from unnest(labels) as l where l.key = 'github_run' and l.value = @run)
-group by resource_type, node
+    countif(j.state != 'DONE') as unfinished,
+    sum(coalesce(j.total_bytes_billed, 0)) as bytes_billed
+from run_jobs as j
+left join statements as s on j.job_id = s.job_id
+where j.parent_job_id is null
+group by resource_type, node, origin
 """
 
 # Per node, the jobs of the latest prod invocation that built or tested it
@@ -59,11 +92,20 @@ qualify row_number() over (partition by resource_type, node order by built_at de
 
 @dataclass
 class NodeCost:
-    resource_type: str | None  # None: run-level queries (hooks, introspection)
+    resource_type: str | None  # None: run-level queries (hooks, introspection, Elementary)
     node: str | None
     jobs: int
     bytes_billed: int
     unfinished: int = 0
+    origin: str | None = None  # run-level only: 'elementary' or the dbt command ('' before the label)
+
+
+def run_level_name(origin: str | None) -> str:
+    if origin == "elementary":
+        return "run-level: Elementary uploads"
+    if origin == "run-operation":
+        return "run-level: dbt run-operation"
+    return f"run-level: dbt {origin + ' ' if origin else ''}(hooks, introspection)"
 
 
 def size(n: int) -> str:
@@ -91,10 +133,10 @@ def render(ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: s
     if unfinished:
         lines.append(f"{unfinished} jobs were still running: their bytes are not counted yet.")
     lines += ["", "| Node | Type | Jobs | Billed | Last prod build |", "|---|---|--:|--:|--:|"]
-    ranked = sorted(ci, key=lambda c: (-c.bytes_billed, c.node or ""))
+    ranked = sorted(ci, key=lambda c: (-c.bytes_billed, c.node or "", c.origin or ""))
     for c in ranked[:TOP]:
         p = prod.get((c.resource_type or "", c.node or ""))
-        name = f"`{c.node}`" if c.node else "run-level (hooks, introspection)"
+        name = f"`{c.node}`" if c.node else run_level_name(c.origin)
         last = size(p.bytes_billed) if p else "–"
         lines.append(f"| {name} | {c.resource_type or 'run'} | {c.jobs} | {size(c.bytes_billed)} | {last} |")
     rest = ranked[TOP:]
@@ -116,7 +158,7 @@ def read_ci(client: Any, run: str) -> list[NodeCost]:
 
     config = bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("run", "STRING", run)])
     rows = client.query(CI_JOBS_SQL, job_config=config).result()
-    return [NodeCost(r.resource_type, r.node, r.jobs, r.bytes_billed, r.unfinished) for r in rows]
+    return [NodeCost(r.resource_type, r.node, r.jobs, r.bytes_billed, r.unfinished, r.origin) for r in rows]
 
 
 def read_prod(client: Any, project: str, nodes: list[str]) -> dict[tuple[str, str], NodeCost]:

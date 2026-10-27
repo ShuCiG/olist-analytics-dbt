@@ -41,10 +41,14 @@ models:
         description: Bytes billed (on-demand pricing; at least 10 MiB per table a query reads).
       - name: slot_ms
         description: Slot milliseconds the job used.
+      - name: touches_elementary
+        description: The job reads or writes a table in a dataset whose name ends in `elementary` (Elementary's tables in every target); metadata views (`__TABLES__`, INFORMATION_SCHEMA) don't count. A script job's own tables only; its statements are child jobs.
       - name: dbt_invocation_id
         description: Label set by dbt-bigquery on every job it runs, one value per dbt command.
       - name: dbt_target
         description: Label from dbt's query comment (macros/query_comment.sql), the profile target (prod, airflow, ci).
+      - name: dbt_command
+        description: Label from dbt's query comment, the dbt command (build, run-operation, generate for `docs generate`, ...); null on jobs from before the label.
       - name: dbt_resource_type
         description: Label from dbt's query comment, the node's type (model, test, seed, snapshot); null for run-level queries.
       - name: dbt_package

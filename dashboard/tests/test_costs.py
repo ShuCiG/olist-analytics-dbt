@@ -27,7 +27,8 @@ def fake_query(jobs: int):
         if "group by 1" in sql and "dbt_target," in sql:
             return pd.DataFrame({"dbt_target": ["prod", "airflow"], "jobs": [200, 40], "mib": [2500.0, 400.0]})
         if "as node" in sql:
-            return pd.DataFrame({"node": ["model: fct_orders_v2", "test: unique_dim_customers"], "jobs": [3, 1], "mib": [50.0, 10.0], "slot_s": [4.2, 0.3]})
+            assert "run_origin = 'elementary'" in sql  # run-level cost split by origin (#147)
+            return pd.DataFrame({"node": ["run: Elementary uploads (on-run-end)", "model: fct_orders_v2", "test: unique_dim_customers"], "jobs": [9, 3, 1], "mib": [90.0, 50.0, 10.0], "slot_s": [8.1, 4.2, 0.3]})
         return pd.DataFrame({
             "started_at": pd.to_datetime(["2026-10-26 07:00"]), "jobs": [120], "mib": [800.0],
             "slot_s": [60.5], "failed_jobs": [0], "dbt_invocation_id": ["a037c466"],

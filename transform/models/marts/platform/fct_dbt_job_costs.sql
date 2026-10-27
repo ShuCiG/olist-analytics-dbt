@@ -4,6 +4,9 @@
 -- before the labels) are left out.
 -- Top-level jobs only: a multi-statement script (e.g. an incremental merge) is a
 -- parent job whose bytes and slot time already sum up its child jobs.
+-- Run-level jobs (no node) get an origin: `elementary` when the job or one of its
+-- statements touches a table of Elementary (its on-run-end uploads), else `dbt`
+-- (introspection, hooks, the catalog of `docs generate`, run-operations).
 -- Incremental: the cursor is the newest job already here, minus a day, so jobs
 -- that were still running at the last build (no bytes yet) are picked up; the
 -- merge on job_id replaces them. JOBS_BY_PROJECT keeps 180 days and older rows
@@ -21,36 +24,59 @@
     )
 }}
 
-with jobs as (
+with labelled as (
     select * from {{ ref('stg_bigquery__jobs') }}
     where
         dbt_target is not null
-        and parent_job_id is null
-        and state = 'DONE'
     {% if is_incremental() %}
         and created_at >= timestamp_sub({{ incremental_cursor('created_at') }}, interval 1 day)
     {% endif %}
 ),
 
+jobs as (
+    select
+        *,
+        timestamp_diff(ended_at, started_at, millisecond) as duration_ms
+    from labelled
+    where parent_job_id is null and state = 'DONE'
+),
+
+-- Statements of a script job carry the script's labels
+statements as (
+    select
+        parent_job_id as job_id,
+        logical_or(touches_elementary) as touches_elementary
+    from labelled
+    where parent_job_id is not null
+    group by parent_job_id
+),
+
 final as (
     select
-        job_id,
-        dbt_invocation_id,
-        dbt_target,
-        coalesce(dbt_resource_type, 'run') as dbt_resource_type,
-        dbt_package,
-        dbt_node,
-        principal,
-        statement_type,
-        created_at,
-        date(created_at) as created_date,
-        timestamp_diff(ended_at, started_at, millisecond) as duration_ms,
-        is_cache_hit,
-        is_failed,
-        coalesce(bytes_processed, 0) as bytes_processed,
-        coalesce(bytes_billed, 0) as bytes_billed,
-        coalesce(slot_ms, 0) as slot_ms
+        jobs.job_id,
+        jobs.dbt_invocation_id,
+        jobs.dbt_target,
+        coalesce(jobs.dbt_resource_type, 'run') as dbt_resource_type,
+        jobs.dbt_package,
+        jobs.dbt_node,
+        jobs.dbt_command,
+        case
+            when jobs.dbt_resource_type is not null then null
+            when jobs.touches_elementary or coalesce(statements.touches_elementary, false) then 'elementary'
+            else 'dbt'
+        end as run_origin,
+        jobs.principal,
+        jobs.statement_type,
+        jobs.created_at,
+        date(jobs.created_at) as created_date,
+        jobs.duration_ms,
+        jobs.is_cache_hit,
+        jobs.is_failed,
+        coalesce(jobs.bytes_processed, 0) as bytes_processed,
+        coalesce(jobs.bytes_billed, 0) as bytes_billed,
+        coalesce(jobs.slot_ms, 0) as slot_ms
     from jobs
+    left join statements on jobs.job_id = statements.job_id
 )
 
 select * from final
