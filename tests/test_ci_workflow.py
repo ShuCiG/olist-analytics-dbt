@@ -80,6 +80,24 @@ def test_prod_job_costs_step_runs_every_deploy_after_the_build() -> None:
     assert "--exclude source:bigquery" in docs["run"]
 
 
+def test_docs_catalog_is_partial_only_on_a_slim_deploy_with_a_baseline() -> None:
+    steps = _jobs()["deploy-prod"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    docs = steps[names.index("dbt docs generate")]
+    # Each of these must force the full catalog (D77)
+    for condition in ('"$SCOPE" != slim', "../prod-state/catalog.json", '"$NEW_COLUMNS" != \'{}\'', '"$REMOVED_COLUMNS" != \'{}\''):
+        assert condition in docs["run"], f"full-catalog condition missing: {condition}"
+    assert "steps.scope.outputs.scope" in docs["env"]["SCOPE"]
+    assert "steps.ingest.outputs.new_columns" in docs["env"]["NEW_COLUMNS"]
+    assert "steps.ingest.outputs.removed_columns" in docs["env"]["REMOVED_COLUMNS"]
+    full, partial = docs["run"].split("exit 0", 1)
+    assert "--static" in full, "the full path writes the docs page itself"
+    assert "--select state:modified+ --state ../prod-state" in partial and "--empty-catalog" in partial
+    assert "docs_catalog.py" in partial
+    upload = steps[names.index("Upload prod manifest (state for slim CI)")]
+    assert "transform/target/catalog.json" in upload["with"]["path"], "the next slim deploy's baseline catalog"
+
+
 def test_pr_comments_never_meet_pr_code() -> None:
     jobs = _jobs()
     steps = jobs["dbt-build-bigquery"]["steps"]
