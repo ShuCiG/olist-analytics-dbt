@@ -116,6 +116,9 @@ the defaults when missing and never overwrites them):
 
 - `olist_alert_emails` — comma-separated recipients (default `data-team@olist.local`)
 - `olist_stale_after_hours` — stale threshold in hours (default 24)
+- `olist_stale_reminded_at_duckdb` / `_bigquery` — written by the `report` task: when the
+  last STALE email went out (about one a day, whatever hours the machine runs; D74).
+  Delete it to get a reminder on the next stale run
 
 Transport: connection `smtp_default`, from env `AIRFLOW_CONN_SMTP_DEFAULT`. By
 default it points at **Mailpit** (service in docker-compose): it catches every

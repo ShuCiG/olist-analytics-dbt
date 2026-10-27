@@ -5,6 +5,9 @@ new source columns (D61).
   under Admin → Variables; no redeploy).
 - Stale threshold: Variable `olist_stale_after_hours` (default 24 = the olist
   source's `warn_after` in sources.yml).
+- Last STALE email per DAG: Variable `olist_stale_reminded_at_<warehouse>` (set by
+  the `report` task, UTC ISO time), so the reminder goes out about once a day
+  whatever hours the machine runs.
 - Transport: connection `smtp_default`. docker-compose points it at Mailpit (UI on
   :8025); a real SMTP server goes in airflow/.env (`SMTP_CONN`, see .env.example).
 
@@ -37,6 +40,7 @@ RECIPIENTS_VAR = "olist_alert_emails"
 DEFAULT_RECIPIENTS = "data-team@olist.local"  # caught by Mailpit
 STALE_AFTER_VAR = "olist_stale_after_hours"
 DEFAULT_STALE_AFTER_HOURS = 24
+REMINDED_AT_VAR = "olist_stale_reminded_at_{warehouse}"
 # Built by airflow-init (`dbt parse`): test descriptions for the emails
 DBT_MANIFEST = "/opt/project/transform/target_airflow/manifest.json"
 
@@ -80,18 +84,24 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
     feed status that `pipeline.py` prints as dlt_ingest's last line (XCom).
     Returns what it decided, for the task's XCom / log.
     """
+    reminded_var = REMINDED_AT_VAR.format(warehouse=warehouse)
+    reminded_at = Variable.get(reminded_var, default=None)
+    now = datetime.now(UTC)
     email, age_h = airflow_emails.report_email(
         warehouse=warehouse,
         run_id=dag_run.run_id,
         status=json.loads(ti.xcom_pull(task_ids="dlt_ingest")),
         dbt_built=bool(ti.xcom_pull(task_ids="has_new_orders")),
-        now=datetime.now(UTC),
+        now=now,
         stale_after=float(Variable.get(STALE_AFTER_VAR, default=DEFAULT_STALE_AFTER_HOURS)),
         log_dir=_log_dir(),
         manifest=DBT_MANIFEST,
+        reminded_at=datetime.fromisoformat(reminded_at) if reminded_at else None,
     )
     if email:
         _send(email)
+        if email.kind == "STALE":
+            Variable.set(reminded_var, now.isoformat(), description="Last STALE email (olist_alerts.report)")
     print(f"email: {email.kind} {email.subject}" if email else "email: none")
     return {"email": email.kind if email else "none", "hours_since_new_orders": round(age_h, 1)}
 
