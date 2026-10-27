@@ -53,14 +53,18 @@ def bar_h(
     fmt: str,
     extra_tooltip: list[alt.Tooltip] | None = None,
     height: int | None = None,
+    label_limit: int = 180,
 ) -> None:
-    """Single-series horizontal bars, sorted by value, largest on top."""
+    """Single-series horizontal bars, sorted by value, largest on top.
+
+    `label_limit`: y-axis labels longer than this many pixels are cut (0: never).
+    """
     chart = (
         alt.Chart(df)
         .mark_bar(color=series_colors()[0], cornerRadiusEnd=4, height={"band": 0.7})
         .encode(
             x=alt.X(f"{x}:Q", title=title, axis=alt.Axis(format=fmt)),
-            y=alt.Y(f"{y}:N", title=None, sort="-x", axis=alt.Axis(labelOverlap=False)),
+            y=alt.Y(f"{y}:N", title=None, sort="-x", axis=alt.Axis(labelOverlap=False, labelLimit=label_limit)),
             tooltip=[
                 alt.Tooltip(f"{y}:N", title=y.replace("_", " ").capitalize()),
                 alt.Tooltip(f"{x}:Q", title=title, format=fmt),

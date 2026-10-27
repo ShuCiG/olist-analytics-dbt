@@ -47,9 +47,18 @@ targets = query(f"""
     group by 1
 """)
 
+# Run-level queries (no node) by origin: Elementary's on-run-end uploads apart from
+# dbt's own (introspection, hooks, the docs catalog, run-operations)
 nodes = query(f"""
     select
-        concat(dbt_resource_type, ': ', coalesce(dbt_node, '(run-level queries)')) as node,
+        concat(dbt_resource_type, ': ', case
+            when dbt_node is not null then dbt_node
+            when run_origin = 'elementary' then 'Elementary uploads (on-run-end)'
+            when dbt_command = 'generate' then 'dbt docs generate (catalog)'
+            when dbt_command = 'run-operation' then 'dbt run-operation'
+            when dbt_command is not null then concat('dbt ', dbt_command, ' (introspection, hooks)')
+            else 'dbt (introspection, hooks)'
+        end) as node,
         count(*) as jobs,
         sum(bytes_billed) / {MIB} as mib,
         sum(slot_ms) / 1000 as slot_s
@@ -60,23 +69,28 @@ nodes = query(f"""
     limit 15
 """)
 
-left, right = st.columns(2)
-with left:
-    st.subheader("Bytes billed per dbt target")
-    charts.bar_h(
-        targets, "mib", "dbt_target", "MiB billed", ",.0f",
-        extra_tooltip=[alt.Tooltip("jobs:Q", title="Jobs", format=",")],
-    )
-    st.caption("prod = deploys from GitHub Actions, airflow = the hourly replay, ci = pull requests.")
-with right:
-    st.subheader("Most expensive nodes in prod")
-    charts.bar_h(
-        nodes, "mib", "node", "MiB billed", ",.0f",
-        extra_tooltip=[
-            alt.Tooltip("jobs:Q", title="Jobs", format=","),
-            alt.Tooltip("slot_s:Q", title="Slot seconds", format=",.1f"),
-        ],
-    )
+st.subheader("Bytes billed per dbt target")
+charts.bar_h(
+    targets, "mib", "dbt_target", "MiB billed", ",.0f",
+    extra_tooltip=[alt.Tooltip("jobs:Q", title="Jobs", format=",")],
+)
+st.caption("prod = deploys from GitHub Actions, airflow = the hourly replay, ci = pull requests.")
+
+# Full width and uncut labels: node names run up to 63 characters
+st.subheader("Most expensive nodes in prod")
+charts.bar_h(
+    nodes, "mib", "node", "MiB billed", ",.0f",
+    extra_tooltip=[
+        alt.Tooltip("jobs:Q", title="Jobs", format=","),
+        alt.Tooltip("slot_s:Q", title="Slot seconds", format=",.1f"),
+    ],
+    label_limit=0,
+)
+st.caption(
+    "run: queries outside a node. Elementary uploads its run results and artifacts at the "
+    "end of every build; dbt's own are metadata lookups, hooks, the catalog of "
+    "`docs generate` and run-operations."
+)
 
 st.subheader("Latest prod dbt commands")
 commands = query(f"""
