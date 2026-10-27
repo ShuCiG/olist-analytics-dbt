@@ -79,27 +79,40 @@ def test_hours_since() -> None:
 
 
 @pytest.mark.parametrize(
-    ("age_h", "expected"),
+    ("age_h", "reminded_h_ago", "expected"),
     [
-        (23.9, False),  # fresh
-        (24.0, True),  # first hourly run past the threshold
-        (24.9, True),
-        (25.0, False),  # then quiet ...
-        (47.9, False),
-        (48.2, True),  # ... until a day later
-        (float("inf"), True),  # never any orders
+        (23.9, None, False),  # fresh
+        (24.0, None, True),  # first run past the threshold
+        (30.0, None, True),  # ... also when the machine was off at that hour
+        (25.0, 1.0, False),  # then quiet ...
+        (47.0, 23.0, False),
+        (47.6, 23.6, True),  # ... until about a day later (runs start a few minutes late)
+        (240.0, 70.0, True),  # off for days: the next run reminds, any hour
+        (24.5, 10.0, True),  # last reminder was before this stale period (fresh in between)
+        (float("inf"), None, True),  # never any orders
+        (float("inf"), 5.0, False),
+        (float("inf"), 24.0, True),
     ],
 )
-def test_is_reminder_hour(age_h: float, expected: bool) -> None:
-    assert airflow_emails.is_reminder_hour(age_h, 24) is expected
+def test_is_reminder_due(age_h: float, reminded_h_ago: float | None, expected: bool) -> None:
+    reminded_at = NOW - timedelta(hours=reminded_h_ago) if reminded_h_ago is not None else None
+    assert airflow_emails.is_reminder_due(age_h, 24, reminded_at, NOW) is expected
 
 
 # --- report task (run did not fail) -----------------------------------------------
 
 
-def report(tmp_path: Path, manifest: Path, feed: dict, dbt_built: bool):
+def report(tmp_path: Path, manifest: Path, feed: dict, dbt_built: bool, reminded_at: datetime | None = None):
     return airflow_emails.report_email(
-        "duckdb", RUN, feed, dbt_built, NOW, stale_after=24, log_dir=tmp_path / "logs", manifest=manifest
+        "duckdb",
+        RUN,
+        feed,
+        dbt_built,
+        NOW,
+        stale_after=24,
+        log_dir=tmp_path / "logs",
+        manifest=manifest,
+        reminded_at=reminded_at,
     )
 
 
@@ -135,8 +148,16 @@ def test_stale_reminder(tmp_path: Path, manifest: Path) -> None:
 
 
 def test_stale_between_reminders_sends_nothing(tmp_path: Path, manifest: Path) -> None:
-    email, _ = report(tmp_path, manifest, status(loaded=0, hours_ago=30), dbt_built=False)
+    feed = status(loaded=0, hours_ago=30)
+    email, _ = report(tmp_path, manifest, feed, dbt_built=False, reminded_at=NOW - timedelta(hours=6))
     assert email is None
+
+
+def test_stale_reminder_at_any_hour(tmp_path: Path, manifest: Path) -> None:
+    # Machine off at the hour the old age-based rule picked: the next run still reminds
+    feed = status(loaded=0, hours_ago=229)
+    email, _ = report(tmp_path, manifest, feed, dbt_built=False, reminded_at=NOW - timedelta(hours=40))
+    assert email is not None and email.kind == "STALE"
 
 
 def test_empty_raw_is_stale(tmp_path: Path, manifest: Path) -> None:

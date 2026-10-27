@@ -3,7 +3,7 @@
 airflow/dags/olist_alerts.py is the Airflow side (Variables, XCom, task context,
 SMTP) and calls these. No Airflow imports here, so the decisions are unit-tested
 in the project venv (tests/test_airflow_emails.py): OK / STALE / no email, the
-stale reminder window, and which log and summary a failure email shows.
+stale reminder schedule, and which log and summary a failure email shows.
 
 Task logs are read from Airflow's log folder (JSON lines, one file per attempt).
 """
@@ -27,6 +27,8 @@ PRODUCER = "dbt.dbt_producer_watcher"
 LOG_NOISE_LOGGERS = ("airflow.dag_processing", "cosmos.converter", "cosmos.airflow", "cosmos.dbt.graph")
 LOG_NOISE_EVENTS = ("::", "Worker startup parse complete", "Tmp dir root location", "Output:")
 ANSI = re.compile(r"\x1b\[[0-9;]*m")  # dbt colors its output
+# STALE reminders: about one a day; half an hour of slack for hourly runs that start late
+REMIND_EVERY_HOURS = 23.5
 
 
 @dataclass
@@ -149,10 +151,19 @@ def hours_since(last_loaded_at: str | None, now: datetime) -> float:
     return (now - datetime.fromisoformat(last_loaded_at)).total_seconds() / 3600
 
 
-def is_reminder_hour(age_h: float, stale_after: float) -> bool:
-    """Stale, and the hourly run that should say so: the first run past the
-    threshold, then one per 24 h. Stateless: derived from the age alone."""
-    return age_h >= stale_after and (age_h == float("inf") or (age_h - stale_after) % 24 < 1)
+def is_reminder_due(age_h: float, stale_after: float, reminded_at: datetime | None, now: datetime) -> bool:
+    """Stale, and no STALE email yet in this stale period or for about a day.
+
+    `reminded_at` is when the last STALE email went out (the caller keeps it), so a
+    machine that is off at some hours still gets one a day. A reminder from before
+    the period began (the feed was fresh in between) doesn't count.
+    """
+    if age_h < stale_after:
+        return False
+    if reminded_at is None:
+        return True
+    since_h = (now - reminded_at).total_seconds() / 3600
+    return since_h >= REMIND_EVERY_HOURS or since_h > age_h - stale_after
 
 
 def report_email(
@@ -164,12 +175,14 @@ def report_email(
     stale_after: float,
     log_dir: Path,
     manifest: str | Path,
+    reminded_at: datetime | None = None,
 ) -> tuple[Email | None, float]:
     """(email or None, hours since new orders) for a run that did not fail.
 
     `status` is the feed status `pipeline.py` prints (orders_loaded, orders_total,
     last_order_at, last_loaded_at). OK when the run brought orders or rebuilt the
-    marts; else STALE on reminder hours; else no email.
+    marts; else STALE when a reminder is due (`reminded_at` = when the last STALE
+    email went out, see is_reminder_due); else no email.
     """
     dag_id = f"olist_elt_{warehouse}"
     # dbt's totals + warnings from the producer's log of this run
@@ -209,7 +222,7 @@ def report_email(
         if dbt_block:
             # Data-quality tests with severity warn: nothing fails, so this is where they show
             body = dbt_summary.to_html(dbt_done, dbt_block, dbt_summary.test_docs(manifest))
-    elif is_reminder_hour(age_h, stale_after):
+    elif is_reminder_due(age_h, stale_after, reminded_at, now):
         kind = "STALE"
         title = f"No new orders for {age_h:.0f} h · data up to {month}"
         subject = f"{prefix} STALE: no new orders for {age_h:.0f} h (data up to {month})"
