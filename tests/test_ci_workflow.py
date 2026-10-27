@@ -273,7 +273,8 @@ def test_databricks_runs_on_main_only() -> None:
 def test_databricks_cleans_up_and_alerts() -> None:
     jobs = _databricks()["jobs"]
     steps = {s.get("name"): s for s in jobs["dbt-build-databricks"]["steps"]}
-    assert steps["Drop CI schemas"]["if"] == "always()"
+    # Even after a failed build; skipped only when the warehouse never came up (nothing created, D78)
+    assert steps["Drop CI schemas"]["if"] == "always() && steps.warehouse.outputs.available == 'true'"
     assert steps["Drop guard refuses non-CI schemas"]["env"]["DBT_CI_SCHEMA"] == "marts_guard_check"
     assert jobs["dbt-build-databricks"]["env"]["DBT_CI_SCHEMA"].startswith("ci_")
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
@@ -389,3 +390,17 @@ def test_notify_schema_sends_only_for_column_changes(
         monkeypatch.setenv(name, value)
     module.main()
     assert calls == ([subject] if subject else [])
+
+
+def test_databricks_skips_when_the_warehouse_is_unavailable() -> None:
+    # D78: "can't start compute" ends the run as skipped, without a failure email
+    job = _databricks()["jobs"]["dbt-build-databricks"]
+    names = [s.get("name") for s in job["steps"]]
+    probe = names.index("Wait for the SQL warehouse")
+    assert job["steps"][probe]["id"] == "warehouse"
+    assert "databricks_warehouse.py" in job["steps"][probe]["run"]
+    assert probe < names.index("Ingest raw data (dlt → Databricks)")
+    for step in job["steps"][probe + 1:]:
+        assert "steps.warehouse.outputs.available == 'true'" in step.get("if", ""), f"runs without a warehouse: {step['name']}"
+    cron = _databricks()[True]["schedule"][0]["cron"]
+    assert cron.split()[0] not in {"0", "00"}, "GitHub delays or drops schedules at the full hour"
