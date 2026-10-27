@@ -372,13 +372,14 @@ jobs:
       # prod build. Not "last green run on main": docs-only merges skip the deploy
       # and upload none (D52)
       - name: Download prod manifest (last prod deploy)
+        id: prod-state
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
             --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
           if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
-            echo "SLIM_CI=true" >> "$GITHUB_ENV"
+            echo "slim=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::No prod manifest found, running a full build"
           fi
@@ -390,6 +391,8 @@ jobs:
 
       - name: dbt build (target ci)
         working-directory: transform
+        env:
+          SLIM_CI: ${{ steps.prod-state.outputs.slim }}
         run: |
           if [ "$SLIM_CI" = true ]; then
             uv run dbt build --target ci --select state:modified+ --exclude package:elementary --defer --state ../prod-state
@@ -403,7 +406,7 @@ jobs:
       # failed tests: the marts that built show what the change did. Slim CI only:
       # prod's tables are found in the prod manifest. A report: never fails the build.
       - name: Data diff vs prod
-        if: ${{ !cancelled() && env.SLIM_CI == 'true' }}
+        if: ${{ !cancelled() && steps.prod-state.outputs.slim == 'true' }}
         continue-on-error: true
         run: |
           uv run python .github/scripts/data_diff.py prod-state/manifest.json data-diff.md \

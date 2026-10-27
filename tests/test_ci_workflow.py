@@ -109,7 +109,7 @@ def test_pr_comments_never_meet_pr_code() -> None:
     # Right after the build (its run_results.json), also after failed tests; before the cost step (counts its bytes) (D73)
     diff = steps[names.index("Data diff vs prod")]
     assert names.index("dbt build (target ci)") + 1 == names.index(diff["name"]) < names.index(cost["name"])
-    assert diff["continue-on-error"] is True and diff["if"] == "${{ !cancelled() && env.SLIM_CI == 'true' }}"
+    assert diff["continue-on-error"] is True and diff["if"] == "${{ !cancelled() && steps.prod-state.outputs.slim == 'true' }}"
     upload = steps[names.index("Upload PR comments")]
     assert "ci-cost.md" in upload["with"]["path"] and "data-diff.md" in upload["with"]["path"]
     job = jobs["pr-comments"]
