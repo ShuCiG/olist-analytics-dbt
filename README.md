@@ -55,7 +55,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 <summary><b>What this project demonstrates</b> (skills list)</summary>
 
 - **Analytics engineering:** dbt Core 1.12, dimensional modeling (star schema, SCD2 snapshot), incremental models
-  (merge, partitioning, clustering), seeds, macros and `adapter.dispatch`, Jinja, doc blocks, exposures
+  (merge, partitioning, clustering), seeds, macros and `adapter.dispatch`, Jinja, doc blocks (persisted as warehouse table and column comments), exposures
 - **Data quality:** dbt data tests and unit tests, custom generic tests, dbt_expectations, model contracts, source
   freshness, data contracts (ODCS, datacontract-cli), sqlfluff
 - **Data observability:** Elementary (volume / freshness / column anomaly detection, schema change monitoring, run and
@@ -486,6 +486,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: `persist_docs` into the warehouse catalogs (#139), clustering the other BigQuery marts (#140), a dbt Python model on Databricks (#142), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: clustering the other BigQuery marts (#140), a dbt Python model on Databricks (#142), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

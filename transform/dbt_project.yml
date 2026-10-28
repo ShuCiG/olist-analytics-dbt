@@ -59,6 +59,12 @@ vars:
 
 models:
   olist:
+    # Descriptions from the .yml files become table and column comments in the
+    # warehouse, so the BigQuery console and Databricks Catalog Explorer show them
+    # too, not only dbt docs (D79).
+    +persist_docs: &persist_docs
+      relation: true
+      columns: true
     staging:
       +materialized: view
       +schema: staging
@@ -103,6 +109,7 @@ seeds:
       +enabled: false
   olist:
     +schema: seeds
+    +persist_docs: *persist_docs
     # Evaluator findings accepted on purpose, with the reason (described by the package's yml)
     dbt_project_evaluator_exceptions:
       +enabled: *evaluator_enabled
@@ -112,3 +119,7 @@ seeds:
       +column_types:
         product_category_name: "{{ 'string' if target.type in ['bigquery', 'databricks'] else 'varchar' }}"
         product_category_name_english: "{{ 'string' if target.type in ['bigquery', 'databricks'] else 'varchar' }}"
+
+snapshots:
+  olist:
+    +persist_docs: *persist_docs
