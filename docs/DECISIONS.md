@@ -642,3 +642,20 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
   - DuckDB: `COMMENT ON`, local, no cost.
 - Result, same on all three engines: every one of the 25 relations has a comment; column comments exactly where the `.yml` has a description (all columns of the marts except `dim_date`'s calendar columns from `dbt_date`).
 - Side effect in slim CI / deploys (D66): with `persist_docs` on, `state:modified` also compares descriptions (`modified.persisted_descriptions`), so a changed description rebuilds that model and its children, which is what updates the comment. The PR that turns it on changes the config of every node, so its CI and the first deploy after it rebuild everything once.
+
+## D80 · 2026-10-28 · Clustering the other BigQuery marts, measured: rejected
+- Question (#140): only `fct_order_items` is partitioned and clustered. Would `cluster_by` on the other marts make the dashboard's queries bill fewer bytes? The dashboard reads `fct_orders` (filtered by a `purchase_date` range from the sidebar, default 2017-01-01 to 2018-08-31) and joins `dim_customers` on `customer_unique_id`. The other dims are under 5 MiB, below BigQuery's 10 MiB minimum per table read, and `fct_order_items_seller_as_of` has no dashboard reader.
+- Evaluated on copies of prod `fct_orders` (30 MiB, 99,441 rows) and `dim_customers` (10.5 MiB) in a throwaway dataset (`ci_cluster_check`, dropped afterwards), at the current size and 10× (order and customer ids suffixed per copy, same dates). Layouts: as today; `cluster_by` `purchase_date` on the fact and `customer_unique_id` on the dim; monthly partitions on `purchase_date` (as `fct_order_items`) with the clustered dim. Six dashboard queries (sales, delivery and customer KPIs, monthly trend, payment mix, states joined to `dim_customers`), without cache; MiB billed (processed):
+
+  | query | period | today | `cluster_by` | monthly partitions |
+  |---|---|---|---|---|
+  | each fact-only query, 1× | default or one month | 10 (2.4–6.8) | 10 | 10 (one month: 0.2–0.5) |
+  | states join, 1× | default or one month | 20 | 20 | 20 |
+  | sales KPI, 10× | default | 68 | 68 | 67 |
+  | sales KPI, 10× | one month (2017-11) | 68 | 68 | 10 (5.1) |
+  | states join, 10× | default | 104 | 104 | 104 |
+  | states join, 10× | one month | 104 | 104 | 42 |
+
+- Why nothing changes: at the current size every query is billed at the 10 MiB per-table minimum (as in D69). Clustering did not prune at 10× either (308 MiB table): a 100× copy (3.1 GiB) was needed before a one-month sales KPI dropped from 682 to 67 MiB billed with `cluster_by purchase_date`. The default period covers 20 of the 25 months, so it prunes little in any layout. Clustering the dim on its join key prunes nothing: the join has no filter on the dim side.
+- Monthly partitions would pay off earlier than clustering (a one-month pick at 10×: 68 → 10 MiB), but only for narrow periods, while the dashboard's default is almost all the data and repeated periods are served from its cache.
+- When to look again: when `fct_orders` reaches roughly 10× its size and narrow periods are a common view; then monthly partitions on `purchase_date`, as on `fct_order_items`, rather than clustering alone.

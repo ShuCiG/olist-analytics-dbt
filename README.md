@@ -474,6 +474,10 @@ Options that were tried or priced, then left out:
   ([D69](docs/DECISIONS.md#d69--2026-10-25--partitioning-the-raw-order-tables-on-bigquery-measured)). The raw order
   tables are partitioned by load day instead, for the incremental path; that bills the same today too
   ([D70](docs/DECISIONS.md#d70--2026-10-25--raw-order-tables-partitioned-by-load-day-incremental-filter-that-prunes)).
+- **Clustering the other marts on BigQuery.** Every dashboard query on `fct_orders` was billed the same 10 MiB
+  minimum with or without `cluster_by`; clustering on `purchase_date` started to prune only on a 100× copy, and a
+  monthly partition only helps one-month picks at 10×
+  ([D80](docs/DECISIONS.md#d80--2026-10-28--clustering-the-other-bigquery-marts-measured-rejected)).
 - **One Airflow task per dbt node** (Cosmos' local mode). Each task paid dbt start-up and a project parse (~36 s):
   a month took ~29 min on DuckDB and ~19 min on BigQuery, against ~6 and ~6–9 min in watcher mode
   ([D25](docs/DECISIONS.md#d25--2026-10-12--cosmos-watcher-mode-airflow-speed-up)).
@@ -486,6 +490,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: clustering the other BigQuery marts (#140), a dbt Python model on Databricks (#142), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: a dbt Python model on Databricks (#142), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).
