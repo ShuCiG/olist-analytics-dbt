@@ -121,6 +121,28 @@ jobs:
         working-directory: transform
         run: uv run dbt run-operation drop_isolated_datasets --target databricks_ci
 
+      # The Python model (D81) runs as a notebook dbt uploads to the service
+      # principal's home folder, one folder per schema: this run's go with its schemas
+      - name: Delete Python model notebooks
+        if: always() && steps.warehouse.outputs.available == 'true'
+        run: |
+          uv run python - <<'EOF'
+          import os
+          from databricks.sdk import WorkspaceClient
+          from databricks.sdk.errors import NotFound
+
+          w = WorkspaceClient()  # DATABRICKS_HOST / _CLIENT_ID / _CLIENT_SECRET
+          root = f"/Users/{w.current_user.me().user_name}/dbt_python_models/{os.environ['DATABRICKS_CATALOG']}"
+          try:
+              folders = [o.path for o in w.workspace.list(root)]
+          except NotFound:
+              folders = []
+          for path in folders:
+              if path.rsplit("/", 1)[-1].startswith(os.environ["DBT_CI_SCHEMA"] + "_"):
+                  w.workspace.delete(path, recursive=True)
+                  print(f"deleted {path}")
+          EOF
+
   notify-failure:
     name: Email on failure
     needs: [dbt-build-databricks]

@@ -2027,6 +2027,7 @@ dependencies = [
     { name = "dlt", extra = ["bigquery", "databricks", "duckdb"] },
     { name = "duckdb" },
     { name = "kagglehub" },
+    { name = "pandas" },
 ]
 
 [package.dev-dependencies]
@@ -2054,6 +2055,7 @@ requires-dist = [
     { name = "dlt", extras = ["bigquery", "databricks", "duckdb"], specifier = ">=1.31.0" },
     { name = "duckdb", specifier = ">=1.5.6" },
     { name = "kagglehub", specifier = ">=1.0.2" },
+    { name = "pandas", specifier = ">=3.0.6" },
 ]
 
 [package.metadata.requires-dev]

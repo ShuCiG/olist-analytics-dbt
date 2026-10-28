@@ -87,6 +87,84 @@ models:
               arguments:
                 min_value: 0
 
+  - name: dim_customer_rfm
+    description: >
+      RFM segmentation, one row per person (`customer_unique_id`), from dim_customers.
+      The project's one Python model (D81): built on Databricks (serverless job) and
+      DuckDB, disabled on BigQuery. Recency is counted back from the last order in
+      the data (`as_of_date`), not today. R and M are quintile scores (1-5, ties
+      share a score); F is the order count capped at 5, because ~97% of people
+      order once.
+    # Protected, not public: dbt has no contracts for Python models, and public
+    # models must have one (dbt_project_evaluator). Not part of the data product.
+    config:
+      group: parties
+      access: protected
+      enabled: "{{ target.type in ['databricks', 'duckdb'] }}"
+      # Databricks: run the model as a one-off job on serverless compute; the SQL
+      # warehouse can't run Python. Other adapters ignore it.
+      submission_method: serverless_cluster
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('dim_customers')
+    columns:
+      - name: customer_unique_id
+        description: "{{ doc('customer_unique_id') }} Primary key."
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_unique_id
+      - name: recency_days
+        description: Days from the person's latest order to `as_of_date`.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: orders_count
+        description: Number of orders, all statuses (as in dim_customers).
+      - name: lifetime_value
+        description: As in dim_customers, in BRL.
+      - name: recency_score
+        description: 1-5, 5 = most recent fifth of people.
+        data_tests: &rfm_score_tests
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+      - name: frequency_score
+        description: Order count capped at 5.
+        data_tests: *rfm_score_tests
+      - name: monetary_score
+        description: 1-5, 5 = top fifth by lifetime value.
+        data_tests: *rfm_score_tests
+      - name: rfm_score
+        description: The three scores as one code, e.g. `515`.
+      - name: segment
+        description: >
+          Repeat buyers (F >= 2): `champions` (R >= 4) or `loyal_at_risk`. One-time
+          buyers: `new_big_spenders` / `new_customers` (R >= 4, M >= 4 or not),
+          `big_spenders_at_risk` / `hibernating` (R 2-3), `lost` (R = 1).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - champions
+                  - loyal_at_risk
+                  - new_big_spenders
+                  - new_customers
+                  - big_spenders_at_risk
+                  - hibernating
+                  - lost
+      - name: as_of_date
+        description: Date of the last order in the data, the "today" of recency.
+
   - name: dim_sellers
     description: One row per seller with zip-prefix centroid coordinates.
     config:
