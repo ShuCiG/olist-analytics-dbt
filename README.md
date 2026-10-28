@@ -33,7 +33,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
 - **One codebase, three warehouses.** The same dbt models run on DuckDB, BigQuery and Databricks with identical
-  mart numbers, through cross-database macros and per-adapter dispatch. → [Data model](#data-model)
+  mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
+  Databricks serverless and DuckDB. → [Data model](#data-model)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets, with PR comments on what the change does to the marts
   (data diff vs prod) and what it bills. Every merge: prod deploy, docs, Airflow image to GHCR.
@@ -43,7 +44,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 126 data tests, 7 unit tests, enforced model contracts, 259 Python tests; known
+- **Data quality at every layer.** 140 data tests, 7 unit tests, enforced model contracts, 259 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -55,7 +56,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 <summary><b>What this project demonstrates</b> (skills list)</summary>
 
 - **Analytics engineering:** dbt Core 1.12, dimensional modeling (star schema, SCD2 snapshot), incremental models
-  (merge, partitioning, clustering), seeds, macros and `adapter.dispatch`, Jinja, doc blocks (persisted as warehouse table and column comments), exposures
+  (merge, partitioning, clustering), seeds, macros and `adapter.dispatch`, a dbt Python model (pandas on Databricks serverless and DuckDB), Jinja, doc blocks (persisted as warehouse table and column comments), exposures
 - **Data quality:** dbt data tests and unit tests, custom generic tests, dbt_expectations, model contracts, source
   freshness, data contracts (ODCS, datacontract-cli), sqlfluff
 - **Data observability:** Elementary (volume / freshness / column anomaly detection, schema change monitoring, run and
@@ -159,6 +160,7 @@ erDiagram
 | `dim_sellers` | seller | zip-prefix centroid coordinates; current state |
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
+| `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
 
@@ -246,7 +248,7 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **126 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 3 singular tests; 9 more on the cost mart in prod | every `dbt build` |
+| **140 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 3 singular tests; 9 more on the cost mart in prod | every `dbt build` |
 | **7 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
@@ -374,8 +376,8 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
-service principal limited to its own catalog, tests both data contracts on those tables, then drops the run's schemas
-([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md)). When Free Edition can't start the warehouse, the run waits up to
+service principal limited to its own catalog, tests both data contracts on those tables, then drops the run's schemas and the Python model's notebooks
+([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md), [D81](docs/DECISIONS.md)). When Free Edition can't start the warehouse, the run waits up to
 20 minutes, then ends as skipped with a warning instead of a failure email ([D78](docs/DECISIONS.md)).
 
 Two PR comments, updated on each push, come from the BigQuery build. The **data diff** compares every mart the build
@@ -490,6 +492,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: a dbt Python model on Databricks (#142), dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

@@ -275,6 +275,9 @@ def test_databricks_cleans_up_and_alerts() -> None:
     steps = {s.get("name"): s for s in jobs["dbt-build-databricks"]["steps"]}
     # Even after a failed build; skipped only when the warehouse never came up (nothing created, D78)
     assert steps["Drop CI schemas"]["if"] == "always() && steps.warehouse.outputs.available == 'true'"
+    # The Python model's notebooks of this run (D81), deleted like its schemas
+    assert steps["Delete Python model notebooks"]["if"] == steps["Drop CI schemas"]["if"]
+    assert "DBT_CI_SCHEMA" in steps["Delete Python model notebooks"]["run"]
     assert steps["Drop guard refuses non-CI schemas"]["env"]["DBT_CI_SCHEMA"] == "marts_guard_check"
     assert jobs["dbt-build-databricks"]["env"]["DBT_CI_SCHEMA"].startswith("ci_")
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
