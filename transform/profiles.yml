@@ -103,3 +103,15 @@ elementary:
       job_retries: 1
       maximum_bytes_billed: 1000000000
       priority: interactive
+    # Airflow's BigQuery DAG (its edr_report task); its DuckDB DAG uses `dev`
+    airflow:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'olist-analytics-dbt-472315') }}"
+      dataset: airflow_elementary
+      location: EU
+      threads: 8
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      maximum_bytes_billed: 1000000000
+      priority: interactive

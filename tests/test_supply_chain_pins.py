@@ -44,3 +44,19 @@ def test_edr_installed_from_hashed_lock() -> None:
     lock = (ROOT / ".github" / "edr-requirements.txt").read_text(encoding="utf-8")
     packages = re.findall(r"^([A-Za-z0-9_.-]+)==", lock, re.M)
     assert packages and lock.count("--hash=sha256:") >= len(packages)
+
+
+def test_airflow_edr_installed_from_hashed_lock() -> None:
+    dockerfile = (ROOT / "airflow" / "Dockerfile").read_text(encoding="utf-8")
+    assert "--require-hashes" in dockerfile and ".github/edr-requirements.txt" in dockerfile
+
+
+def test_edr_lock_matches_project_dbt_versions() -> None:
+    # The Airflow report opens a DuckDB file the project's duckdb wrote: a newer
+    # storage version can't be read by an older duckdb (and dbt should match too)
+    lock = (ROOT / ".github" / "edr-requirements.txt").read_text(encoding="utf-8")
+    edr = dict(re.findall(r"^([A-Za-z0-9_.-]+)==(\S+)", lock, re.M))
+    uv_lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    project = dict(re.findall(r'^name = "([^"]+)"\nversion = "([^"]+)"', uv_lock, re.M))
+    for package in ("dbt-core", "dbt-bigquery", "dbt-duckdb", "duckdb"):
+        assert edr[package] == project[package], f"{package}: edr {edr[package]}, uv.lock {project[package]}"

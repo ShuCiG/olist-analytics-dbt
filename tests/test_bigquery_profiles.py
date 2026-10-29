@@ -16,6 +16,6 @@ def test_bigquery_outputs_cap_bytes_billed() -> None:
         for name, output in body["outputs"].items()
         if output["type"] == "bigquery"
     }
-    assert len(outputs) == 4
+    assert len(outputs) == 5
     for name, output in outputs.items():
         assert output.get("maximum_bytes_billed") == _CAP, name

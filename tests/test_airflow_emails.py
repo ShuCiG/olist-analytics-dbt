@@ -124,6 +124,8 @@ def test_new_orders_send_ok_with_dbt_warnings(tmp_path: Path, manifest: Path) ->
     assert "278 customers" in email.html and "Customers whose zip code is missing." in email.html
     assert "PASS=120 WARN=1" in email.html
     assert round(age_h, 2) == 0.05
+    # The report edr_report rebuilt after this build
+    assert 'href="http://localhost:8081/airflow_duckdb/"' in email.html
 
 
 def test_rebuild_without_new_orders_is_ok(tmp_path: Path, manifest: Path) -> None:
@@ -145,6 +147,7 @@ def test_stale_reminder(tmp_path: Path, manifest: Path) -> None:
     assert email is not None and email.kind == "STALE"
     assert email.subject == f"[{DAG}] STALE: no new orders for 24 h (data up to 2017-03)"
     assert "skipped (nothing new)" in email.html
+    assert "localhost:8081" not in email.html  # no new report without a dbt build
 
 
 def test_stale_between_reminders_sends_nothing(tmp_path: Path, manifest: Path) -> None:

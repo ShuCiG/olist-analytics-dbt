@@ -3,7 +3,8 @@
 Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
 simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
 when nothing arrived) → `elementary_tables` (Elementary's history tables, D38) →
-`dbt` task group → `report` (email, see below), where the
+`dbt` task group → `edr_report` (Elementary's report, see below) → `report`
+(email, see below), where the
 dbt group is rendered by
 [Cosmos](https://github.com/astronomer/astronomer-cosmos) in watcher mode: one
 producer task runs `dbt source freshness` + a single `dbt build` for the whole
@@ -22,9 +23,9 @@ cp airflow/.env.example airflow/.env      # optional: GCP_KEY_FILE for the BigQu
 GIT_SHA=$(git rev-parse HEAD) docker compose -f airflow/docker-compose.yml up -d --build
 ```
 
-UI at http://localhost:8080, alert emails at http://localhost:8025 (Mailpit). DAGs
-start paused. No login (all users admin), so both ports are published on `127.0.0.1`
-only: other machines on the network can't reach them. The shared secrets (JWT, API
+UI at http://localhost:8080, alert emails at http://localhost:8025 (Mailpit),
+Elementary reports at http://localhost:8081 (below). DAGs start paused. No login (all
+users admin), so every port is published on `127.0.0.1` only: other machines on the network can't reach them. The shared secrets (JWT, API
 secret key, Fernet key) have fixed local defaults; set your own in `airflow/.env`
 (see [.env.example](.env.example)).
 
@@ -56,6 +57,30 @@ working tree (re-run it after adding or removing models / tests):
 docker compose -f airflow/docker-compose.yml -f airflow/docker-compose.dev.yml up -d --build
 docker compose -f airflow/docker-compose.yml -f airflow/docker-compose.dev.yml run --rm airflow-init
 ```
+
+## Elementary report
+
+After every run that built dbt, `edr_report` renders Elementary's report (test and run
+history, anomaly charts, model and test timings, lineage; D38) from that warehouse's
+`elementary` schema, as CD does for prod on GitHub Pages. One report per DAG, written
+to `data/elementary/airflow_<warehouse>/index.html`, three ways to open it:
+
+- **In the Airflow UI:** Browse → *Elementary (DuckDB)* / *Elementary (BigQuery)*: the
+  report embedded in the UI (plugin [`plugins/elementary_reports.py`](plugins/elementary_reports.py)).
+  The API server serves the files itself at http://localhost:8080/elementary-reports/.
+- **On its own port:** http://localhost:8081/airflow_duckdb/, `/airflow_bigquery/`
+  (service `elementary-reports`, Python's static file server in the same image). The
+  OK email links here.
+- **As a file:** `data/elementary/airflow_<warehouse>/index.html`.
+
+The CLI lives in its own venv in the image (`/opt/edr-venv`, from the hash-pinned
+[`.github/edr-requirements.txt`](../.github/edr-requirements.txt) CD uses too): in the
+project venv it would downgrade `networkx`. It also runs after a failed build (the
+report shows the failure), not when dbt was skipped. A failing `edr` ends the task
+*skipped*, not failed: a broken report doesn't fail the run or send a FAILED email.
+Only the open source report's pages work: Data Health, Catalog, Incidents, Test
+Configuration, Environments, Alert Rules and Pull Requests in its menu link to
+Elementary Cloud.
 
 ## Schedule: a simulated live feed
 
