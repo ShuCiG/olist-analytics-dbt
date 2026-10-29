@@ -3,7 +3,7 @@
 # in uv.lock (D38: elementary-data caps networkx below 3). Regenerate after
 # changing a version (dbt-duckdb and duckdb as in uv.lock: the Airflow report reads
 # a DuckDB file the project's DuckDB writes):
-#   printf 'elementary-data[bigquery,duckdb]==0.26.1\ndbt-core==1.12.5\ndbt-bigquery==1.12.1\ndbt-duckdb==1.11.1\nduckdb==1.5.6\n' > edr.in
+#   printf 'elementary-data[bigquery,duckdb]==0.26.1\ndbt-core==1.12.6\ndbt-bigquery==1.12.1\ndbt-duckdb==1.11.1\nduckdb==1.5.6\n' > edr.in
 #   uv pip compile edr.in --python-version 3.12 --python-platform x86_64-manylinux_2_28 \
 #     --generate-hashes --no-header -o .github/edr-requirements.txt  (then re-add this comment)
 about-time==3.1.1 \
@@ -446,7 +446,7 @@ dbt-bigquery==1.12.1 \
     --hash=sha256:71787ff4495999a26058dffe4da46558acf57bdc409cdb46565d9afb0391c75e \
     --hash=sha256:8f7e0eff7f4a5f8a9fea4db4fca65eef885df2f8c75b41699e061ad9b0efd745
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/5ca4dbc7-2e9f-40aa-98e4-0b45866fe626/scratchpad/edr.in
+    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
     #   elementary-data
 dbt-common==1.39.0 \
     --hash=sha256:30d63490b9ef2aad6f469ec841fb758430fcb1d997b79ff3df36fcb7b79a241f \
@@ -456,11 +456,11 @@ dbt-common==1.39.0 \
     #   dbt-bigquery
     #   dbt-core
     #   dbt-duckdb
-dbt-core==1.12.5 \
-    --hash=sha256:77661a8c9ee1d1ec7a8ed904d15a0937289d12ba6fd2d86d6f36d3eea735ce3d \
-    --hash=sha256:f17f662aed7b6a8b0d267ecf07448ad1ec03edf147a52abbdf5ee48d25999bb6
+dbt-core==1.12.6 \
+    --hash=sha256:a14fb6724a557dea781afa19171869a1b0b286a396d5dc012e74b8bd3596325e \
+    --hash=sha256:e4378ecde4740d6b6a5b706ad25162272e28dc20ee8390c42c1ebd637752574f
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/5ca4dbc7-2e9f-40aa-98e4-0b45866fe626/scratchpad/edr.in
+    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
     #   dbt-bigquery
     #   dbt-duckdb
     #   elementary-data
@@ -471,7 +471,7 @@ dbt-duckdb==1.11.1 \
     --hash=sha256:4fe54c1aea840ccf4725a01851049be2bbe2d4c023faaad044c616505c780b45 \
     --hash=sha256:81340c41a1bd0f8189109d3a61c394c08a636e482af0124a06765e9a41f44bcd
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/5ca4dbc7-2e9f-40aa-98e4-0b45866fe626/scratchpad/edr.in
+    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
     #   elementary-data
 dbt-extractor==0.6.0 \
     --hash=sha256:05bcfab7ebd70296ceb31742e8333ba66a2c939de44e61a7088bebafa939aaf6 \
@@ -547,12 +547,12 @@ duckdb==1.5.6 \
     --hash=sha256:ebcbd09cd8578ab1093393e9b16289cda0e8f1791ac595bf00eb5bad75c3cf00 \
     --hash=sha256:f14551eef9180fc72869e2d9a2896410a8826169e22495e98a825abaa0eac1a7
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/5ca4dbc7-2e9f-40aa-98e4-0b45866fe626/scratchpad/edr.in
+    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
     #   dbt-duckdb
 elementary-data==0.26.1 \
     --hash=sha256:cff88a9001d18fefc065e920a56ae6b2d21661f0298ae3fd6b7911063c56fdf4 \
     --hash=sha256:dbcd640eb9db8a25dbb30aa0e97b72e551daa1f0104212ae6a270d03e74b32b8
-    # via -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/5ca4dbc7-2e9f-40aa-98e4-0b45866fe626/scratchpad/edr.in
+    # via -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
 fastjsonschema==2.22.2 \
     --hash=sha256:0fb3915616adac85ccfdd737d26be1089845d2019819505b42d39888458f74d4 \
     --hash=sha256:72064e12356a7d6ef02165be2946b9abadbdf238536e07eb587e3dbaa33099cf

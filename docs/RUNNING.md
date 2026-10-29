@@ -126,11 +126,11 @@ mkdir -p ../data/elementary
 # edr runs its own dbt project from its install folder: the DuckDB path must be absolute
 DBT_DUCKDB_PATH="$(cd ../data && pwd)/olist.duckdb" \
   uvx --python 3.12 --from "elementary-data[duckdb]==0.26.1" \
-    --with dbt-core==1.12.5 --with dbt-duckdb==1.11.1 --with duckdb==1.5.6 \
+    --with dbt-core==1.12.6 --with dbt-duckdb==1.11.1 --with duckdb==1.5.6 \
   edr report --profiles-dir . --file-path ../data/elementary/index.html
 ```
 
-- BigQuery prod: `--from "elementary-data[bigquery]==0.26.1" --with dbt-core==1.12.5 --with dbt-bigquery==1.12.1`
+- BigQuery prod: `--from "elementary-data[bigquery]==0.26.1" --with dbt-core==1.12.6 --with dbt-bigquery==1.12.1`
   and `--profile-target prod` (CD publishes this one at `/elementary/` on GitHub Pages).
 - Windows: `edr`'s internal dbt project is deep inside uv's cache and passes the 260-character path limit
   (`No such file or directory: 'dbt_packages\...'`); point uv at a short cache, e.g. `UV_CACHE_DIR=C:/uvc`.

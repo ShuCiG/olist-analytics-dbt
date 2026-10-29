@@ -638,7 +638,7 @@ wheels = [
 
 [[package]]
 name = "dbt-core"
-version = "1.12.5"
+version = "1.12.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agate" },
@@ -667,9 +667,9 @@ dependencies = [
     { name = "sqlparse" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/4b/92569e1b74c81578d4c699ce1ad04b47084d6cc78e6d9846a17c8536fba1/dbt_core-1.12.5.tar.gz", hash = "sha256:f17f662aed7b6a8b0d267ecf07448ad1ec03edf147a52abbdf5ee48d25999bb6", size = 1036303, upload-time = "2026-09-15T19:08:28.036Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/85/37a226ed7c80dd83775f74bca99a42be9ec38e10fa4e21ef421da4e6e6c8/dbt_core-1.12.6.tar.gz", hash = "sha256:e4378ecde4740d6b6a5b706ad25162272e28dc20ee8390c42c1ebd637752574f", size = 1040922, upload-time = "2026-10-14T10:24:54.298Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/8e/90f07667fdc1b448f167a48f53bc0db3641cd4eb9ab5f1af2c1a2171f754/dbt_core-1.12.5-py3-none-any.whl", hash = "sha256:77661a8c9ee1d1ec7a8ed904d15a0937289d12ba6fd2d86d6f36d3eea735ce3d", size = 1132717, upload-time = "2026-09-15T19:08:26.36Z" },
+    { url = "https://files.pythonhosted.org/packages/57/9a/db7029272bd80bde5d7e80588bfea5a031762f4180764f50bb4e473a8634/dbt_core-1.12.6-py3-none-any.whl", hash = "sha256:a14fb6724a557dea781afa19171869a1b0b286a396d5dc012e74b8bd3596325e", size = 1137877, upload-time = "2026-10-14T10:24:52.426Z" },
 ]
 
 [[package]]
@@ -680,7 +680,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/44/22/43a63fb0cd40dba71
 
 [[package]]
 name = "dbt-databricks"
-version = "1.12.8"
+version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -694,9 +694,9 @@ dependencies = [
     { name = "packaging" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/39/56433aa09bdbae57b4b2638cc54ccd6d3f6289b29ea19cd2c64b785c11ec/dbt_databricks-1.12.8.tar.gz", hash = "sha256:42a177c80cb04ec38ebed8406dca948130c0302918de3d412b8fa304f427e5a2", size = 123759, upload-time = "2026-10-24T11:10:09.97Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/4c/3e9169d416dd78c2a7918676ce7fe7448e08869e2d1b5c596b4a44436aa3/dbt_databricks-1.13.0.tar.gz", hash = "sha256:1fbd18b740fafc462cc165fb24b9f270c598b25cfeb8f7630434f76d2a00daf6", size = 142242, upload-time = "2026-10-29T12:17:43.912Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/f4/6b84a758c78a998c7dc636f79d07f0463c3d371d466eb5ecd36d91eff022/dbt_databricks-1.12.8-py3-none-any.whl", hash = "sha256:f78866844ff2f4f419a5e67be3b6c138331d743390ae08fe574aa5836883e61c", size = 181955, upload-time = "2026-10-24T11:10:08.249Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/22/ac8dde6fabe2d273a1d8d42a86b73e6c2c862f85291b04e21d96388f96cc/dbt_databricks-1.13.0-py3-none-any.whl", hash = "sha256:34b96b3120426f4d6e36b3b5dfe66fe79cfef8b68f6db9621d293e6fdc02c550", size = 204247, upload-time = "2026-10-29T12:17:42.072Z" },
 ]
 
 [[package]]
@@ -2049,8 +2049,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dbt-bigquery", specifier = ">=1.12.1" },
-    { name = "dbt-core", specifier = ">=1.12.5" },
-    { name = "dbt-databricks", specifier = ">=1.12.8" },
+    { name = "dbt-core", specifier = ">=1.12.6" },
+    { name = "dbt-databricks", specifier = ">=1.13.0" },
     { name = "dbt-duckdb", specifier = ">=1.11.1" },
     { name = "dlt", extras = ["bigquery", "databricks", "duckdb"], specifier = ">=1.31.0" },
     { name = "duckdb", specifier = ">=1.5.6" },
