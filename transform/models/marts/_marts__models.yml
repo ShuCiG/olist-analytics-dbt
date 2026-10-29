@@ -337,6 +337,9 @@ models:
       group: orders
       contract:
         enforced: true
+      # dbt v2 (D83) creates a view named after the model for the latest version by
+      # default; v2 already takes the unsuffixed name (alias below). dbt-core: off anyway.
+      latest_version_pointer: {enabled: false}
     data_tests:
       - dbt_expectations.expect_table_row_count_to_equal_other_table:
           arguments:
