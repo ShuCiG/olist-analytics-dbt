@@ -21,6 +21,8 @@ from urllib.parse import quote
 from . import dbt_summary, email_html, schema_changes
 
 UI_URL = "http://localhost:8080"
+# Elementary reports of the DAGs' edr_report task (`elementary-reports` service)
+REPORTS_URL = "http://localhost:8081"
 LOG_TAIL_LINES = 15
 PRODUCER = "dbt.dbt_producer_watcher"
 # Log records that are parsing / runner chatter, not the task's own output
@@ -241,7 +243,9 @@ def report_email(
         intro,
         body,
         rows,
-        [("Open the run", run_url(dag_id, run_id))],
+        [("Open the run", run_url(dag_id, run_id))]
+        # Rebuilt after every dbt build (also in the UI: Browse → Elementary)
+        + ([("Elementary report", f"{REPORTS_URL}/airflow_{warehouse}/")] if dbt_built else []),
         footer=f"{dag_id} · local Airflow · settings: Admin → Variables",
     )
     return Email(kind, subject, html), age_h

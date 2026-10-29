@@ -5,7 +5,8 @@
 # The code is baked into the image (prod-like): a code change needs a rebuild or
 # another published image. Live edit: add docker-compose.dev.yml (see there).
 #   docker compose -f airflow/docker-compose.yml up -d --build
-#   UI: http://localhost:8080, alert emails (Mailpit): http://localhost:8025
+#   UI: http://localhost:8080, alert emails (Mailpit): http://localhost:8025,
+#   Elementary reports: http://localhost:8081 (also in the UI: Browse → Elementary)
 # BigQuery DAG: set GCP_KEY_FILE in airflow/.env (see .env.example).
 
 x-airflow-common: &airflow-common
@@ -23,6 +24,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
     AIRFLOW__CORE__DAGS_FOLDER: /opt/project/airflow/dags
+    # Elementary reports in the UI (Browse menu), served by the API server
+    AIRFLOW__CORE__PLUGINS_FOLDER: /opt/project/airflow/plugins
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
@@ -76,6 +79,18 @@ services:
     image: axllent/mailpit:v1.31.3
     ports:
       - "127.0.0.1:8025:8025"
+    restart: always
+
+  # Elementary reports the DAGs' edr_report task writes, on their own port. Same
+  # image as Airflow (no extra image to pin), Python's static file server: local
+  # use only, read-only mount.
+  elementary-reports:
+    image: ${OLIST_AIRFLOW_IMAGE:-olist-airflow:local}
+    entrypoint: ["python", "-m", "http.server", "8081", "--directory", "/srv/elementary"]
+    volumes:
+      - ../data/elementary:/srv/elementary:ro
+    ports:
+      - "127.0.0.1:8081:8081"
     restart: always
 
   postgres:

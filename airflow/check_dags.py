@@ -6,13 +6,16 @@ Cosmos watcher producer is missing, when dbt is not gated by `has_new_orders`
 (dlt_ingest -> has_new_orders -> elementary_tables -> producer: no rebuild once the
 feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
-failure callback), when a dbt-running task gets Elementary's clock as `--vars`
+failure callback), when `edr_report` (Elementary's report) is not between the
+dbt group and `report` with `none_skipped` and a skip exit code (a broken report
+must not fail the run), when a dbt-running task gets Elementary's clock as `--vars`
 instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
 a full parse per run, D50), when retries are not as expected (BigQuery: every
 task retries once, transient GCP errors, D53, with the producer retrying at once
 and every node task waiting for it; DuckDB: none, a retried node task runs dbt
 outside the pool), or
-when the DuckDB pool holds anything but the writers (dlt + producer): a sensor in
+when the DuckDB pool holds anything but the writers (dlt, Elementary's tables,
+producer, edr_report): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
 """
@@ -29,7 +32,8 @@ EXPECTED = {"olist_elt_duckdb", "olist_elt_bigquery"}
 PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
 ELEMENTARY = "elementary_tables"
-DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER}
+EDR_REPORT = "edr_report"
+DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT}
 RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 
 bag = DagBag(dag_folder=DAG_FOLDER)
@@ -67,6 +71,18 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
         or not dag.on_failure_callback
     ):
         print(f"{dag_id}: alerts not wired (report task / failure callback)", file=sys.stderr)
+        missing.add(dag_id)
+    if EDR_REPORT not in dag.task_ids or not (
+        dag.get_task(EDR_REPORT).trigger_rule == "none_skipped"
+        and dag.get_task(EDR_REPORT).skip_on_exit_code
+        # After the dbt group's last tasks; `report` behind both (a failed dbt must
+        # still hold back the email when edr_report ran)
+        and dag.get_task(EDR_REPORT).upstream_task_ids
+        and all(t.startswith("dbt.") for t in dag.get_task(EDR_REPORT).upstream_task_ids)
+        and dag.get_task(EDR_REPORT).upstream_task_ids < dag.get_task("report").upstream_task_ids
+        and EDR_REPORT in dag.get_task("report").upstream_task_ids
+    ):
+        print(f"{dag_id}: {EDR_REPORT} not wired (dbt -> {EDR_REPORT} -> report)", file=sys.stderr)
         missing.add(dag_id)
     for task_id in (ELEMENTARY, PRODUCER):
         if task_id not in dag.task_ids:

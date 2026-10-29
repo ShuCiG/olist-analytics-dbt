@@ -7,6 +7,9 @@
 !alerting/
 !airflow/dags/
 !airflow/check_dags.py
+!airflow/plugins/
+# Elementary CLI lock (edr venv)
+!.github/edr-requirements.txt
 !transform/
 transform/target/
 transform/target_airflow/

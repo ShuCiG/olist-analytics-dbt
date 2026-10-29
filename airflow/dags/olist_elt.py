@@ -63,6 +63,13 @@ DBT_MANIFEST = DBT_PROJECT_DIR / "target_airflow" / "manifest.json"
 # is set there too, AIRFLOW__COSMOS__CACHE_DIR): a recreated container keeps them
 DBT_CACHE_DIR = Path("/opt/dbt-cache")
 GCP_KEY = Path(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent"))
+# Elementary's CLI, own venv (Dockerfile). Reports land in the mounted data folder,
+# one per warehouse; the plugin (plugins/elementary_reports.py) and the
+# `elementary-reports` service (docker-compose.yml) serve them.
+EDR_BIN = Path("/opt/edr-venv/bin")
+REPORTS_DIR = PROJECT_DIR / "data" / "elementary"
+# edr's exit code turned into a skipped task: a broken report must not fail the run
+EDR_FAILED = 99
 
 # Which orders to load: up to the `until` param if given, else the next month
 CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
@@ -350,11 +357,41 @@ def build_dag(wh: Warehouse) -> DAG:
             ignore_downstream_trigger_rules=False,
         )
 
+        # Elementary's report (test and run history, anomaly charts) from this
+        # warehouse's `elementary` schema, as CD does for prod (D38). Also after a
+        # failed build, which the report shows; not when dbt was skipped (nothing
+        # new). edr runs its own dbt project with the project's `elementary` profile.
+        # Written next to the old report and moved over it: the servers never hand
+        # out a half-written file. In the pool: on DuckDB edr's dbt opens the file.
+        report_dir = REPORTS_DIR / f"airflow_{wh.name}"
+        edr_dir = DBT_CACHE_DIR / f"edr_{wh.name}"
+        edr_report = BashOperator(
+            task_id="edr_report",
+            bash_command=(
+                f"mkdir -p {report_dir} {edr_dir}"
+                f" && printf 'anonymous_usage_tracking: false\\n' > {edr_dir / 'config.yml'}"
+                f" && {EDR_BIN / 'edr'} report --profiles-dir {DBT_PROJECT_DIR}"
+                f" --profile-target {wh.dbt_target} --config-dir {edr_dir} --target-path {edr_dir}"
+                f" --file-path {report_dir / 'index.tmp.html'} --env airflow_{wh.name}"
+                " --days-back 30 --open-browser false"
+                f" && mv {report_dir / 'index.tmp.html'} {report_dir / 'index.html'}"
+                f" || exit {EDR_FAILED}"
+            ),
+            cwd=str(DBT_PROJECT_DIR),
+            # edr calls `dbt` from PATH: the edr venv's must come first
+            env={**wh.env, "PATH": f"{EDR_BIN}:{os.environ.get('PATH', '/usr/bin:/bin')}"},
+            append_env=True,
+            skip_on_exit_code=EDR_FAILED,
+            trigger_rule=TriggerRule.NONE_SKIPPED,
+            **({"pool": wh.pool} if wh.pool else {}),
+        )
+
         email_report = PythonOperator(
             task_id="report",
             python_callable=report,
             op_kwargs={"warehouse": wh.name},
-            # After dbt succeeded or was skipped; a failed dbt fails the run instead
+            # After dbt succeeded or was skipped; a failed dbt fails the run instead.
+            # Behind edr_report too: the email links to the fresh report.
             trigger_rule=TriggerRule.NONE_FAILED,
         )
 
@@ -366,7 +403,9 @@ def build_dag(wh: Warehouse) -> DAG:
             op_kwargs={"warehouse": wh.name},
         )
 
-        ingest >> new_orders >> elementary_tables >> dbt >> email_report
+        ingest >> new_orders >> elementary_tables >> dbt >> edr_report >> email_report
+        # Directly too: a failed dbt must hold back the email even if edr_report ran
+        dbt >> email_report
         ingest >> schema_email
     return dag
 
