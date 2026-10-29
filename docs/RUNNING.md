@@ -10,6 +10,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Semantic layer queries](#semantic-layer-queries)
 - [Observability report (Elementary)](#observability-report-elementary)
 - [Project evaluator](#project-evaluator)
+- [dbt v2 parse check](#dbt-v2-parse-check)
 - [Dashboard](#dashboard)
 - [BigQuery](#bigquery) (cost per dbt node, PR data diff)
 - [Databricks](#databricks)
@@ -146,6 +147,21 @@ dbt_project_evaluator is off in normal runs (its ~50 nodes stay out of builds an
 cd transform
 DBT_PROJECT_EVALUATOR=true uv run dbt build --select package:dbt_project_evaluator dbt_project_evaluator_exceptions
 ```
+
+## dbt v2 parse check
+
+dbt-core installs the v2 engine (dbt-oss) as `dbt-core-experimental-parser`; CI parses the project with it on
+every PR, as a warning only ([D83](DECISIONS.md)). Same check locally:
+
+```bash
+cd transform
+uv run dbt parse --use-v2-parser --target-path target-v2
+../.venv/Scripts/dbt-core-experimental-parser build --exclude dim_customer_rfm   # the v2 engine itself (Windows path)
+```
+
+On Windows set `PYTHONUTF8=1`: dbt-core reads the v2 manifest with the console code page otherwise and fails.
+The second line runs dbt-oss directly; point `DBT_DUCKDB_PATH` at a copy named `olist.duckdb` (the file name is the
+catalog name), not at `data/olist.duckdb`.
 
 ## Dashboard
 

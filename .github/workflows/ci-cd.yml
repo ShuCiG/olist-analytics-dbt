@@ -263,6 +263,15 @@ jobs:
         working-directory: transform
         run: uv run dbt deps
 
+      # dbt v2 readiness (D83): the v2 parser (dbt-oss, the Rust engine; installed with
+      # dbt-core as dbt-core-experimental-parser) must parse the project. Non-blocking
+      # for now: an error becomes a warning annotation on the run, not a red check.
+      - name: dbt parse (v2 parser, non-blocking)
+        working-directory: transform
+        run: |
+          uv run dbt parse --use-v2-parser --target-path target-v2 \
+            || echo "::warning title=dbt v2 parser::dbt parse --use-v2-parser failed, see the step log (D83)"
+
       # Fresh ingest just ran, so this checks the `_loaded_at` plumbing (warn-only, D18)
       - name: dbt source freshness
         working-directory: transform
