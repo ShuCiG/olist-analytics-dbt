@@ -29,3 +29,8 @@ variable "monthly_credit_quota" {
   type        = number
   default     = 20
 }
+
+variable "alert_email" {
+  description = "Recipient of the task graph failure email: a verified email of a user in the account"
+  type        = string
+}

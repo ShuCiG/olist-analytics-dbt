@@ -3,3 +3,4 @@ organization_name        = "MYORG"
 account_name             = "MYACCOUNT"
 owner_user               = "MYUSER"
 olist_svc_rsa_public_key = "MIIBIjANBgkqh..." # ~/.snowflake/keys/olist_svc.pub without header/footer, one line
+alert_email              = "me@example.com" # verified email of a user in the account

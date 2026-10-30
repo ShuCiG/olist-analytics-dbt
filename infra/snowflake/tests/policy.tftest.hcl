@@ -7,6 +7,7 @@ variables {
   owner_user                 = "OWNER"
   olist_svc_rsa_public_key   = "MIIB"
   terraform_private_key_path = "tests/dummy.p8"
+  alert_email                = "ops@example.com"
 }
 
 run "cost_guards" {
@@ -39,5 +40,14 @@ run "least_privilege" {
   assert {
     condition     = snowflake_service_user.olist.default_role == "OLIST_RUNNER"
     error_message = "OLIST_SVC runs as OLIST_RUNNER"
+  }
+}
+
+run "dbt_project_access" {
+  command = plan
+
+  assert {
+    condition     = toset(snowflake_grant_privileges_to_account_role.runner_dbt_schema.privileges) == toset(["USAGE", "CREATE DBT PROJECT", "CREATE TASK", "CREATE STAGE"])
+    error_message = "OLIST_RUNNER creates only the dbt project, its stage and tasks in DBT_PROJECTS"
   }
 }

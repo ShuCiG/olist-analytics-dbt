@@ -1,0 +1,17 @@
+# dbt Projects on Snowflake (#185) only: Snowflake reads this file instead of
+# profiles.yml (which also has DuckDB / BigQuery / Databricks targets). The run
+# happens inside Snowflake as the calling user, so account and user are
+# placeholders and there are no credentials. Schemas native_staging, ...,
+# native_marts keep it apart from the dbt Core `snowflake` target.
+olist:
+  target: native
+  outputs:
+    native:
+      type: snowflake
+      account: in-snowflake
+      user: in-snowflake
+      role: OLIST_RUNNER
+      warehouse: OLIST_WH
+      database: OLIST
+      schema: native
+      threads: 4
