@@ -1,12 +1,17 @@
 """Load Olist CSVs from Kaggle into schema/dataset `raw` (`--dataset`) with dlt.
 
-Destination: DuckDB (default, local dev), BigQuery (`--destination bigquery`) or
-Databricks (`--destination databricks`).
+Destination: DuckDB (default, local dev), BigQuery (`--destination bigquery`),
+Databricks (`--destination databricks`) or Snowflake (`--destination snowflake`).
 BigQuery auth = Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
 Databricks auth = DATABRICKS_HOST, DATABRICKS_HTTP_PATH (SQL warehouse) and either
 DATABRICKS_TOKEN (personal access token) or DATABRICKS_CLIENT_ID +
 DATABRICKS_CLIENT_SECRET (service principal, CI); tables go to catalog
 DATABRICKS_CATALOG (default `olist`).
+Snowflake auth = key pair: SNOWFLAKE_ACCOUNT (`<org>-<account>`), SNOWFLAKE_USER
+(default `OLIST_SVC`) and SNOWFLAKE_PRIVATE_KEY_PATH (local file) or
+SNOWFLAKE_PRIVATE_KEY (PEM text, CI); database / warehouse / role default to the
+objects in infra/snowflake (SNOWFLAKE_DATABASE, _WAREHOUSE, _ROLE). dlt uppercases
+identifiers there (RAW.ORDERS); dbt's unquoted names resolve to them.
 
 All source columns are loaded as strings: the raw layer mirrors the source exactly
 (e.g. zip prefixes keep leading zeros). Typing happens in dbt staging.
@@ -383,6 +388,20 @@ def make_destination(name: str, duckdb_path: Path):
         else:
             credentials["access_token"] = os.environ["DATABRICKS_TOKEN"]
         return dlt.destinations.databricks(credentials=credentials)
+    if name == "snowflake":
+        # Files go through each table's internal stage (PUT + COPY INTO)
+        credentials = {
+            "host": os.environ["SNOWFLAKE_ACCOUNT"],
+            "username": os.environ.get("SNOWFLAKE_USER", "OLIST_SVC"),
+            "database": os.environ.get("SNOWFLAKE_DATABASE", "OLIST"),
+            "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "OLIST_WH"),
+            "role": os.environ.get("SNOWFLAKE_ROLE", "OLIST_RUNNER"),
+        }
+        if os.environ.get("SNOWFLAKE_PRIVATE_KEY"):
+            credentials["private_key"] = os.environ["SNOWFLAKE_PRIVATE_KEY"]
+        else:
+            credentials["private_key_path"] = os.path.expanduser(os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"])
+        return dlt.destinations.snowflake(credentials=credentials)
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     return dlt.destinations.duckdb(str(duckdb_path))
 
@@ -391,7 +410,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--destination", choices=["duckdb", "bigquery", "databricks"], default="duckdb")
+    parser.add_argument("--destination", choices=["duckdb", "bigquery", "databricks", "snowflake"], default="duckdb")
     chunk = parser.add_mutually_exclusive_group()
     chunk.add_argument(
         "--until", type=month_key, help="load order months up to this one, YYYY-MM (default: all)"
@@ -400,7 +419,7 @@ def main() -> None:
         "--next", action="store_true", help="load only the next month that has orders"
     )
     parser.add_argument(
-        "--dataset", default="raw", help="target schema (DuckDB, Databricks) / dataset (BigQuery)"
+        "--dataset", default="raw", help="target schema (DuckDB, Databricks, Snowflake) / dataset (BigQuery)"
     )
     parser.add_argument(
         "--duckdb-path", type=Path, default=DUCKDB_PATH, help="DuckDB file (default: %(default)s)"

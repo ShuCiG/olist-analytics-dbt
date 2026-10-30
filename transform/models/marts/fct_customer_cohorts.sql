@@ -97,9 +97,8 @@ final as (
         activity_month,
         cohort_size,
         active_customers,
-        -- Integer / integer is a float on every engine here (dbt.type_float() would be
-        -- a 4-byte FLOAT on DuckDB, not the contract's DOUBLE)
-        active_customers / cohort_size as retention_rate,
+        -- Cast first: integer / integer is NUMBER(p, 6) on Snowflake
+        {{ to_float('active_customers') }} / cohort_size as retention_rate,
         orders_count,
         {{ to_money('revenue') }} as revenue,
         {{ to_money('sum(revenue) over (
