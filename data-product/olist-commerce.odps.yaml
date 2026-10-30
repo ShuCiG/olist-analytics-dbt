@@ -8,7 +8,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: olist-commerce
 name: Olist commerce analytics
-version: 1.0.2
+version: 1.1.0
 status: active
 domain: commerce
 type: aggregate
@@ -53,7 +53,7 @@ outputPorts:
       Star schema in BigQuery (prod and hourly live feed) and DuckDB (local); also built and
       contract-tested weekly on Databricks (CI only).
     contractId: olist-marts
-    version: 1.0.2
+    version: 1.1.0
     inputContracts:
       - id: olist-raw
         version: 1.0.2
@@ -64,11 +64,11 @@ outputPorts:
     type: semantic-layer
     description: >-
       Business metrics (revenue, average order value, late delivery rate, repeat customer
-      rate, ...) defined once in the dbt Semantic Layer, queried with MetricFlow on either
+      rate, cohort retention, ...) defined once in the dbt Semantic Layer, queried with MetricFlow on either
       warehouse.
     inputContracts:
       - id: olist-marts
-        version: 1.0.2
+        version: 1.1.0
     authoritativeDefinitions:
       - type: implementation
         url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__semantic_models.yml

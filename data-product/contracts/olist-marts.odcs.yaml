@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.0.2
+version: 1.1.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -376,3 +376,64 @@ schema:
       - name: volume_cm3
         logicalType: integer
     quality: [*not_empty_rule]
+
+  - name: fct_customer_cohorts
+    physicalName: fct_customer_cohorts
+    physicalType: table
+    description: >-
+      Retention and value of acquisition cohorts: one row per cohort (month of the first order)
+      and month since that first order, zeros where nobody ordered.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_customer_cohorts
+    properties:
+      - name: cohort_month_sk
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: cohort_month
+        logicalType: date
+        required: true
+      - name: months_since_first_order
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 0
+      - name: activity_month
+        logicalType: date
+        required: true
+      - name: cohort_size
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 1
+      - name: active_customers
+        logicalType: integer
+        required: true
+      - name: retention_rate
+        logicalType: number
+        required: true
+        logicalTypeOptions:
+          minimum: 0
+          maximum: 1
+      - name: orders_count
+        logicalType: integer
+        required: true
+      - name: revenue
+        logicalType: number
+        required: true
+      - name: cumulative_revenue
+        logicalType: number
+        required: true
+      - name: cumulative_revenue_per_customer
+        logicalType: number
+        required: true
+    quality:
+      - *not_empty_rule
+      - type: sql
+        description: Everyone in a cohort orders in its month 0.
+        query: >-
+          select count(*) from {schema}.{model}
+          where months_since_first_order = 0 and active_customers <> cohort_size
+        mustBe: 0

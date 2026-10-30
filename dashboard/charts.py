@@ -18,6 +18,15 @@ def series_colors() -> list[str]:
     return _SERIES["dark" if st.context.theme.type == "dark" else "light"]
 
 
+# Sequential blue ramp (steps 100 -> 700): low values recede toward the surface,
+# so the dark theme runs it the other way round
+_SEQUENTIAL = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+
+
+def sequential_colors() -> list[str]:
+    return _SEQUENTIAL[::-1] if st.context.theme.type == "dark" else _SEQUENTIAL
+
+
 def _show(chart: alt.Chart | alt.LayerChart | alt.FacetChart, height: int) -> None:
     st.altair_chart(chart.properties(height=height), width="stretch")
 
@@ -99,5 +108,53 @@ def bar_grouped(
                 alt.Tooltip(f"{y}:Q", title=title, format=fmt),
             ],
         )
+    )
+    _show(chart, height)
+
+
+def heatmap(
+    df: pd.DataFrame, x: str, y: str, value: str, title: str, fmt: str,
+    extra_tooltip: list[alt.Tooltip] | None = None, height: int = 420,
+) -> None:
+    """Cells on an ordinal x and a monthly y (`y` as dates, newest on top), one-hue color scale."""
+    chart = (
+        alt.Chart(df)
+        .mark_rect(cornerRadius=2, stroke=None)
+        .encode(
+            # Inner padding = a thin surface gap between cells
+            x=alt.X(f"{x}:O", title=x.replace("_", " ").capitalize(), axis=alt.Axis(labelAngle=0),
+                    scale=alt.Scale(paddingInner=0.08)),
+            y=alt.Y(f"yearmonth({y}):O", title=None, sort="descending", axis=alt.Axis(format="%b %Y"),
+                    scale=alt.Scale(paddingInner=0.08)),
+            color=alt.Color(
+                f"{value}:Q",
+                scale=alt.Scale(range=sequential_colors()),
+                legend=alt.Legend(title=title, format=fmt, orient="top", gradientLength=200),
+            ),
+            tooltip=[
+                alt.Tooltip(f"yearmonth({y}):T", title="Cohort", format="%B %Y"),
+                alt.Tooltip(f"{x}:O", title=x.replace("_", " ").capitalize()),
+                alt.Tooltip(f"{value}:Q", title=title, format=fmt),
+                *(extra_tooltip or []),
+            ],
+        )
+    )
+    _show(chart, height)
+
+
+def curve(df: pd.DataFrame, x: str, y: str, title: str, fmt: str, height: int = 260) -> None:
+    """Single-series line over an integer x (e.g. months since first order), points on every step."""
+    color = series_colors()[0]
+    base = alt.Chart(df).encode(
+        x=alt.X(f"{x}:Q", title=x.replace("_", " ").capitalize(), axis=alt.Axis(tickMinStep=1, grid=False)),
+        y=alt.Y(f"{y}:Q", title=title, axis=alt.Axis(format=fmt)),
+        tooltip=[
+            alt.Tooltip(f"{x}:Q", title=x.replace("_", " ").capitalize()),
+            alt.Tooltip(f"{y}:Q", title=title, format=fmt),
+        ],
+    )
+    chart = alt.layer(
+        base.mark_line(color=color, strokeWidth=2),
+        base.mark_point(color=color, filled=True, size=64),
     )
     _show(chart, height)

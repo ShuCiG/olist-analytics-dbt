@@ -165,6 +165,84 @@ models:
       - name: as_of_date
         description: Date of the last order in the data, the "today" of recency.
 
+  - name: fct_customer_cohorts
+    description: >
+      Retention and value of acquisition cohorts. One row per cohort (month of a
+      person's first order) and month since that first order, from month 0 up to
+      the latest month with orders; months nobody ordered in are rows with zeros.
+      Active = placed any order that month (all statuses, as `orders_count` in
+      `dim_customers`); revenue = payments on orders not canceled/unavailable (as
+      `lifetime_value`). The latest month is partial while the feed runs.
+    config:
+      group: parties
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [cohort_month, months_since_first_order]
+    columns:
+      - name: cohort_month_sk
+        description: Surrogate key (cohort_month, months_since_first_order). Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+      - name: cohort_month
+        description: First day of the month of the cohort's first orders.
+        data_type: date
+        data_tests: [not_null]
+      - name: months_since_first_order
+        description: Calendar months between `cohort_month` and `activity_month`; 0 = the month of the first order.
+        data_type: integer
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: activity_month
+        description: First day of the month the activity is counted in.
+        data_type: date
+        data_tests:
+          - not_null
+          - is_not_before:
+              arguments:
+                earlier_column: cohort_month
+      - name: cohort_size
+        description: People whose first order is in `cohort_month`.
+        data_type: bigint
+      - name: active_customers
+        description: People of the cohort who placed at least one order in `activity_month`.
+        data_type: bigint
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= cohort_size"
+      - name: retention_rate
+        description: "`active_customers` / `cohort_size`; 1 in month 0."
+        data_type: *float_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: orders_count
+        description: Orders of the cohort in `activity_month`, all statuses.
+        data_type: bigint
+      - name: revenue
+        description: Payments of the cohort in `activity_month` on orders not canceled/unavailable, in BRL.
+        data_type: *money_type
+      - name: cumulative_revenue
+        description: "`revenue` from month 0 up to this month, in BRL."
+        data_type: *money_type
+      - name: cumulative_revenue_per_customer
+        description: >
+          `cumulative_revenue` / `cohort_size`: value per acquired person after this
+          many months (LTV curve), in BRL.
+        data_type: *money_type
+
   - name: dim_sellers
     description: One row per seller with zip-prefix centroid coordinates.
     config:

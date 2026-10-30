@@ -31,7 +31,7 @@ import warehouse  # noqa: E402
 
 PRODUCT_DIR = DASHBOARD.parent / "data-product"
 MANIFEST = PRODUCT_DIR / "consumers" / "olist-dashboard.yaml"
-PAGES = ["views/overview.py", "views/delivery.py", "views/customers.py"]
+PAGES = ["views/overview.py", "views/delivery.py", "views/customers.py", "views/cohorts.py"]
 
 
 def load(path: Path) -> dict[str, Any]:
