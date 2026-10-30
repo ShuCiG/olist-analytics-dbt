@@ -160,6 +160,14 @@ jobs:
       - name: terraform test
         run: terraform test
 
+      # Snowflake root (#185): own state, same checks on a mock provider
+      - name: terraform validate + test (snowflake)
+        working-directory: infra/snowflake
+        run: |
+          terraform init -backend=false -lockfile=readonly -input=false
+          terraform validate
+          terraform test
+
   # dbt_project_evaluator: project structure rules (naming, DAG shape, docs and test
   # coverage, governance: public marts need contracts, exposures only read public
   # models). Reads dbt's graph, not data, so an empty DuckDB file is enough. Off in

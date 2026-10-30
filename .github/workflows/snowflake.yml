@@ -1,0 +1,149 @@
+name: Snowflake
+
+# Fourth engine (#185): the dlt load and dbt build on Snowflake (dbt Core, schemas
+# ci_sf_<run>_*), then the DBT PROJECT object and its task graph redeployed from main
+# (snowflake/deploy.py; the graph itself runs daily inside Snowflake). Weekly and on
+# demand, not on pull requests: the key of service user OLIST_SVC lives in
+# environment `snowflake-ci`, which admits only main. The account is a trial: without
+# the secret (removed when the trial ends) the run skips instead of failing.
+on:
+  schedule:
+    # Off the full hour: GitHub delays or drops schedules at :00
+    - cron: "37 6 * * 1"  # Mondays 06:37 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dbt-build-snowflake:
+    name: dbt build (Snowflake)
+    if: github.ref == 'refs/heads/main'
+    environment: snowflake-ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+      # run_id in the name: a cancelled run's cleanup can't drop a newer run's schemas
+      DBT_CI_SCHEMA: ci_sf_${{ github.run_id }}
+      DBT_RAW_SCHEMA: ci_sf_${{ github.run_id }}_raw
+    steps:
+      - name: Key of OLIST_SVC
+        id: key
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SNOWFLAKE_PRIVATE_KEY" ] || [ -z "$SNOWFLAKE_ACCOUNT" ]; then
+            echo "::notice::No Snowflake account configured (trial ended?): run skipped"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          key_path="$RUNNER_TEMP/olist_svc.p8"
+          umask 077
+          printf '%s\n' "$SNOWFLAKE_PRIVATE_KEY" > "$key_path"
+          # Read by dlt, the dbt profile and snowflake/deploy.py
+          echo "SNOWFLAKE_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: steps.key.outputs.available == 'true'
+
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa  # v10.3.1
+        if: steps.key.outputs.available == 'true'
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        if: steps.key.outputs.available == 'true'
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        if: steps.key.outputs.available == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Ingest raw data (dlt → Snowflake)
+        if: steps.key.outputs.available == 'true'
+        run: uv run python ingestion/pipeline.py --destination snowflake --dataset "$DBT_RAW_SCHEMA"
+
+      - name: dbt deps
+        if: steps.key.outputs.available == 'true'
+        working-directory: transform
+        run: uv run dbt deps
+
+      # The cleanup below must refuse a schema outside ci_*
+      - name: Drop guard refuses non-CI schemas
+        if: steps.key.outputs.available == 'true'
+        working-directory: transform
+        env:
+          DBT_CI_SCHEMA: marts_guard_check
+        run: |
+          if uv run dbt run-operation drop_isolated_datasets --target snowflake_ci; then
+            echo "::error::drop_isolated_datasets accepted schema '$DBT_CI_SCHEMA'"
+            exit 1
+          fi
+
+      # Elementary's tables first, as in every fresh warehouse (D38)
+      - name: dbt run (Elementary tables)
+        if: steps.key.outputs.available == 'true'
+        working-directory: transform
+        run: uv run dbt run --target snowflake_ci --select package:elementary
+
+      - name: dbt build (target snowflake_ci)
+        if: steps.key.outputs.available == 'true'
+        working-directory: transform
+        run: uv run dbt build --target snowflake_ci --exclude package:elementary
+
+      - name: Upload manifest (for the failure email)
+        if: always() && steps.key.outputs.available == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ci-manifest
+          path: transform/target/manifest.json
+          retention-days: 3
+
+      - name: Drop CI schemas
+        if: always() && steps.key.outputs.available == 'true'
+        working-directory: transform
+        run: uv run dbt run-operation drop_isolated_datasets --target snowflake_ci
+
+      # Only after a green build: the object and the task graph follow main
+      - name: Deploy DBT PROJECT + task graph
+        if: steps.key.outputs.available == 'true'
+        run: uv run python snowflake/deploy.py
+
+  notify-failure:
+    name: Email on failure
+    needs: [dbt-build-snowflake]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # job list + logs of this run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download manifest (test descriptions)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name ci-manifest --dir ci-manifest
+      - name: Send email
+        env:
+          DBT_MANIFEST: ci-manifest/manifest.json
+          GH_TOKEN: ${{ github.token }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          EVENT_TITLE: "Snowflake: ${{ github.event_name }} on ${{ github.ref_name }}"
+        run: python3 .github/scripts/notify_failure.py

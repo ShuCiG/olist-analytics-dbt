@@ -5,8 +5,8 @@ with source as (
 renamed as (
     select
         geolocation_zip_code_prefix as zip_code_prefix,
-        cast(geolocation_lat as {{ dbt.type_float() }}) as latitude,
-        cast(geolocation_lng as {{ dbt.type_float() }}) as longitude,
+        {{ to_float("geolocation_lat") }} as latitude,
+        {{ to_float("geolocation_lng") }} as longitude,
         geolocation_city as city,
         geolocation_state as state
     from source

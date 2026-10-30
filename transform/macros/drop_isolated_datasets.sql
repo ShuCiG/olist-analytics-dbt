@@ -6,22 +6,23 @@
       dropped.
     - databricks_ci: the scheduled Databricks CI run's schemas in catalog olist_ci
       (D58), dropped with everything in them (dlt's staging volume included).
+    - snowflake_ci: the scheduled Snowflake CI run's schemas in database OLIST (#185).
     - airflow: the Airflow BigQuery DAG's datasets, run by hand to reset it; the
       datasets are emptied (every table and view dropped), not dropped: Terraform
       owns them and their access grants (infra/), so a reset leaves no drift.
     Guarded twice: refuses any other target (never prod / dev), and a dataset name
-    outside the target's own namespace (ci, databricks_ci: ci_*; airflow: airflow), so a prod name
+    outside the target's own namespace (ci, databricks_ci, snowflake_ci: ci_*; airflow: airflow), so a prod name
     in DBT_CI_SCHEMA or profiles.yml can't turn the cleanup into a prod drop.
-    Usage: dbt run-operation drop_isolated_datasets --target ci|airflow|databricks_ci
+    Usage: dbt run-operation drop_isolated_datasets --target ci|airflow|databricks_ci|snowflake_ci
 #}
 {% macro drop_isolated_datasets() %}
-    {% set allowed = ['ci', 'airflow', 'databricks_ci'] %}
+    {% set allowed = ['ci', 'airflow', 'databricks_ci', 'snowflake_ci'] %}
     {% if target.name not in allowed %}
         {{ exceptions.raise_compiler_error("drop_isolated_datasets runs only on targets " ~ allowed ~ ", got '" ~ target.name ~ "'") }}
     {% endif %}
     {% set schema_ok = target.schema == 'airflow' if target.name == 'airflow' else target.schema.startswith('ci_') %}
     {% if not schema_ok %}
-        {{ exceptions.raise_compiler_error("drop_isolated_datasets: dataset '" ~ target.schema ~ "' is outside target '" ~ target.name ~ "' (ci, databricks_ci: ci_*; airflow: airflow)") }}
+        {{ exceptions.raise_compiler_error("drop_isolated_datasets: dataset '" ~ target.schema ~ "' is outside target '" ~ target.name ~ "' (ci, databricks_ci, snowflake_ci: ci_*; airflow: airflow)") }}
     {% endif %}
     {% set suffixes = ['', '_raw', '_raw_staging', '_staging', '_intermediate', '_marts', '_seeds', '_snapshots', '_elementary'] %}
     {% for suffix in suffixes %}
