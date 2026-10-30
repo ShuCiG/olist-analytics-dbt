@@ -55,7 +55,9 @@ docs/PROGRESS.md
 
 # Terraform (infra/): provider cache, local state, saved plans, operator variables
 infra/.terraform/
+infra/snowflake/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
 infra/terraform.tfvars
+infra/snowflake/terraform.tfvars
