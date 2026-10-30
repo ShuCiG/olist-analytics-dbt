@@ -1,6 +1,6 @@
 # infra/snowflake — Snowflake account as code
 
-Separate Terraform root for the Snowflake engine (#185), so the GCP root never needs the Snowflake account. State: same GCS bucket as `infra/`, prefix `snowflake`.
+Separate Terraform root for the Snowflake engine (#185, D85), so the GCP root never needs the Snowflake account. State: same GCS bucket as `infra/`, prefix `snowflake`.
 
 | File | What |
 |---|---|
@@ -8,6 +8,8 @@ Separate Terraform root for the Snowflake engine (#185), so the GCP root never n
 | `cost.tf` | account-level resource monitor: 20 credits a month, notify at 50/80 %, suspend at 100 %, cancel queries at 110 % |
 | `database.tf` | database `OLIST`; dlt and dbt create the schemas inside |
 | `access.tf` | role `OLIST_RUNNER` (warehouse usage, `CREATE SCHEMA` on `OLIST`), key-pair service user `OLIST_SVC` |
+| `dbt_project.tf` | schema `DBT_PROJECTS` for the DBT PROJECT object and its task graph (made by `snowflake/deploy.py`), runner grants, `EXECUTE TASK` |
+| `notify.tf` | email integration `OLIST_EMAIL` for the task graph's failure email; recipient from `alert_email` (tfvars, not in the repo) |
 | `bootstrap.sql` | one-time `TERRAFORM_SVC` service user Terraform runs as |
 | `tests/policy.tftest.hcl` | cost guards and grants, on a mock provider (CI) |
 

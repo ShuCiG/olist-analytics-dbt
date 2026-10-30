@@ -8,8 +8,8 @@ DATABRICKS_TOKEN (personal access token) or DATABRICKS_CLIENT_ID +
 DATABRICKS_CLIENT_SECRET (service principal, CI); tables go to catalog
 DATABRICKS_CATALOG (default `olist`).
 Snowflake auth = key pair: SNOWFLAKE_ACCOUNT (`<org>-<account>`), SNOWFLAKE_USER
-(default `OLIST_SVC`) and SNOWFLAKE_PRIVATE_KEY_PATH (local file) or
-SNOWFLAKE_PRIVATE_KEY (PEM text, CI); database / warehouse / role default to the
+(default `OLIST_SVC`) and SNOWFLAKE_PRIVATE_KEY_PATH (PEM file; CI writes its
+secret to one); database / warehouse / role default to the
 objects in infra/snowflake (SNOWFLAKE_DATABASE, _WAREHOUSE, _ROLE). dlt uppercases
 identifiers there (RAW.ORDERS); dbt's unquoted names resolve to them.
 
@@ -396,11 +396,8 @@ def make_destination(name: str, duckdb_path: Path):
             "database": os.environ.get("SNOWFLAKE_DATABASE", "OLIST"),
             "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "OLIST_WH"),
             "role": os.environ.get("SNOWFLAKE_ROLE", "OLIST_RUNNER"),
+            "private_key_path": os.path.expanduser(os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"]),
         }
-        if os.environ.get("SNOWFLAKE_PRIVATE_KEY"):
-            credentials["private_key"] = os.environ["SNOWFLAKE_PRIVATE_KEY"]
-        else:
-            credentials["private_key_path"] = os.path.expanduser(os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"])
         return dlt.destinations.snowflake(credentials=credentials)
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     return dlt.destinations.duckdb(str(duckdb_path))

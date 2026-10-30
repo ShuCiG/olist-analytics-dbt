@@ -270,6 +270,38 @@ uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server datab
 uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server databricks-ci
 ```
 
+## Snowflake
+
+A trial account works for 30 days (no external access: see D85). Set up the account with Terraform once
+([infra/snowflake/README.md](../infra/snowflake/README.md): key pairs, `bootstrap.sql`, `terraform apply`), then as
+service user `OLIST_SVC`:
+
+```bash
+export SNOWFLAKE_ACCOUNT=<org>-<account>                           # SELECT CURRENT_ORGANIZATION_NAME(), CURRENT_ACCOUNT_NAME()
+export SNOWFLAKE_PRIVATE_KEY_PATH=~/.snowflake/keys/olist_svc.p8   # dbt on Windows: a Windows path
+uv run python ingestion/pipeline.py --destination snowflake
+cd transform && uv run dbt run --target snowflake --select package:elementary
+uv run dbt build --target snowflake --exclude package:elementary && cd ..
+```
+
+dbt Projects on Snowflake and the task graph (same variables; Snowflake CLI comes pinned through `uvx`):
+
+```bash
+uv run python snowflake/deploy.py      # upload transform/ + packages as OLIST.DBT_PROJECTS.OLIST, apply tasks.sql
+```
+
+```sql
+EXECUTE DBT PROJECT OLIST.DBT_PROJECTS.OLIST ARGS = 'build --exclude package:elementary';  -- one run, target native
+EXECUTE TASK OLIST.DBT_PROJECTS.DBT_ELEMENTARY;                                         -- the whole graph now
+SELECT SYSTEM$GET_DBT_LOG('<query id>');                                                -- log of a failed run
+ALTER TASK OLIST.DBT_PROJECTS.DBT_ELEMENTARY SUSPEND;                                   -- stop the daily schedule
+```
+
+The weekly CI (`.github/workflows/snowflake.yml`, target `snowflake_ci`) needs environment `snowflake-ci` with
+variable `SNOWFLAKE_ACCOUNT` and secret `SNOWFLAKE_PRIVATE_KEY` (the PEM text of `olist_svc.p8`); without the
+secret it skips. When the trial ends: delete the secret, `terraform destroy` in `infra/snowflake` (the database has
+`prevent_destroy`: remove it first), or keep everything on a paid account.
+
 ## Airflow
 
 ```bash
