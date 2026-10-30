@@ -29,7 +29,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 ## Highlights
 
 - **Data product with enforced contracts.** Descriptor in the Open Data Product Standard (owner, input and output
-  ports), an ODCS data contract per port, ~370 contract checks on the data in every CI run. The dashboard's usage
+  ports), an ODCS data contract per port, ~410 contract checks on the data in every CI run. The dashboard's usage
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
 - **One codebase, three warehouses.** The same dbt models run on DuckDB, BigQuery and Databricks with identical
@@ -44,7 +44,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 140 data tests, 7 unit tests, enforced model contracts, 262 Python tests; known
+- **Data quality at every layer.** 150 data tests, 8 unit tests, enforced model contracts, 264 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -160,6 +160,7 @@ erDiagram
 | `dim_sellers` | seller | zip-prefix centroid coordinates; current state |
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
+| `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) |
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
@@ -248,13 +249,13 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **140 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 3 singular tests; 9 more on the cost mart in prod | every `dbt build` |
-| **7 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join | every `dbt build` |
+| **150 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 3 singular tests; 9 more on the cost mart in prod | every `dbt build` |
+| **8 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 371 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 411 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **262 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **264 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -324,6 +325,8 @@ current warehouse, joins included.
 | `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
 | `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |
 | `new_customers`, `repeat_customers`, `repeat_customer_rate` | people by first order (cohort); of them, who ordered again; the share |
+| `cohort_size`, `retained_customers`, `cohort_retention_rate` | from `fct_customer_cohorts`, by `cohort__months_since_first_order`: people acquired; of them, who ordered in that month; the share |
+| `ltv_3_months`, `cohort_revenue_to_date` | revenue per acquired person in months 0–2 (cohorts old enough); cumulative cohort revenue |
 
 ```bash
 cd transform && uv run dbt parse
@@ -332,7 +335,7 @@ uv run mf query --metrics revenue,average_order_value --group-by metric_time__mo
 
 The dashboard keeps its own SQL (it runs without dbt), and a test compares every KPI tile with `mf query` on the
 same data and period. Same numbers on DuckDB and BigQuery: 99,441 orders, R$ 15,735,527.03 revenue, 6.77 % late
-deliveries, 3.12 % repeat customers.
+deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the month after their first.
 
 ## Orchestration and alerts
 
@@ -409,12 +412,12 @@ fails on a service account key older than 90 days or on an account that should h
 
 ## Dashboard
 
-Three pages over the marts (sales, delivery & reviews, customers & sellers), a shared date filter, and a sidebar
+Four pages over the marts (sales, delivery & reviews, customers & sellers, cohorts & retention), a shared date filter, and a sidebar
 showing how fresh the data is. It runs on DuckDB or BigQuery with the same SQL, and the deployed app reads the
 Airflow-fed marts with a service account that can only read `marts` and `airflow_marts`. Declared in dbt as an
 exposure, so it appears in the lineage.
 
-On BigQuery a fourth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
+On BigQuery a fifth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
 package, node name), and each prod deploy turns BigQuery's job history into `fct_dbt_job_costs`, one row per job, for
 prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes (queries
 outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
@@ -423,6 +426,8 @@ outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIO
 | Sales overview | Customers & sellers |
 |---|---|
 | ![Sales overview](docs/images/dashboard-overview.png) | ![Customers & sellers](docs/images/dashboard-customers.png) |
+
+![Cohorts & retention](docs/images/dashboard-cohorts.png)
 
 ![dbt cost on BigQuery](docs/images/dashboard-costs.png)
 
@@ -493,6 +498,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dbt-core 1.12.6 once dbt-databricks allows it (#114), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: Snowflake as a fourth engine with dbt Projects on Snowflake and Tasks (#185), OpenLineage lineage into Marquez (#183), Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

@@ -98,6 +98,8 @@ DELIVERY = {
 }
 CUSTOMERS = {"customers": "customers", "avg_spend": "revenue_per_customer"}
 REPEAT = {"customers": "new_customers", "repeat_rate": "repeat_customer_rate"}
+COHORTS = {"new_customers": "new_customers", "ltv_3m": "ltv_3_months"}
+RETENTION = {"retention_m1": 1, "retention_m3": 3}  # tile -> month of cohort_retention_rate
 
 
 def test_usage_agreement_lists_these_metrics() -> None:
@@ -105,7 +107,8 @@ def test_usage_agreement_lists_these_metrics() -> None:
     path = Path(__file__).resolve().parents[2] / "data-product" / "consumers" / "olist-dashboard.yaml"
     with path.open(encoding="utf-8") as f:
         declared = yaml.safe_load(f)["metrics"]["names"]
-    compared = {m for pairs in (SALES, DELIVERY, CUSTOMERS, REPEAT) for m in pairs.values()}
+    compared = {m for pairs in (SALES, DELIVERY, CUSTOMERS, REPEAT, COHORTS) for m in pairs.values()}
+    compared.add("cohort_retention_rate")
     assert sorted(declared) == sorted(compared)
 
 
@@ -136,3 +139,16 @@ def test_repeat_rate_over_all_data(tmp_path: Path) -> None:
     pairs = REPEAT
     metrics = mf_query(tmp_path, list(pairs.values()))
     assert_same(kpis.customers(warehouse.date_bounds()), metrics, pairs)
+
+
+def test_cohort_kpis(tmp_path: Path, period: kpis.Period) -> None:
+    # Cohort metrics have the cohort month as their time axis (metric_time);
+    # new_customers (by first order) must agree with the cohort mart's sizes
+    pairs = COHORTS
+    metrics = mf_query(tmp_path, list(pairs.values()), *period_args(period))
+    dashboard = kpis.cohorts(period)
+    assert_same(dashboard, metrics, pairs)
+    for column, month in RETENTION.items():
+        at_month = f"{{{{ Dimension('cohort__months_since_first_order') }}}} = {month}"
+        rate = mf_query(tmp_path, ["cohort_retention_rate"], *period_args(period), "--where", at_month)
+        assert_same(dashboard, rate, {column: "cohort_retention_rate"})

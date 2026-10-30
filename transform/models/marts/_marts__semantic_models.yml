@@ -86,6 +86,41 @@ semantic_models:
         agg: count
         expr: customer_unique_id
 
+  - name: customer_cohorts
+    description: >
+      One row per acquisition cohort and month since its first order
+      (fct_customer_cohorts). Time axis = cohort month; group by
+      `cohort__months_since_first_order` for retention / LTV curves.
+    model: ref('fct_customer_cohorts')
+    config:
+      group: parties
+    defaults:
+      agg_time_dimension: cohort_month
+    entities:
+      - name: cohort
+        type: primary
+        expr: cohort_month_sk
+    dimensions:
+      - name: cohort_month
+        type: time
+        type_params:
+          time_granularity: month
+      - name: months_since_first_order
+        type: categorical
+    measures:
+      - name: cohort_people
+        description: People acquired (cohort size), repeated on every month row of a cohort.
+        agg: sum
+        expr: cohort_size
+      - name: active_people
+        description: People of the cohort who ordered in the month.
+        agg: sum
+        expr: active_customers
+      - name: cohort_cumulative_revenue
+        description: Revenue of the cohort from month 0 up to the month, BRL.
+        agg: sum
+        expr: cumulative_revenue
+
 metrics:
   # Sales. Revenue leaves out orders that never became a sale (as the dashboard does).
   - name: orders
@@ -229,6 +264,63 @@ metrics:
     config:
       group: parties
 
+  # Cohorts (fct_customer_cohorts). Sums over cohorts weight each by its size.
+  - name: cohort_size
+    label: Cohort size
+    description: People acquired; with a `months_since_first_order` filter, only cohorts old enough to have that month.
+    type: simple
+    type_params:
+      measure: cohort_people
+    config:
+      group: parties
+
+  - name: retained_customers
+    label: Retained customers
+    description: People who ordered again in a given month after their first (group by months since first order).
+    type: simple
+    type_params:
+      measure: active_people
+    config:
+      group: parties
+
+  - name: cohort_retention_rate
+    label: Cohort retention rate
+    description: >
+      Retained customers / cohort size, per month since the first order (1 in
+      month 0). Without that dimension it averages over all months: group by it.
+    type: ratio
+    type_params:
+      numerator: retained_customers
+      denominator: cohort_size
+    config:
+      group: parties
+
+  - name: ltv_3_months
+    label: 3-month LTV, BRL
+    description: >
+      Revenue per acquired person in the calendar month of the first order and the
+      two after (months 0-2). Cohorts younger than that are left out.
+    type: ratio
+    type_params:
+      numerator:
+        name: cohort_revenue_to_date
+        filter: &month_2 |
+          {{ Dimension('cohort__months_since_first_order') }} = 2
+      denominator:
+        name: cohort_size
+        filter: *month_2
+    config:
+      group: parties
+
+  - name: cohort_revenue_to_date
+    label: Cohort revenue to date, BRL
+    description: Cumulative revenue of the cohorts up to a month since the first order (filter or group by that month).
+    type: simple
+    type_params:
+      measure: cohort_cumulative_revenue
+    config:
+      group: parties
+
 # Named queries over the metrics: `mf query --saved-query <name>`
 saved_queries:
   - name: sales_by_month
@@ -248,3 +340,12 @@ saved_queries:
         - Dimension('customer__state')
     config:
       group: orders
+
+  - name: cohort_retention_curve
+    description: Retention and revenue per acquired person by month since the first order, over all cohorts (Customers page).
+    query_params:
+      metrics: [cohort_size, retained_customers, cohort_retention_rate]
+      group_by:
+        - Dimension('cohort__months_since_first_order')
+    config:
+      group: parties

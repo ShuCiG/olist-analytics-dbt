@@ -164,3 +164,50 @@ unit_tests:
         - {order_item_sk: i2, seller_version_id: v2, seller_state: RJ, is_seller_version_current: false}
         - {order_item_sk: i3, seller_version_id: v3, seller_state: RJ, is_seller_version_current: true}
         - {order_item_sk: i4, seller_version_id: w1, seller_state: SP, is_seller_version_current: true}
+
+  - name: test_fct_customer_cohorts_retention_and_ltv
+    model: fct_customer_cohorts
+    description: >
+      Cohort = month of the first order: an order on the last evening of January
+      is the January cohort, one a few hours later counts as month 1. A canceled
+      order counts as activity but adds no revenue. A month nobody ordered in is a
+      row with zeros (cumulative values carry on); months after the latest order
+      (April) get no rows.
+    given:
+      - input: ref('dim_customers')
+        rows:
+          - {customer_unique_id: u1, first_order_at: 2018-01-31 23:00:00}
+          - {customer_unique_id: u2, first_order_at: 2018-01-15 10:00:00}
+          - {customer_unique_id: u3, first_order_at: 2018-02-10 10:00:00}
+      - input: ref('fct_orders')
+        rows:
+          - {customer_unique_id: u1, order_status: delivered, paid_amount: 100.00, purchased_at: 2018-01-31 23:00:00}
+          - {customer_unique_id: u1, order_status: canceled, paid_amount: 30.00, purchased_at: 2018-02-01 01:00:00}
+          - {customer_unique_id: u1, order_status: delivered, paid_amount: 50.00, purchased_at: 2018-03-05 10:00:00}
+          - {customer_unique_id: u2, order_status: delivered, paid_amount: 20.00, purchased_at: 2018-01-15 10:00:00}
+          - {customer_unique_id: u3, order_status: delivered, paid_amount: 40.00, purchased_at: 2018-02-10 10:00:00}
+      - input: ref('dim_date')
+        rows:
+          # one row per day in the real model: months repeat
+          - {month_start_date: 2018-01-01}
+          - {month_start_date: 2018-01-01}
+          - {month_start_date: 2018-02-01}
+          - {month_start_date: 2018-03-01}
+          - {month_start_date: 2018-04-01}
+    expect:
+      rows:
+        - {cohort_month: 2018-01-01, months_since_first_order: 0, activity_month: 2018-01-01, cohort_size: 2,
+           active_customers: 2, retention_rate: 1.0, orders_count: 2, revenue: 120.00,
+           cumulative_revenue: 120.00, cumulative_revenue_per_customer: 60.00}
+        - {cohort_month: 2018-01-01, months_since_first_order: 1, activity_month: 2018-02-01, cohort_size: 2,
+           active_customers: 1, retention_rate: 0.5, orders_count: 1, revenue: 0,
+           cumulative_revenue: 120.00, cumulative_revenue_per_customer: 60.00}
+        - {cohort_month: 2018-01-01, months_since_first_order: 2, activity_month: 2018-03-01, cohort_size: 2,
+           active_customers: 1, retention_rate: 0.5, orders_count: 1, revenue: 50.00,
+           cumulative_revenue: 170.00, cumulative_revenue_per_customer: 85.00}
+        - {cohort_month: 2018-02-01, months_since_first_order: 0, activity_month: 2018-02-01, cohort_size: 1,
+           active_customers: 1, retention_rate: 1.0, orders_count: 1, revenue: 40.00,
+           cumulative_revenue: 40.00, cumulative_revenue_per_customer: 40.00}
+        - {cohort_month: 2018-02-01, months_since_first_order: 1, activity_month: 2018-03-01, cohort_size: 1,
+           active_customers: 0, retention_rate: 0, orders_count: 0, revenue: 0,
+           cumulative_revenue: 40.00, cumulative_revenue_per_customer: 40.00}

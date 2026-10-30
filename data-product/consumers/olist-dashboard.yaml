@@ -69,6 +69,14 @@ uses:
     - state
     - latitude
     - longitude
+  fct_customer_cohorts:
+    - cohort_month
+    - months_since_first_order
+    - cohort_size
+    - active_customers
+    - retention_rate
+    - cumulative_revenue
+    - cumulative_revenue_per_customer
 
 # KPI tiles that must equal these semantic-layer metrics (dashboard/tests/test_metrics.py)
 metrics:
@@ -85,3 +93,5 @@ metrics:
     - avg_review_score
     - new_customers
     - repeat_customer_rate
+    - cohort_retention_rate
+    - ltv_3_months

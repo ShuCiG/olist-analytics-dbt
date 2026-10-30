@@ -1,4 +1,4 @@
-"""KPI tiles of the three pages, one query each, for a purchase-date period.
+"""KPI tiles of the pages, one query each, for a purchase-date period.
 
 Kept out of the page scripts so a test can run the same SQL: these numbers must
 equal the dbt Semantic Layer metrics (transform/models/marts/_marts__semantic_models.yml),
@@ -65,4 +65,28 @@ def customers(period: Period) -> pd.Series:
             avg(case when orders > 1 then 1.0 else 0.0 end) as repeat_rate,
             avg(spend) as avg_spend
         from per_customer
+    """).iloc[0]
+
+
+def cohort_filter(period: Period) -> str:
+    """Cohorts whose first-order month overlaps the period (a cohort is a whole month)."""
+    lo, hi = period
+    return date_filter((lo.replace(day=1), hi), "cohort_month")
+
+
+def cohorts(period: Period) -> pd.Series:
+    """Cohorts acquired in the period: new_customers, retention_m1, retention_m3,
+    ltv_3m (metrics: new_customers; cohort_retention_rate at months 1 and 3;
+    ltv_3_months). A cohort too young for a month is left out of that month's rate."""
+    return query(f"""
+        select
+            sum(case when months_since_first_order = 0 then cohort_size end) as new_customers,
+            sum(case when months_since_first_order = 1 then active_customers end)
+                / sum(case when months_since_first_order = 1 then cohort_size end) as retention_m1,
+            sum(case when months_since_first_order = 3 then active_customers end)
+                / sum(case when months_since_first_order = 3 then cohort_size end) as retention_m3,
+            sum(case when months_since_first_order = 2 then cumulative_revenue end)
+                / sum(case when months_since_first_order = 2 then cohort_size end) as ltv_3m
+        from {table('fct_customer_cohorts')}
+        where {cohort_filter(period)}
     """).iloc[0]

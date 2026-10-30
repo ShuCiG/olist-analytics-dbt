@@ -10,6 +10,7 @@ pages = [
     st.Page("views/overview.py", title="Sales overview", icon=":material/payments:", default=True),
     st.Page("views/delivery.py", title="Delivery & reviews", icon=":material/local_shipping:"),
     st.Page("views/customers.py", title="Customers & sellers", icon=":material/storefront:"),
+    st.Page("views/cohorts.py", title="Cohorts & retention", icon=":material/group_add:"),
 ]
 # The cost mart exists on BigQuery only (D71)
 if warehouse.BACKEND == "bigquery":
