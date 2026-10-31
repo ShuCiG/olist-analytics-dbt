@@ -29,3 +29,11 @@ data_tests:
       fct_order_items and check the loader.
     config:
       meta: {alert_unit: order lines}
+
+  - name: assert_dim_date_week_of_year
+    description: >-
+      Calendar days whose week_of_year is not the Sunday-start week (BigQuery
+      EXTRACT(WEEK)). Reports grouped by week_of_year would put days in the wrong
+      week on this engine; check macros/week_of_year.sql and the dbt_date dispatch.
+    config:
+      meta: {alert_unit: days}

@@ -252,7 +252,7 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **150 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 3 singular tests; 9 more on the cost mart in prod | every `dbt build` |
+| **151 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 4 singular tests; 9 more on the cost mart in prod | every `dbt build` |
 | **8 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 411 checks of the input and output promises on the data | CI, after ingest and build |
@@ -524,6 +524,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: one meaning of `dim_date.week_of_year` on every engine (#187), OpenLineage lineage into Marquez (#183), Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: OpenLineage lineage into Marquez (#183), Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).
