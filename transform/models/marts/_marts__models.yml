@@ -27,7 +27,12 @@ models:
         granularity: day
         data_tests: [unique, not_null]
       - name: week_of_year
-        description: Engine-dependent (dbt_date dispatch, #187); use `iso_week_of_year` across engines.
+        description: >
+          Week of the year, weeks starting on Sunday; days before the year's first
+          Sunday are week 0 (BigQuery `EXTRACT(WEEK)`, same on every engine via
+          `macros/week_of_year.sql`). ISO weeks: `iso_week_of_year`.
+      - name: prior_year_week_of_year
+        description: "`week_of_year` of the same day of week one year earlier (364 days back)."
 
   - name: dim_customers
     description: >
