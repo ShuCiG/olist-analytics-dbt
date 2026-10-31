@@ -28,6 +28,7 @@ dev = [
     "pytest>=9.1.1",
     "sqlfluff>=4.4.0",
     "sqlfluff-templater-dbt>=4.4.0",
+    "sqlglot>=30.18.0",  # lineage/columns.py; the Airflow image gets Airflow's pin (D87)
 ]
 
 # `uv sync` installs the dashboard too (CI type-checks and smoke-tests it)
@@ -38,11 +39,11 @@ default-groups = ["dev", "dashboard"]
 # marts and runs separately (`uv run pytest dashboard`)
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting
+pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting, lineage
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard", "alerting", "tests", "data-product", ".github/scripts", ".claude/skills/audit"]
+include = ["ingestion", "dashboard", "alerting", "lineage", "tests", "data-product", ".github/scripts", ".claude/skills/audit"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

@@ -62,7 +62,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Data quality:** dbt data tests and unit tests, custom generic tests, dbt_expectations, model contracts, source
   freshness, data contracts (ODCS, datacontract-cli), sqlfluff
 - **Data observability:** Elementary (volume / freshness / column anomaly detection, schema change monitoring, run and
-  test history, `edr report`)
+  test history, `edr report`); OpenLineage run and column-level lineage into Marquez
 - **Data products and governance:** Open Data Product Standard, data usage agreements, contract versioning and
   breaking-change detection, dbt groups / access / model versions, dbt_project_evaluator, PII classification
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
@@ -106,6 +106,7 @@ flowchart LR
 | Data product | ODPS v1.1 descriptor, ODCS v3.1 contracts, `datacontract-cli`, data usage agreements |
 | Semantic layer | dbt Semantic Layer / MetricFlow |
 | Orchestration | Airflow 3 + Astronomer Cosmos (watcher mode) in Docker Compose; image published to GHCR |
+| Lineage | OpenLineage (Airflow provider, Cosmos' dbt events, sqlglot column lineage) → Marquez, local |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, read-only service account, dbt exposure |
 | Quality & CI | GitHub Actions, sqlfluff, pyright, pytest, pre-commit, dbt_project_evaluator |
 | Environment | uv, Python 3.12 |
@@ -360,6 +361,7 @@ flowchart LR
     producer -. node results .-> sensors[one sensor task<br/>per dbt node]
     sensors --> report[report<br/>email: OK / STALE]
     ingest --> schema[schema_report<br/>email: SCHEMA]
+    producer -. model events .-> lineage[openlineage<br/>to Marquez]
 ```
 
 **Alerts:** at most one report per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
@@ -369,6 +371,17 @@ missing from a source file sends `SCHEMA: 1 source column removed in orders` on 
 Airflow and from the prod deploy ([D61](docs/DECISIONS.md)). Warn-test
 findings read in business words ("278 customers — zip code missing from the geolocation reference, so maps leave
 them out ..."). Failed GitHub Actions jobs are emailed too, with the failed step and a log excerpt.
+
+**Lineage:** every run sends [OpenLineage](https://openlineage.io/) events to a local [Marquez](https://marquezproject.ai/):
+one graph per warehouse from the dlt load through the raw tables and one job per dbt model to the marts, with
+column-level lineage (`fct_orders.order_amount` ← `int_order_items_aggregated_to_orders` ← `stg_olist__order_items.price`,
+`freight_value` ← raw). Cosmos' events lump the whole build into one job, and OpenLineage's SQL parser stops at dbt's
+`select *` import CTEs (2 of 25 models traced); the DAG re-sends Cosmos' per-model events and traces columns with
+sqlglot, parents first (25 of 25 SQL models, [D87](docs/DECISIONS.md)).
+
+![Marquez: lineage of the BigQuery DAG](docs/images/marquez-lineage.png)
+
+*Marquez, BigQuery DAG, upstream of `fct_orders`: the dlt load (left) → raw tables → staging → intermediate → `fct_orders` → its child marts.*
 
 The Airflow image is prod-like: code, dbt packages and manifest baked in, labelled with its git commit, published
 to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.md](airflow/README.md).
@@ -480,6 +493,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
+├── lineage/                     # column lineage of dbt models (sqlglot) for the OpenLineage events
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email
@@ -524,6 +538,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: OpenLineage lineage into Marquez (#183), Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

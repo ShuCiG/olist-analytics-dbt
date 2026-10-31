@@ -2134,6 +2134,7 @@ dev = [
     { name = "pytest" },
     { name = "sqlfluff" },
     { name = "sqlfluff-templater-dbt" },
+    { name = "sqlglot" },
 ]
 
 [package.metadata]
@@ -2163,6 +2164,7 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "sqlfluff", specifier = ">=4.4.0" },
     { name = "sqlfluff-templater-dbt", specifier = ">=4.4.0" },
+    { name = "sqlglot", specifier = ">=30.18.0" },
 ]
 
 [[package]]

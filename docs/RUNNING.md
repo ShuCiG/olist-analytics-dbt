@@ -305,13 +305,13 @@ secret it skips. When the trial ends: delete the secret, `terraform destroy` in 
 ## Airflow
 
 ```bash
-docker compose -f airflow/docker-compose.yml up -d --build      # UI: http://localhost:8080, Mailpit: :8025
+docker compose -f airflow/docker-compose.yml up -d --build      # UI: http://localhost:8080, Mailpit: :8025, Marquez: :3000
 docker compose -f airflow/docker-compose.yml exec airflow-scheduler \
   airflow dags trigger olist_elt_duckdb --conf '{"until": "2017-06"}'   # catch up to a month at once
 ```
 
 Or run a published image instead of building: `OLIST_AIRFLOW_IMAGE=ghcr.io/shucig/olist-airflow:<sha>` in
-`airflow/.env`. BigQuery key, DAG params, alert settings, reset and re-running a failed month:
+`airflow/.env`. BigQuery key, DAG params, alert settings, lineage in Marquez, reset and re-running a failed month:
 [airflow/README.md](../airflow/README.md).
 
 ## Development hooks

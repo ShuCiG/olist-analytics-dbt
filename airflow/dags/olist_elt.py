@@ -51,6 +51,7 @@ from cosmos.constants import (
     TestIndirectSelection,
 )
 from olist_alerts import on_dag_failure, report, schema_report
+from olist_lineage import RawLoadOperator, send_dbt_lineage, stash_dbt_lineage
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
@@ -109,6 +110,10 @@ class Warehouse:
     name: str  # DAG id suffix
     dbt_target: str
     dlt_args: list[str]
+    # OpenLineage name of the raw tables dlt loads (olist_lineage.py): the dbt
+    # integration's namespace for the profile, and database.schema of the tables
+    lineage_namespace: str
+    raw_dataset: str
     env: dict[str, str] = field(default_factory=dict)
     pool: str | None = None  # for every task that writes to the warehouse
     # Airflow retries of every task: heals transient network errors (see build_dag)
@@ -179,12 +184,21 @@ def has_new_orders(ti, params) -> bool:
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
+# The tables dlt loads: the dbt project's sources
+RAW_TABLES = sorted(
+    source["identifier"]
+    for source in json.loads(DBT_MANIFEST.read_text())["sources"].values()
+    if source["source_name"] == "olist"
+)
 
 WAREHOUSES = [
     Warehouse(
         name="duckdb",
         dbt_target="dev",
         dlt_args=["--destination", "duckdb", "--duckdb-path", str(DUCKDB_FILE)],
+        # dbt-duckdb names the database after the file
+        lineage_namespace=f"duckdb://{DUCKDB_FILE}",
+        raw_dataset=f"{DUCKDB_FILE.stem}.raw",
         env={"DBT_DUCKDB_PATH": str(DUCKDB_FILE)},
         # One writer per DuckDB file: dlt and dbt tasks queue on a 1-slot pool
         pool="duckdb",
@@ -197,6 +211,9 @@ if GCP_KEY.is_file() and GCP_KEY.stat().st_size > 0:
             name="bigquery",
             dbt_target="airflow",
             dlt_args=["--destination", "bigquery", "--dataset", "airflow_raw"],
+            lineage_namespace="bigquery",
+            # Project as in profiles.yml
+            raw_dataset=f"{os.environ.get('GCP_PROJECT_ID', 'olist-analytics-dbt-472315')}.airflow_raw",
             env={"DBT_RAW_SCHEMA": "airflow_raw"},
             # Transient GCP errors (an HTML 403 from Google's front end, SSLEOFError on
             # a job insert) failed whole runs. dlt is idempotent (merge + cursor), and
@@ -245,8 +262,10 @@ def build_dag(wh: Warehouse) -> DAG:
         },
         tags=["olist", "dlt", "dbt", wh.name],
     ) as dag:
-        ingest = BashOperator(
+        ingest = RawLoadOperator(
             task_id="dlt_ingest",
+            lineage_namespace=wh.lineage_namespace,
+            raw_tables=[f"{wh.raw_dataset}.{table}" for table in RAW_TABLES],
             bash_command=(
                 f"{VENV_BIN / 'python'} ingestion/pipeline.py {' '.join(wh.dlt_args)}"
                 f" {CHUNK_FLAG}"
@@ -289,6 +308,8 @@ def build_dag(wh: Warehouse) -> DAG:
                 # would wait for the producer they are watching
                 setup_operator_args={
                     "freshness_callback": no_freshness_skips,
+                    # One OpenLineage event per model, sent by `openlineage` (olist_lineage.py)
+                    "post_execute": stash_dbt_lineage,
                     # Unit tests check logic on fixtures: CI's job, not the data pipeline's
                     "dbt_cmd_flags": ["--exclude-resource-type", "unit_test"],
                     **({"pool": wh.pool} if wh.pool else {}),
@@ -403,10 +424,19 @@ def build_dag(wh: Warehouse) -> DAG:
             op_kwargs={"warehouse": wh.name},
         )
 
+        # The producer's model events to Marquez (olist_lineage.py), beside the rest:
+        # Marquez takes 1-3 min for a build's events, nothing waits for it
+        lineage = PythonOperator(
+            task_id="openlineage",
+            python_callable=send_dbt_lineage,
+            op_kwargs={"producer_task_id": PRODUCER_TASK_ID},
+        )
+
         ingest >> new_orders >> elementary_tables >> dbt >> edr_report >> email_report
         # Directly too: a failed dbt must hold back the email even if edr_report ran
         dbt >> email_report
         ingest >> schema_email
+        dag.get_task(PRODUCER_TASK_ID) >> lineage
     return dag
 
 
