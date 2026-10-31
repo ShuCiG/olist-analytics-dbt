@@ -6,10 +6,12 @@ FROM apache/airflow:3.3.2-python3.12@sha256:9df9c8be4096b9cc626bd7cb1f2b8c712eef
 
 COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
-# Airflow side: Cosmos only, pinned against Airflow's constraint file
+# Airflow side: Cosmos, and sqlglot for the column lineage the producer's callback
+# sends (lineage/columns.py, D87); pinned against Airflow's constraint file
 RUN pip install --no-cache-dir \
     "apache-airflow==3.3.2" \
     "astronomer-cosmos==1.15.1" \
+    sqlglot \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
 
 # Project side: dbt + dlt from the lock file (dev tools excluded)

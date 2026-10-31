@@ -6,7 +6,8 @@
 # another published image. Live edit: add docker-compose.dev.yml (see there).
 #   docker compose -f airflow/docker-compose.yml up -d --build
 #   UI: http://localhost:8080, alert emails (Mailpit): http://localhost:8025,
-#   Elementary reports: http://localhost:8081 (also in the UI: Browse → Elementary)
+#   Elementary reports: http://localhost:8081 (also in the UI: Browse → Elementary),
+#   lineage (Marquez): http://localhost:3000
 # BigQuery DAG: set GCP_KEY_FILE in airflow/.env (see .env.example).
 
 x-airflow-common: &airflow-common
@@ -59,6 +60,28 @@ x-airflow-common: &airflow-common
     # everything. Real SMTP: set SMTP_CONN in airflow/.env (see .env.example).
     # Extras are truthy strings: leave a flag out rather than setting it to false.
     AIRFLOW_CONN_SMTP_DEFAULT: ${SMTP_CONN:-smtp://mailpit:1025?disable_ssl=true&disable_tls=true&from_email=airflow%40olist.local}
+    # OpenLineage events (D87) to the local Marquez. The provider ships with the
+    # base image; Cosmos and airflow/dags/olist_lineage.py use the same transport.
+    # OPENLINEAGE_DISABLED=true in airflow/.env switches it off (Marquez down: each
+    # event only logs a connection error, the task is not affected).
+    # Timeout: Marquez takes a few seconds for a mart's event with column lineage
+    AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type": "http", "url": "http://marquez:5000", "timeout": 30}'
+    AIRFLOW__OPENLINEAGE__NAMESPACE: olist_airflow
+    AIRFLOW__OPENLINEAGE__DISABLED: ${OPENLINEAGE_DISABLED:-false}
+    # No events from Cosmos' tasks: the producer's lumps the whole build into one job
+    # (the `openlineage` task sends one per model instead), the sensors' carry no
+    # datasets
+    AIRFLOW__OPENLINEAGE__EMISSION_POLICY: >-
+      [{"scope": {"operator": "cosmos.operators.watcher.DbtProducerWatcherOperator"}, "controls": {"emit": false}},
+      {"scope": {"operator": "cosmos.operators.watcher.DbtRunWatcherOperator"}, "controls": {"emit": false}},
+      {"scope": {"operator": "cosmos.operators.watcher.DbtTestWatcherOperator"}, "controls": {"emit": false}},
+      {"scope": {"operator": "cosmos.operators.watcher.DbtSourceWatcherOperator"}, "controls": {"emit": false}},
+      {"scope": {"operator": "cosmos.operators.watcher.DbtSeedWatcherOperator"}, "controls": {"emit": false}},
+      {"scope": {"operator": "cosmos.operators.watcher.DbtSnapshotWatcherOperator"}, "controls": {"emit": false}}]
+    # Task events from a thread, not a forked child: with a slow backend the fork
+    # can leave a task stuck in `running` (provider docs); a slow send is cut after
+    # [openlineage] execution_timeout (10 s) either way
+    AIRFLOW__OPENLINEAGE__EXECUTE_IN_THREAD: "true"
   volumes:
     # Data only (warehouse files); the code comes from the image
     - ../data:/opt/project/data
@@ -91,6 +114,56 @@ services:
       - ../data/elementary:/srv/elementary:ro
     ports:
       - "127.0.0.1:8081:8081"
+    restart: always
+
+  # Lineage (D87): Marquez, the OpenLineage reference backend. API (events in,
+  # also queried by the web UI) on :5000, UI on :3000. Own Postgres: Marquez
+  # migrates its schema on start, apart from Airflow's metadata DB. No search
+  # (OpenSearch would be a fourth service for a local graph of ~100 nodes).
+  marquez:
+    image: marquezproject/marquez:0.51.1
+    environment:
+      MARQUEZ_CONFIG: marquez.dev.yml
+      POSTGRES_HOST: marquez-db
+      SEARCH_ENABLED: "false"
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5001/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      marquez-db:
+        condition: service_healthy
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.51.1
+    environment:
+      MARQUEZ_HOST: marquez
+      MARQUEZ_PORT: "5000"
+      WEB_PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: always
+    depends_on:
+      - marquez
+
+  marquez-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+      POSTGRES_DB: marquez
+    volumes:
+      - marquez-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "marquez"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
     restart: always
 
   postgres:
@@ -206,3 +279,4 @@ volumes:
   dlt-pipelines:
   dbt-cache:
   airflow-logs:
+  marquez-db:

@@ -5,6 +5,7 @@
 !uv.lock
 !ingestion/
 !alerting/
+!lineage/
 !airflow/dags/
 !airflow/check_dags.py
 !airflow/plugins/

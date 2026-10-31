@@ -8,7 +8,8 @@ feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
 failure callback), when `edr_report` (Elementary's report) is not between the
 dbt group and `report` with `none_skipped` and a skip exit code (a broken report
-must not fail the run), when a dbt-running task gets Elementary's clock as `--vars`
+must not fail the run), when the dbt model lineage is not prepared by the producer
+and sent by `openlineage` behind it (D87), when a dbt-running task gets Elementary's clock as `--vars`
 instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
 a full parse per run, D50), when retries are not as expected (BigQuery: every
 task retries once, transient GCP errors, D53, with the producer retrying at once
@@ -33,6 +34,7 @@ PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
 ELEMENTARY = "elementary_tables"
 EDR_REPORT = "edr_report"
+LINEAGE = "openlineage"
 DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT}
 RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 
@@ -83,6 +85,16 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
         and EDR_REPORT in dag.get_task("report").upstream_task_ids
     ):
         print(f"{dag_id}: {EDR_REPORT} not wired (dbt -> {EDR_REPORT} -> report)", file=sys.stderr)
+        missing.add(dag_id)
+    # Lineage (D87): the producer prepares the per-model events, `openlineage` sends
+    # them behind it, outside the run's main line
+    if PRODUCER in dag.task_ids and (
+        getattr(dag.get_task(PRODUCER)._post_execute_hook, "__name__", None) != "stash_dbt_lineage"
+        or LINEAGE not in dag.task_ids
+        or dag.get_task(LINEAGE).upstream_task_ids != {PRODUCER}
+        or dag.get_task(LINEAGE).downstream_task_ids
+    ):
+        print(f"{dag_id}: lineage not wired ({PRODUCER} post_execute -> {LINEAGE})", file=sys.stderr)
         missing.add(dag_id)
     for task_id in (ELEMENTARY, PRODUCER):
         if task_id not in dag.task_ids:

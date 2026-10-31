@@ -4,7 +4,7 @@ Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
 simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
 when nothing arrived) → `elementary_tables` (Elementary's history tables, D38) →
 `dbt` task group → `edr_report` (Elementary's report, see below) → `report`
-(email, see below), where the
+(email, see below), plus `openlineage` (lineage to Marquez, see below), where the
 dbt group is rendered by
 [Cosmos](https://github.com/astronomer/astronomer-cosmos) in watcher mode: one
 producer task runs `dbt source freshness` + a single `dbt build` for the whole
@@ -24,7 +24,8 @@ GIT_SHA=$(git rev-parse HEAD) docker compose -f airflow/docker-compose.yml up -d
 ```
 
 UI at http://localhost:8080, alert emails at http://localhost:8025 (Mailpit),
-Elementary reports at http://localhost:8081 (below). DAGs start paused. No login (all
+Elementary reports at http://localhost:8081, lineage at http://localhost:3000 (Marquez;
+both below). DAGs start paused. No login (all
 users admin), so every port is published on `127.0.0.1` only: other machines on the network can't reach them. The shared secrets (JWT, API
 secret key, Fernet key) have fixed local defaults; set your own in `airflow/.env`
 (see [.env.example](.env.example)).
@@ -81,6 +82,38 @@ report shows the failure), not when dbt was skipped. A failing `edr` ends the ta
 Only the open source report's pages work: Data Health, Catalog, Incidents, Test
 Configuration, Environments, Alert Rules and Pull Requests in its menu link to
 Elementary Cloud.
+
+## Lineage (OpenLineage → Marquez)
+
+Every run sends [OpenLineage](https://openlineage.io/) events to a local
+[Marquez](https://marquezproject.ai/) (D87): UI at http://localhost:3000, API at
+http://localhost:5000 (services `marquez`, `marquez-web`, `marquez-db`). Pick the
+namespace `olist_airflow` for jobs; datasets sit in the warehouse's namespace
+(`duckdb:///opt/project/data/airflow.duckdb`, `bigquery`). One graph per warehouse:
+
+`olist_elt_<warehouse>.dlt_ingest` → raw tables → one job per dbt model (staging →
+intermediate → marts, snapshot included) → marts, every model job a child of the DAG
+run. Datasets carry their schema, the dbt tests' results and, per column, the columns
+it is computed from (column lineage: click a column in a dataset's page).
+
+- **Airflow tasks:** the OpenLineage provider that ships with the base image; transport
+  and namespace in `docker-compose.yml`.
+- **dlt:** has no OpenLineage support; `dlt_ingest` is a `RawLoadOperator`
+  ([`dags/olist_lineage.py`](dags/olist_lineage.py)) that reports the raw tables
+  (the dbt sources) as its outputs, named as the dbt integration names them.
+- **dbt:** Cosmos parses the producer's `dbt build` artifacts into one event per model,
+  but sends them merged into the producer task's event: one job reading and writing
+  every table. The producer's `post_execute` keeps them one per model and adds column
+  lineage from sqlglot ([`lineage/columns.py`](../lineage/columns.py)): OpenLineage's
+  own parser stops at the `select *` of dbt's import CTEs. The `openlineage` task sends
+  them, beside `edr_report`: Marquez takes 1–3 minutes for a build's events, nothing in
+  the run waits for it. Cosmos' task events are off
+  (`AIRFLOW__OPENLINEAGE__EMISSION_POLICY`).
+
+Without Marquez (or with `OPENLINEAGE_DISABLED=true` in `airflow/.env`) the tasks run
+as before; a failed send only logs a warning. A failed build sends no model events
+(its tasks' events still show the failure), nor does a node rebuilt by its own retry
+(BigQuery, after a failed producer).
 
 ## Schedule: a simulated live feed
 
