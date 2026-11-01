@@ -2,6 +2,7 @@
 (import CTEs and a final `select *`), on DuckDB and BigQuery naming."""
 
 from lineage.columns import column_lineage
+from lineage.exposures import exposure_inputs, exposures
 
 STG_ORDERS = """
 with source as (
@@ -162,3 +163,44 @@ def test_unparsable_model_is_left_out() -> None:
 
     assert "db.marts.rfm" not in traced
     assert "db.marts.fct_orders" in traced
+
+
+def _model_event(unique_id: str, output: str) -> dict:
+    return {
+        "job": {"name": f"dag.{unique_id}.build.run", "facets": {"dbt_node": {"unique_id": unique_id}}},
+        "outputs": [{"namespace": "bigquery", "name": output}],
+    }
+
+
+def test_exposure_reads_the_outputs_of_its_models() -> None:
+    manifest = {
+        "exposures": {
+            "exposure.olist.ml_feed": {"name": "ml_feed", "type": "ml", "depends_on": {"nodes": []}},
+            "exposure.olist.olist_dashboard": {
+                "name": "olist_dashboard",
+                "type": "dashboard",
+                "depends_on": {"nodes": ["model.olist.fct_orders.v2", "model.olist.dim_customers"]},
+            },
+        }
+    }
+    events = [
+        _model_event("model.olist.stg_orders", "p.airflow_staging.stg_orders"),
+        # A versioned model: the event names the relation (alias), not the node
+        _model_event("model.olist.fct_orders.v2", "p.airflow_marts.fct_orders"),
+        _model_event("model.olist.fct_orders.v1", "p.airflow_marts.fct_orders_v1"),
+        _model_event("model.olist.dim_customers", "p.airflow_marts.dim_customers"),
+        {"job": {"name": "dag.test", "facets": {}}, "outputs": []},
+    ]
+
+    [dashboard] = exposures(manifest)
+
+    assert exposure_inputs(dashboard, events) == [
+        {"namespace": "bigquery", "name": "p.airflow_marts.dim_customers"},
+        {"namespace": "bigquery", "name": "p.airflow_marts.fct_orders"},
+    ]
+
+
+def test_exposure_without_model_events_reads_nothing() -> None:
+    dashboard = {"name": "d", "type": "dashboard", "depends_on": {"nodes": ["model.olist.dim_customers"]}}
+
+    assert exposure_inputs(dashboard, [_model_event("model.olist.stg_orders", "x")]) == []

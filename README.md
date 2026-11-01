@@ -46,7 +46,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 150 data tests, 8 unit tests, enforced model contracts, 264 Python tests; known
+- **Data quality at every layer.** 150 data tests, 8 unit tests, enforced model contracts, 278 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -259,7 +259,7 @@ flowchart LR
 | **Data contracts** | 411 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **264 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **278 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -377,7 +377,8 @@ one graph per warehouse from the dlt load through the raw tables and one job per
 column-level lineage (`fct_orders.order_amount` ← `int_order_items_aggregated_to_orders` ← `stg_olist__order_items.price`,
 `freight_value` ← raw). Cosmos' events lump the whole build into one job, and OpenLineage's SQL parser stops at dbt's
 `select *` import CTEs (2 of 25 models traced); the DAG re-sends Cosmos' per-model events and traces columns with
-sqlglot, parents first (25 of 25 SQL models, [D87](docs/DECISIONS.md)).
+sqlglot, parents first (25 of 25 SQL models, [D87](docs/DECISIONS.md)). The graph ends at the dashboard: the dbt
+exposure becomes a job reading the marts it depends on ([D88](docs/DECISIONS.md)).
 
 ![Marquez: lineage of the BigQuery DAG](docs/images/marquez-lineage.png)
 
@@ -493,7 +494,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
-├── lineage/                     # column lineage of dbt models (sqlglot) for the OpenLineage events
+├── lineage/                     # column lineage (sqlglot) and exposure jobs for the OpenLineage events
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email

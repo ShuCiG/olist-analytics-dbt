@@ -15,6 +15,11 @@ the dlt load through raw tables and every dbt model to the marts.
   and Airflow kills a task's process 20 s after success (`task_success_overtime`).
   Cosmos' own task events are switched off in docker-compose.yml
   (`emission_policy`): the sensors carry no datasets.
+- Dashboard (#197): the dbt exposure `olist_dashboard` becomes a job of its own that
+  reads the marts it depends on (lineage/exposures.py), one COMPLETE run per DAG run
+  that built dbt, sent with the model events. It says "the dashboard reads these
+  tables", not "the dashboard ran". Only the DAG whose marts the live app reads
+  (Warehouse.dashboard in olist_elt.py).
 
 Lineage never fails a task: any error is logged and the run goes on. A failed build
 sends no model events (its tasks' events still show the failure).
@@ -26,11 +31,14 @@ import logging
 import sys
 import time
 
+import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 
 # Repo root (in the image): the lineage package is unit-tested in the project venv
 sys.path.insert(0, "/opt/project")
 from lineage.columns import column_lineage  # noqa: E402
+from lineage.exposures import exposure_inputs  # noqa: E402
+from lineage.exposures import exposures as exposures  # noqa: E402  (re-exported for olist_elt.py)
 
 log = logging.getLogger(__name__)
 
@@ -76,15 +84,61 @@ def _column_lineage_facet(namespace: str, columns: dict[str, list[tuple[str, str
     )
 
 
-def stash_dbt_lineage(context, result=None) -> None:
-    """Producer's post_execute: its build's model events, ready to send, to XCom."""
+def stash_dbt_lineage(context, result=None, exposures: list[dict] | None = None) -> None:
+    """Producer's post_execute: its build's model events, ready to send, to XCom, plus
+    one event per given exposure (manifest entries, lineage/exposures.py)."""
     try:
-        _stash_dbt_lineage(context)
+        _stash_dbt_lineage(context, exposures or [])
     except Exception:
         log.warning("OpenLineage: dbt model events not prepared", exc_info=True)
 
 
-def _stash_dbt_lineage(context) -> None:
+def _exposure_event(exposure: dict, inputs: list[dict], parent, namespace: str, producer: str) -> dict:
+    from openlineage.client.event_v2 import InputDataset, Job, Run, RunEvent, RunState
+    from openlineage.client.facet_v2 import documentation_job, job_type_job, ownership_job
+    from openlineage.client.serde import Serde
+    from openlineage.client.uuid import generate_new_uuid
+
+    owner = exposure.get("owner") or {}
+    event = RunEvent(
+        eventType=RunState.COMPLETE,
+        eventTime=pendulum.now("UTC").isoformat(),
+        run=Run(runId=str(generate_new_uuid()), facets={"parent": parent}),
+        job=Job(
+            namespace=namespace,
+            name=exposure["name"],
+            facets={
+                "jobType": job_type_job.JobTypeJobFacet(
+                    processingType="BATCH", integration="DBT", jobType=exposure["type"].upper()
+                ),
+                "documentation": documentation_job.DocumentationJobFacet(
+                    description=" ".join((exposure.get("description") or exposure["name"]).split())
+                ),
+                **(
+                    {
+                        "ownership": ownership_job.OwnershipJobFacet(
+                            owners=[ownership_job.Owner(name=owner["name"], type="MAINTAINER")]
+                        )
+                    }
+                    if owner.get("name")
+                    else {}
+                ),
+            },
+        ),
+        inputs=[InputDataset(namespace=i["namespace"], name=i["name"]) for i in inputs],
+        producer=producer,
+    )
+    serialized = Serde.to_dict(event)
+    # No standard facet for the app's URL: dbt's own exposure fields, as a custom facet
+    serialized["job"]["facets"]["dbt_exposure"] = {
+        "_producer": producer,
+        "_schemaURL": "https://schemas.getdbt.com/dbt/manifest/v12.json#/definitions/Exposure",
+        **{k: exposure[k] for k in ("label", "url", "maturity", "type") if exposure.get(k)},
+    }
+    return serialized
+
+
+def _stash_dbt_lineage(context, exposures: list[dict]) -> None:
     from airflow.providers.openlineage import conf
     from airflow.providers.openlineage.plugins import macros
     from openlineage.client.facet_v2 import parent_run, schema_dataset
@@ -132,8 +186,16 @@ def _stash_dbt_lineage(context) -> None:
             list_columns(output, columns)
             for input_ in event.inputs:
                 list_columns(input_, [c for inputs in columns.values() for t, c in inputs if t == input_.name])
-    ti.xcom_push(key=EVENTS_XCOM, value=[Serde.to_dict(e) for e in events])
-    log.info("OpenLineage: %d dbt model events (%d with column lineage)", len(events), len(traced))
+    serialized = [Serde.to_dict(e) for e in events]
+    for exposure in exposures:
+        inputs = exposure_inputs(exposure, serialized)
+        if inputs:
+            serialized.append(_exposure_event(exposure, inputs, parent, namespace, events[0].producer))
+    ti.xcom_push(key=EVENTS_XCOM, value=serialized)
+    log.info(
+        "OpenLineage: %d dbt model events (%d with column lineage), %d exposures",
+        len(events), len(traced), len(serialized) - len(events),
+    )
 
 
 def send_dbt_lineage(ti, producer_task_id: str) -> None:

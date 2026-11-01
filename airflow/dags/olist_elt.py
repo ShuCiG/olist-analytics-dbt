@@ -34,6 +34,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 import pendulum
@@ -51,7 +52,7 @@ from cosmos.constants import (
     TestIndirectSelection,
 )
 from olist_alerts import on_dag_failure, report, schema_report
-from olist_lineage import RawLoadOperator, send_dbt_lineage, stash_dbt_lineage
+from olist_lineage import RawLoadOperator, exposures, send_dbt_lineage, stash_dbt_lineage
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"
@@ -118,6 +119,8 @@ class Warehouse:
     pool: str | None = None  # for every task that writes to the warehouse
     # Airflow retries of every task: heals transient network errors (see build_dag)
     retries: int = 0
+    # The dashboard reads this warehouse's marts: its exposure goes into the lineage
+    dashboard: bool = False
 
 
 def no_freshness_skips(*_: object) -> list[tuple[str, str]]:
@@ -184,10 +187,11 @@ def has_new_orders(ti, params) -> bool:
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"
+MANIFEST = json.loads(DBT_MANIFEST.read_text())
 # The tables dlt loads: the dbt project's sources
 RAW_TABLES = sorted(
     source["identifier"]
-    for source in json.loads(DBT_MANIFEST.read_text())["sources"].values()
+    for source in MANIFEST["sources"].values()
     if source["source_name"] == "olist"
 )
 
@@ -220,6 +224,9 @@ if GCP_KEY.is_file() and GCP_KEY.stat().st_size > 0:
             # dbt nodes heal via Cosmos' fallback (build_dag); the client libraries
             # don't retry these (google-cloud-bigquery treats SSLError as permanent)
             retries=1,
+            # The live app reads airflow_marts (dashboard/warehouse.py). Locally it
+            # reads data/olist.duckdb, not this DAG's airflow.duckdb
+            dashboard=True,
         )
     )
 
@@ -308,8 +315,11 @@ def build_dag(wh: Warehouse) -> DAG:
                 # would wait for the producer they are watching
                 setup_operator_args={
                     "freshness_callback": no_freshness_skips,
-                    # One OpenLineage event per model, sent by `openlineage` (olist_lineage.py)
-                    "post_execute": stash_dbt_lineage,
+                    # One OpenLineage event per model (and the dashboard), sent by
+                    # `openlineage` (olist_lineage.py)
+                    "post_execute": partial(
+                        stash_dbt_lineage, exposures=exposures(MANIFEST) if wh.dashboard else []
+                    ),
                     # Unit tests check logic on fixtures: CI's job, not the data pipeline's
                     "dbt_cmd_flags": ["--exclude-resource-type", "unit_test"],
                     **({"pool": wh.pool} if wh.pool else {}),
