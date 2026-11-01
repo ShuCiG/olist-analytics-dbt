@@ -3,6 +3,7 @@
 locals {
   services = toset([
     "bigquery.googleapis.com",             # warehouse (dlt, dbt, dashboard)
+    "bigqueryconnection.googleapis.com",   # Cloud resource connections (on before Terraform; D90)
     "bigquerystorage.googleapis.com",      # Storage Read API (datacontract-cli)
     "billingbudgets.googleapis.com",       # budget below
     "cloudbilling.googleapis.com",         # billing account IAM (drift.tf)
