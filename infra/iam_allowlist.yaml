@@ -1,10 +1,11 @@
 # IAM bindings that exist outside Terraform on purpose (D62). The daily drift check
 # (.github/workflows/drift.yml, job iam-bindings) fails on any other binding on what
-# infra/ manages: the project, its service accounts, the managed datasets, the state
-# bucket and the billing account. Bindings Terraform manages come from its state.
+# infra/ manages: the project, its service accounts, the managed datasets, the buckets,
+# the BigQuery connections and the billing account. Bindings Terraform manages come from its state.
 #
 # Fields are fnmatch patterns over the normalized binding (.github/scripts/iam_drift.py):
-#   scope   project | serviceAccount/<email> | dataset/<id> | bucket/<name> | billingAccount
+#   scope   project | serviceAccount/<email> | dataset/<id> | bucket/<name> |
+#           connection/<id> | billingAccount
 #   role    an IAM role; dataset access entries map READER / WRITER / OWNER to
 #           roles/bigquery.dataViewer / dataEditor / dataOwner
 #   member  user:, serviceAccount:, group:, specialGroup:, projectOwner: ... as GCP prints it

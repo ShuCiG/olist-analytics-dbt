@@ -49,7 +49,8 @@ class Managed:
     project: str = ""
     project_number: str = ""
     billing_account: str = ""
-    bucket: str = ""
+    buckets: list[str] = field(default_factory=list)
+    connections: list[tuple[str, str]] = field(default_factory=list)  # (location, id)
     datasets: list[str] = field(default_factory=list)
     service_accounts: set[str] = field(default_factory=set)  # emails
     bindings: set[Binding] = field(default_factory=set)
@@ -72,15 +73,22 @@ def managed(state: dict[str, Any]) -> Managed:
         elif t == "google_bigquery_dataset_iam_member":
             m.bindings.add((f"dataset/{v['dataset_id']}", v["role"], v["member"]))
         elif t == "google_storage_bucket":
-            m.bucket = v["name"]
+            m.buckets.append(v["name"])
         elif t == "google_storage_bucket_iam_member":
             m.bindings.add((f"bucket/{v['bucket'].removeprefix('b/')}", v["role"], v["member"]))
+        elif t == "google_bigquery_connection":
+            m.connections.append((v["location"], v["connection_id"]))
+        elif t == "google_bigquery_connection_iam_member":
+            # connection_id may be the full name (projects/.../connections/<id>)
+            m.bindings.add((f"connection/{v['connection_id'].rsplit('/', 1)[-1]}", v["role"], v["member"]))
         elif t == "google_billing_account_iam_member":
             m.billing_account = v["billing_account_id"]
             m.bindings.add(("billingAccount", v["role"], v["member"]))
         elif t == "google_iam_workload_identity_pool":
             m.project_number = v["name"].split("/")[1]  # projects/<number>/locations/...
     m.datasets.sort()
+    m.buckets.sort()
+    m.connections.sort()
     return m
 
 
@@ -146,8 +154,13 @@ def read_live(session: Any, m: Managed) -> Live:
         if dataset.get("labels"):
             live.labels[ds] = dataset["labels"]
 
-    bucket = get(f"https://storage.googleapis.com/storage/v1/b/{m.bucket}/iam")
-    live.bindings |= policy_bindings(f"bucket/{m.bucket}", bucket)
+    for name in m.buckets:
+        bucket = get(f"https://storage.googleapis.com/storage/v1/b/{name}/iam")
+        live.bindings |= policy_bindings(f"bucket/{name}", bucket)
+
+    for location, cid in m.connections:
+        conn = f"https://bigqueryconnection.googleapis.com/v1/projects/{m.project}/locations/{location}/connections/{cid}"
+        live.bindings |= policy_bindings(f"connection/{cid}", get(f"{conn}:getIamPolicy", post=True))
 
     billing = f"https://cloudbilling.googleapis.com/v1/billingAccounts/{m.billing_account}:getIamPolicy"
     live.bindings |= policy_bindings("billingAccount", get(billing))
@@ -209,7 +222,7 @@ def main() -> None:
 
     print(
         f"Checked {len(live.bindings)} bindings: project, {len(live.service_accounts)} service accounts, "
-        f"{len(m.datasets)} datasets, state bucket, billing account"
+        f"{len(m.datasets)} datasets, {len(m.buckets)} buckets, {len(m.connections)} connections, billing account"
     )
     found = findings(m, live, entries)
     for line in found:

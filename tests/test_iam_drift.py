@@ -21,6 +21,8 @@ OWNER = "owner@example.com"
 RUNNER = f"dbt-runner@{P}.iam.gserviceaccount.com"
 READER = f"dashboard-reader@{P}.iam.gserviceaccount.com"
 BUCKET = f"{P}-tfstate"
+ICEBERG = f"{P}-iceberg"
+CONN = f"https://bigqueryconnection.googleapis.com/v1/projects/{P}/locations/EU/connections/iceberg:getIamPolicy"
 
 
 def resource(type_: str, **values: Any) -> dict[str, Any]:
@@ -43,6 +45,15 @@ STATE = {
                 resource("google_bigquery_dataset", dataset_id="marts"),
                 resource("google_bigquery_dataset_iam_member", dataset_id="marts", role="roles/bigquery.dataViewer", member=f"serviceAccount:{READER}"),
                 resource("google_storage_bucket", name=BUCKET),
+                resource("google_storage_bucket", name=ICEBERG),
+                resource("google_storage_bucket_iam_member", bucket=f"b/{ICEBERG}", role="roles/storage.objectUser", member="serviceAccount:bqcx@x"),
+                resource("google_bigquery_connection", location="EU", connection_id="iceberg"),
+                resource(
+                    "google_bigquery_connection_iam_member",
+                    connection_id=f"projects/{P}/locations/eu/connections/iceberg",
+                    role="roles/bigquery.connectionAdmin",
+                    member=f"serviceAccount:{RUNNER}",
+                ),
                 resource("google_billing_account_iam_member", billing_account_id="000000-000000-000000", role="roles/billing.viewer", member="serviceAccount:tp@x"),
                 resource("google_iam_workload_identity_pool", name=f"projects/{NUMBER}/locations/global/workloadIdentityPools/github"),
             ]
@@ -55,7 +66,12 @@ def policy(*bindings: tuple[str, str]) -> dict[str, Any]:
     return {"bindings": [{"role": role, "members": [member]} for role, member in bindings]}
 
 
-def api(extra_project: tuple[str, str] | None = None, labels: dict | None = None, extra_sa: str | None = None) -> dict[str, Any]:
+def api(
+    extra_project: tuple[str, str] | None = None,
+    labels: dict | None = None,
+    extra_sa: str | None = None,
+    extra_connection: tuple[str, str] | None = None,
+) -> dict[str, Any]:
     """Live API responses as they look today, plus one optional change."""
     project = [("roles/bigquery.jobUser", f"serviceAccount:{RUNNER}"), ("roles/owner", f"user:{OWNER}")]
     accounts = [RUNNER, READER] + ([extra_sa] if extra_sa else [])
@@ -71,6 +87,10 @@ def api(extra_project: tuple[str, str] | None = None, labels: dict | None = None
             **({"labels": labels} if labels else {}),
         },
         f"https://storage.googleapis.com/storage/v1/b/{BUCKET}/iam": policy(("roles/storage.legacyBucketOwner", f"projectOwner:{P}")),
+        f"https://storage.googleapis.com/storage/v1/b/{ICEBERG}/iam": policy(
+            ("roles/storage.legacyBucketOwner", f"projectOwner:{P}"), ("roles/storage.objectUser", "serviceAccount:bqcx@x")
+        ),
+        CONN: policy(("roles/bigquery.connectionAdmin", f"serviceAccount:{RUNNER}"), *([extra_connection] if extra_connection else [])),
         "https://cloudbilling.googleapis.com/v1/billingAccounts/000000-000000-000000:getIamPolicy": policy(
             ("roles/billing.admin", f"user:{OWNER}"), ("roles/billing.viewer", "serviceAccount:tp@x")
         ),
@@ -125,6 +145,12 @@ def test_allowlisted_role_for_another_member_is_reported() -> None:
     # roles/owner is allowed for the owner only
     assert check(api(extra_project=("roles/owner", "user:intruder@example.com"))) == [
         "binding  project  roles/owner  user:intruder@example.com"
+    ]
+
+
+def test_connection_grant_outside_terraform_is_reported() -> None:
+    assert check(api(extra_connection=("roles/bigquery.connectionUser", "user:someone@example.com"))) == [
+        "binding  connection/iceberg  roles/bigquery.connectionUser  user:someone@example.com"
     ]
 
 
