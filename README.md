@@ -378,7 +378,8 @@ column-level lineage (`fct_orders.order_amount` ← `int_order_items_aggregated_
 `freight_value` ← raw). Cosmos' events lump the whole build into one job, and OpenLineage's SQL parser stops at dbt's
 `select *` import CTEs (2 of 25 models traced); the DAG re-sends Cosmos' per-model events and traces columns with
 sqlglot, parents first (25 of 25 SQL models, [D87](docs/DECISIONS.md)). The graph ends at the dashboard: the dbt
-exposure becomes a job reading the marts it depends on ([D88](docs/DECISIONS.md)).
+exposure becomes a job reading the marts it depends on ([D88](docs/DECISIONS.md)). A failed build shows the failed model
+as FAILED next to the ones built before it ([D89](docs/DECISIONS.md)).
 
 ![Marquez: lineage of the BigQuery DAG](docs/images/marquez-lineage.png)
 

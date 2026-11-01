@@ -34,7 +34,6 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from functools import partial
 from pathlib import Path
 
 import pendulum
@@ -316,10 +315,10 @@ def build_dag(wh: Warehouse) -> DAG:
                 setup_operator_args={
                     "freshness_callback": no_freshness_skips,
                     # One OpenLineage event per model (and the dashboard), sent by
-                    # `openlineage` (olist_lineage.py)
-                    "post_execute": partial(
-                        stash_dbt_lineage, exposures=exposures(MANIFEST) if wh.dashboard else []
-                    ),
+                    # `openlineage` (olist_lineage.py). Cosmos calls it after the
+                    # build, failed or not, before it raises
+                    "callback": stash_dbt_lineage,
+                    "callback_args": {"exposures": exposures(MANIFEST) if wh.dashboard else []},
                     # Unit tests check logic on fixtures: CI's job, not the data pipeline's
                     "dbt_cmd_flags": ["--exclude-resource-type", "unit_test"],
                     **({"pool": wh.pool} if wh.pool else {}),
@@ -435,11 +434,13 @@ def build_dag(wh: Warehouse) -> DAG:
         )
 
         # The producer's model events to Marquez (olist_lineage.py), beside the rest:
-        # Marquez takes 1-3 min for a build's events, nothing waits for it
+        # Marquez takes 1-3 min for a build's events, nothing waits for it. After a
+        # failed producer too; skipped with it (no new orders, a retried producer)
         lineage = PythonOperator(
             task_id="openlineage",
             python_callable=send_dbt_lineage,
             op_kwargs={"producer_task_id": PRODUCER_TASK_ID},
+            trigger_rule=TriggerRule.NONE_SKIPPED,
         )
 
         ingest >> new_orders >> elementary_tables >> dbt >> edr_report >> email_report

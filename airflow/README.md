@@ -103,7 +103,7 @@ it is computed from (column lineage: click a column in a dataset's page).
   (the dbt sources) as its outputs, named as the dbt integration names them.
 - **dbt:** Cosmos parses the producer's `dbt build` artifacts into one event per model,
   but sends them merged into the producer task's event: one job reading and writing
-  every table. The producer's `post_execute` keeps them one per model and adds column
+  every table. The producer's Cosmos `callback` keeps them one per model and adds column
   lineage from sqlglot ([`lineage/columns.py`](../lineage/columns.py)): OpenLineage's
   own parser stops at the `select *` of dbt's import CTEs. The `openlineage` task sends
   them, beside `edr_report`: Marquez takes 1–3 minutes for a build's events, nothing in
@@ -116,9 +116,11 @@ it is computed from (column lineage: click a column in a dataset's page).
   dashboard reads `data/olist.duckdb`, not the DuckDB DAG's file.
 
 Without Marquez (or with `OPENLINEAGE_DISABLED=true` in `airflow/.env`) the tasks run
-as before; a failed send only logs a warning. A failed build sends no model events
-(its tasks' events still show the failure), nor does a node rebuilt by its own retry
-(BigQuery, after a failed producer).
+as before; a failed send only logs a warning. A failed build sends its model events
+too (D89): the failed model as FAILED, the models built before it as COMPLETED, the
+ones dbt skipped behind it nothing. Not on BigQuery: its producer retries, the sensors
+rebuild the failed nodes, and a FAIL event from the first attempt would stay in
+Marquez after the heal. Nodes rebuilt by a sensor's own run send no events.
 
 ## Schedule: a simulated live feed
 
