@@ -37,11 +37,21 @@ resource "google_bigquery_connection" "iceberg" {
 }
 
 # The connection's service account (Google-made, bqcx-...) reads and writes
-# the table files
+# the table files. Both roles, as BigQuery's docs list them: without
+# legacyBucketReader (storage.buckets.get) the CREATE TABLE tries to grant the
+# account itself and fails on storage.buckets.setIamPolicy.
 resource "google_storage_bucket_iam_member" "iceberg_connection" {
+  for_each = toset(["roles/storage.objectUser", "roles/storage.legacyBucketReader"])
+
   bucket = google_storage_bucket.iceberg.name
-  role   = "roles/storage.objectUser"
+  role   = each.value
   member = "serviceAccount:${google_bigquery_connection.iceberg.cloud_resource[0].service_account_id}"
+}
+
+# Adopts the grant made before it became a for_each
+moved {
+  from = google_storage_bucket_iam_member.iceberg_connection
+  to   = google_storage_bucket_iam_member.iceberg_connection["roles/storage.objectUser"]
 }
 
 # dbt-runner creates the tables through the connection: that takes
