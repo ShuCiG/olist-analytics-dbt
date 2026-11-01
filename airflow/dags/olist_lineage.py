@@ -8,8 +8,8 @@ the dlt load through raw tables and every dbt model to the marts.
 - dbt: Cosmos' watcher producer runs one `dbt build` and parses its artifacts into
   one OpenLineage event per model, which the provider would send merged into one
   producer job that reads and writes every table (that large event also timed out
-  against Marquez). `stash_dbt_lineage` (the producer's post_execute) keeps them one
-  job per model, children of the DAG run, adds column lineage from sqlglot
+  against Marquez). `stash_dbt_lineage` (the producer's Cosmos callback) keeps them
+  one job per model, children of the DAG run, adds column lineage from sqlglot
   (lineage/columns.py) and hands them on by XCom; the `openlineage` task sends them.
   Not from the producer itself: Marquez takes 1-3 min for a build's ~25 events,
   and Airflow kills a task's process 20 s after success (`task_success_overtime`).
@@ -21,15 +21,26 @@ the dlt load through raw tables and every dbt model to the marts.
   tables", not "the dashboard ran". Only the DAG whose marts the live app reads
   (Warehouse.dashboard in olist_elt.py).
 
-Lineage never fails a task: any error is logged and the run goes on. A failed build
-sends no model events (its tasks' events still show the failure).
+Lineage never fails a task: any error is logged and the run goes on.
+
+A failed build sends its model events too (#196). Cosmos' callback runs after every
+build, before Cosmos raises on a failed one, with the build's artifacts still on disk.
+Cosmos keeps only the COMPLETE events of its parse, so the failed models' FAIL events
+come from a second parse of the same artifacts, only when a model failed: the failed
+model shows FAILED, the ones built before it COMPLETED, the ones dbt skipped behind it
+nothing. Not on BigQuery, whose producer retries: its XComs are cleared for attempt 2,
+which skips itself (so does `openlineage`), and the sensors rebuild the failed nodes on
+their own. A FAIL event from attempt 1 would otherwise stay the model's state in
+Marquez after the heal. Nodes rebuilt by a sensor's own run send no events.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import time
+from pathlib import Path
 
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
@@ -84,13 +95,38 @@ def _column_lineage_facet(namespace: str, columns: dict[str, list[tuple[str, str
     )
 
 
-def stash_dbt_lineage(context, result=None, exposures: list[dict] | None = None) -> None:
-    """Producer's post_execute: its build's model events, ready to send, to XCom, plus
-    one event per given exposure (manifest entries, lineage/exposures.py)."""
+def stash_dbt_lineage(project_dir: str, context, exposures: list[dict] | None = None) -> None:
+    """Producer's Cosmos callback (after the build, failed or not): its model events,
+    ready to send, to XCom, plus one event per given exposure (manifest entries,
+    lineage/exposures.py; `callback_args`)."""
     try:
-        _stash_dbt_lineage(context, exposures or [])
+        _stash_dbt_lineage(project_dir, context, exposures or [])
     except Exception:
         log.warning("OpenLineage: dbt model events not prepared", exc_info=True)
+
+
+def _failed_model_events(task, project_dir: str) -> list:
+    """FAIL events of the build's failed models (Cosmos keeps only the COMPLETE ones):
+    the same parse as Cosmos', of the same artifacts, only when a model failed."""
+    run_results = Path(project_dir) / "target" / "run_results.json"
+    if not any(
+        r["status"] == "error" and not r["unique_id"].startswith("test.")
+        for r in json.loads(run_results.read_text())["results"]
+    ):
+        return []
+    from cosmos import settings
+    from cosmos.constants import OPENLINEAGE_PRODUCER
+    from openlineage.common.provider.dbt.local import DbtLocalArtifactProcessor
+
+    processor = DbtLocalArtifactProcessor(
+        producer=OPENLINEAGE_PRODUCER,
+        job_namespace=settings.LINEAGE_NAMESPACE,
+        project_dir=project_dir,
+        profile_name=task.profile_config.profile_name,
+        target=task.profile_config.target_name,
+    )
+    processor.should_raise_on_unsupported_command = False
+    return processor.parse().fails
 
 
 def _exposure_event(exposure: dict, inputs: list[dict], parent, namespace: str, producer: str) -> dict:
@@ -138,7 +174,7 @@ def _exposure_event(exposure: dict, inputs: list[dict], parent, namespace: str, 
     return serialized
 
 
-def _stash_dbt_lineage(context, exposures: list[dict]) -> None:
+def _stash_dbt_lineage(project_dir: str, context, exposures: list[dict]) -> None:
     from airflow.providers.openlineage import conf
     from airflow.providers.openlineage.plugins import macros
     from openlineage.client.facet_v2 import parent_run, schema_dataset
@@ -147,7 +183,9 @@ def _stash_dbt_lineage(context, exposures: list[dict]) -> None:
     if conf.is_disabled():
         return
     # Set by Cosmos after the build (DbtLocalBaseOperator)
-    events = getattr(context["task"], "openlineage_events_completes", None) or []
+    task = context["task"]
+    failed = _failed_model_events(task, project_dir)
+    events = [*(getattr(task, "openlineage_events_completes", None) or []), *failed]
     # Test jobs left out: their results are on the datasets already (Cosmos' events
     # carry dataQualityAssertions), and a job per tested model doubles the graph
     events = [e for e in events if getattr(e.job.facets.get("jobType"), "jobType", None) != "TEST"]
@@ -193,8 +231,9 @@ def _stash_dbt_lineage(context, exposures: list[dict]) -> None:
             serialized.append(_exposure_event(exposure, inputs, parent, namespace, events[0].producer))
     ti.xcom_push(key=EVENTS_XCOM, value=serialized)
     log.info(
-        "OpenLineage: %d dbt model events (%d with column lineage), %d exposures",
-        len(events), len(traced), len(serialized) - len(events),
+        "OpenLineage: %d dbt model events (%d failed, %d with column lineage), %d exposures",
+        len(events), len([e for e in events if e in failed]), len(traced),
+        len(serialized) - len(events),
     )
 
 

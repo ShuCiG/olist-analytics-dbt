@@ -9,7 +9,7 @@ when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-leve
 failure callback), when `edr_report` (Elementary's report) is not between the
 dbt group and `report` with `none_skipped` and a skip exit code (a broken report
 must not fail the run), when the dbt model lineage is not prepared by the producer
-and sent by `openlineage` behind it (D87), when the dashboard exposure job is
+and sent by `openlineage` behind it, after a failed build too (D87, #196), when the dashboard exposure job is
 not in exactly the BigQuery DAG (D88), when a dbt-running task gets Elementary's clock as `--vars`
 instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
 a full parse per run, D50), when retries are not as expected (BigQuery: every
@@ -43,14 +43,6 @@ RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 DASHBOARD = {"olist_elt_bigquery": ["olist_dashboard"]}
 
 
-def post_execute(task):
-    """The producer's post_execute callable, unwrapped from functools.partial."""
-    hook = task._post_execute_hook
-    return getattr(hook, "func", hook)
-
-
-def post_execute_kwargs(task) -> dict:
-    return getattr(task._post_execute_hook, "keywords", {})
 
 
 bag = DagBag(dag_folder=DAG_FOLDER)
@@ -104,16 +96,19 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
     # Lineage (D87): the producer prepares the per-model events, `openlineage` sends
     # them behind it, outside the run's main line
     if PRODUCER in dag.task_ids and (
-        getattr(post_execute(dag.get_task(PRODUCER)), "__name__", None) != "stash_dbt_lineage"
+        getattr(dag.get_task(PRODUCER).callback, "__name__", None) != "stash_dbt_lineage"
         or LINEAGE not in dag.task_ids
         or dag.get_task(LINEAGE).upstream_task_ids != {PRODUCER}
         or dag.get_task(LINEAGE).downstream_task_ids
+        # A failed build sends its events too (#196): `openlineage` runs after a
+        # failed producer (Cosmos' callback runs before it raises)
+        or dag.get_task(LINEAGE).trigger_rule != "none_skipped"
     ):
-        print(f"{dag_id}: lineage not wired ({PRODUCER} post_execute -> {LINEAGE})", file=sys.stderr)
+        print(f"{dag_id}: lineage not wired ({PRODUCER} callback -> {LINEAGE})", file=sys.stderr)
         missing.add(dag_id)
     # The dashboard's job (#197): from its exposure, in the DAG of the marts the live app reads
     if PRODUCER in dag.task_ids and [
-        e["name"] for e in post_execute_kwargs(dag.get_task(PRODUCER)).get("exposures", [])
+        e["name"] for e in dag.get_task(PRODUCER).callback_args.get("exposures", [])
     ] != DASHBOARD.get(dag_id, []):
         print(f"{dag_id}: dashboard exposure not as expected in the lineage", file=sys.stderr)
         missing.add(dag_id)
