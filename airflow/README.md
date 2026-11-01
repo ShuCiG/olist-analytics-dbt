@@ -109,6 +109,11 @@ it is computed from (column lineage: click a column in a dataset's page).
   them, beside `edr_report`: Marquez takes 1–3 minutes for a build's events, nothing in
   the run waits for it. Cosmos' task events are off
   (`AIRFLOW__OPENLINEAGE__EMISSION_POLICY`).
+- **Dashboard:** the dbt exposure `olist_dashboard` is a job of its own,
+  `olist_elt_bigquery.olist_dashboard`, reading the marts listed in its `depends_on`
+  ([`lineage/exposures.py`](../lineage/exposures.py)), one run per DAG run that built
+  dbt (D88). BigQuery DAG only: the live app reads `airflow_marts`, while the local
+  dashboard reads `data/olist.duckdb`, not the DuckDB DAG's file.
 
 Without Marquez (or with `OPENLINEAGE_DISABLED=true` in `airflow/.env`) the tasks run
 as before; a failed send only logs a warning. A failed build sends no model events
