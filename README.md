@@ -535,11 +535,16 @@ Options that were tried or priced, then left out:
   ([D58](docs/DECISIONS.md#d58--2026-10-21--databricks-as-a-third-engine-free-edition)).
 - **Snowflake as prod.** The project runs there (above), but on a 30-day trial: a prod would stop working a month
   after it was built ([D2](docs/DECISIONS.md#d2--2026-10-10--warehouse-duckdb-dev--bigquery-ciprod-phase-3), [D85](docs/DECISIONS.md)).
+- **Iceberg tables for the marts (BigLake, read from DuckDB).** BigQuery wrote two marts as Iceberg and DuckDB read
+  them from GCS with 0 diffs, but `catalogs.yml` is project-wide and the DuckDB and Databricks targets fail to parse
+  with a BigLake catalog. Builds took about 2× as long, readers need a metadata export after every build, and dropped or
+  replaced tables leave billed files in the bucket
+  ([D90](docs/DECISIONS.md#d90--2026-11-01--iceberg-tables-for-the-marts-biglake-read-from-duckdb-evaluated-rejected)).
 - **dbt deps inside Snowflake, the repo as a Git repository source.** Both need an external access integration,
   which trial accounts don't allow; the packages go up with the code instead ([D85](docs/DECISIONS.md)).
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: Iceberg tables for the marts (#184), dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).
