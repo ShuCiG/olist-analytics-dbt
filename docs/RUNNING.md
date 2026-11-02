@@ -11,6 +11,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Observability report (Elementary)](#observability-report-elementary)
 - [Project evaluator](#project-evaluator)
 - [dbt v2 parse check](#dbt-v2-parse-check)
+- [Review labels](#review-labels)
 - [Dashboard](#dashboard)
 - [BigQuery](#bigquery) (cost per dbt node, PR data diff)
 - [Databricks](#databricks)
@@ -162,6 +163,32 @@ uv run dbt parse --use-v2-parser --target-path target-v2
 On Windows set `PYTHONUTF8=1`: dbt-core reads the v2 manifest with the console code page otherwise and fails.
 The second line runs dbt-oss directly; point `DBT_DUCKDB_PATH` at a copy named `olist.duckdb` (the file name is the
 catalog name), not at `data/olist.duckdb`.
+
+## Review labels
+
+Labels (sentiment, topic, English translation) are CSV batches in `ingestion/review_labels/labels/`, made by
+following [guidelines.md](../ingestion/review_labels/guidelines.md) (D92). The pipeline loads them into
+`raw.review_labels` whenever the files change; `dbt build` makes `fct_review_topics`.
+
+```bash
+python ingestion/review_labels/labels.py validate          # every batch: header, allowed values, one label per review id
+# Claude API for texts without a label (Claude Haiku 5.5, Message Batches; reads raw.order_reviews from DuckDB)
+uv run python ingestion/review_labels/classify_api.py --dry-run          # how many, estimated cost; no call
+ANTHROPIC_API_KEY=... uv run python ingestion/review_labels/classify_api.py --max-texts 500
+uv run python ingestion/pipeline.py                         # loads the new batch (labels_loaded in the status line)
+```
+
+The backfill runs as a scheduled Claude Code cloud routine on branch `data/review-labels` (unlabelled texts in
+`ingestion/review_labels/queue/`, instructions in [ROUTINE.md](../ingestion/review_labels/ROUTINE.md)); by hand in
+a session:
+
+```bash
+python ingestion/review_labels/labels.py status                             # labelled / still open
+python ingestion/review_labels/labels.py next --limit 100 --out ingestion/review_labels/work/next.jsonl
+# label every line into work/labels.jsonl: {"key", "sentiment", "topic", "translation_en"}
+python ingestion/review_labels/labels.py write ingestion/review_labels/work/labels.jsonl --labeled-by <who>
+python ingestion/review_labels/labels.py export-queue                       # rebuild the queue from data/olist.duckdb
+```
 
 ## Dashboard
 

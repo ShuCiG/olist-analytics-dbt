@@ -33,6 +33,10 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   ports), an ODCS data contract per port, ~410 contract checks on the data in every CI run. The dashboard's usage
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
+- **What customers write, labelled by an LLM.** 42k Portuguese review texts get a sentiment, a topic and an English
+  translation from Claude, following written guidelines and checked against a hand-labelled gold set. The labels
+  are versioned files in the repo with their own input contract, so every engine builds the same mart. Reviews
+  labelled "delivery" are on late orders 30 % of the time, other topics 0–3 %. → [Review topics](#review-topics)
 - **One codebase, four warehouses.** The same dbt models run on DuckDB, BigQuery, Databricks and Snowflake with identical
   mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
   Databricks serverless and DuckDB. On Snowflake the project also runs inside the warehouse (dbt Projects on
@@ -82,9 +86,11 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 flowchart LR
     kaggle[(Olist dump<br/>Kaggle CSV)] -->|dlt, monthly chunks| ic{{input contract<br/>olist-raw}}
     ic --> raw
+    labels[(review labels<br/>LLM, files in repo)] -->|dlt, when changed| lc{{input contract<br/>review-labels}}
+    lc --> raw
 
     subgraph product[Data product olist-commerce · Product Owner]
-        raw[raw<br/>8 tables] --> staging[staging<br/>8 views] --> intermediate[intermediate<br/>6 views] --> marts[marts<br/>star schema]
+        raw[raw<br/>9 tables] --> staging[staging<br/>9 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
         marts --> metrics[semantic layer<br/>14 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
@@ -121,14 +127,15 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | | Port | Contract / definition | What it says |
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
-| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 5 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
+| Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
+| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 7 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__semantic_models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
-| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 29 columns and 11 metrics it relies on |
+| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 46 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 170 + 201 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 170 + 28 + 279 checks on the data;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -152,6 +159,7 @@ erDiagram
     fct_order_items_seller_as_of |o--|| fct_order_items : order_item_sk
     fct_order_items_seller_as_of }o--|| dim_sellers_history : seller_version_id
     fct_order_items }o--|| dim_date : purchase_date
+    fct_review_topics |o--|| fct_orders : order_id
 ```
 
 | Model | Grain | Notes |
@@ -164,6 +172,7 @@ erDiagram
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
 | `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) |
+| `fct_review_topics` | order with a labelled review | sentiment, topic and English translation of the review text (LLM labels, [D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)), next to the order's state, main category and delivery outcome |
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
@@ -249,17 +258,38 @@ flowchart LR
 
 </details>
 
+## Review topics
+
+The marts knew each review's score but not what the text says. Every review with a title or message (42,389, in
+Portuguese) gets three labels: a sentiment, the one topic it is mainly about (delivery, product quality, wrong or
+missing item, seller service, general, other) and a faithful English translation
+([guidelines](ingestion/review_labels/guidelines.md), [D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)).
+
+- **Who labels:** Claude. A Claude Code session labelled a gold set of 300 reviews (60 per score) by hand; a
+  scheduled Claude Code cloud routine labels the rest in nightly runs with the same guidelines, writing checked CSV
+  batches to a data branch. Identical texts ("bom", "recomendo") are labelled once.
+- **Where labels live:** CSV batches in the repo ([`ingestion/review_labels/labels/`](ingestion/review_labels/labels/)),
+  so dbt stays deterministic and every engine gets the same labels. The pipeline loads them into `raw.review_labels`
+  only when the files change (their sha is stored with the rows); new labels trigger the Airflow build and a full
+  prod deploy like new orders do.
+- **New reviews:** [`classify_api.py`](ingestion/review_labels/classify_api.py) sends only texts without a label to
+  Claude Haiku 5.5 through the Message Batches API, with the guidelines as the system prompt and a JSON schema for the
+  answer; with nothing open it makes no call. All open texts at once would cost about $4 at batch prices.
+- **Checked:** the labels have their own input contract; `fct_review_topics` is in the output contract and has 11
+  data tests; the labels agree with facts they never saw: reviews about delivery are on orders that arrived late 30 %
+  of the time, every other topic 0–3 % (seller service: 27 % never delivered).
+
 ## Data quality
 
 | Check | What | Where |
 |---|---|---|
-| **151 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 4 singular tests; 9 more on the cost mart in prod | every `dbt build` |
+| **173 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 4 singular tests; 9 more on the cost mart in prod | every `dbt build` |
 | **8 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 411 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 477 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **278 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **295 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -449,12 +479,12 @@ resource monitor (20 credits a month), roles, key-pair service users, the email 
 
 ## Dashboard
 
-Four pages over the marts (sales, delivery & reviews, customers & sellers, cohorts & retention), a shared date filter, and a sidebar
+Five pages over the marts (sales, delivery & reviews, customers & sellers, cohorts & retention, what customers write), a shared date filter, and a sidebar
 showing how fresh the data is. It runs on DuckDB or BigQuery with the same SQL, and the deployed app reads the
 Airflow-fed marts with a service account that can only read `marts` and `airflow_marts`. Declared in dbt as an
 exposure, so it appears in the lineage.
 
-On BigQuery a fifth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
+On BigQuery a sixth page shows what dbt itself costs: every query dbt sends carries job labels (target, node type,
 package, node name), and each prod deploy turns BigQuery's job history into `fct_dbt_job_costs`, one row per job, for
 prod deploys, the Airflow replay and PR CI. The page lists bytes billed per target, the most expensive nodes (queries
 outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
@@ -486,8 +516,9 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 
 ```
 ├── ingestion/pipeline.py        # dlt: Kaggle CSV → DuckDB / BigQuery / Databricks / Snowflake raw, monthly chunks
+├── ingestion/review_labels/     # review labels: guidelines, label batches (CSV), batch tool, Claude API script
 ├── transform/                   # dbt project
-│   ├── models/staging/olist/    #   1:1 with sources: types, names (bigquery/: the job history)
+│   ├── models/staging/olist/    #   1:1 with sources: types, names (labels/: review labels, bigquery/: the job history)
 │   ├── models/intermediate/     #   pivots, rollups, dedup
 │   ├── models/marts/            #   star schema, exposures, semantic models and metrics (platform/: cost mart)
 │   ├── snapshots/ seeds/ macros/ tests/
