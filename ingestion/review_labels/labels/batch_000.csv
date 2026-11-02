@@ -1,0 +1,301 @@
+review_id,sentiment,topic,translation_en,labeled_by,guidelines_version
+010b7361d3c6962ffb181a8764da3b36,negative,wrong_or_missing_item,Wrong goods — My truck bed bag came for the Ford Ranger instead of the Frontier,claude-code-session,1
+02e7ff70b5fe765da26580c8b489b7bd,positive,general,It met my expectations,claude-code-session,1
+054c4e60560dc93fe71d44e423637992,positive,delivery,"delivery was made before the latest date, it was much faster than expected!",claude-code-session,1
+057bc18d26659b75eb511e4d4b0bc564,positive,other,"Fair price, great quality. I recommend it",claude-code-session,1
+070dc070834a65b7bf328f093b141535,positive,general,"I liked it a lot, it came just right",claude-code-session,1
+071eae9e0e3e25c48c8f9a3e666711c7,positive,general,great.,claude-code-session,1
+082eb17b6aa03398be816eeb2a66928f,negative,product_quality,I found the material bad,claude-code-session,1
+08684202004f18aad861d4a702f1348b,negative,delivery,"According to the post office they still haven't received it. Even so, I decided to wait for them to resend it.",claude-code-session,1
+0895487764ee1e8939d663ead544a69f,positive,seller_service,Efficiency and commitment to the consumer.,claude-code-session,1
+08f0251cfd3f79a3a41b0cd148f5700b,negative,seller_service,"I had to accept the product... Because they didn't honour my cancellation, made before the invoice was issued.... So now I'll think twice before buying on the site",claude-code-session,1
+09b2442999d15d07ebc62d415a6688d0,mixed,product_quality,I thought the quality would be better!! But I liked it..,claude-code-session,1
+0b6f2f6cac537d5db8e3eb69bc6f976f,negative,wrong_or_missing_item,My products came wrong,claude-code-session,1
+0e1059a405261feda792621aa2d0699a,positive,delivery,"good, I recommend it — I recommend it, it arrived on the right date.",claude-code-session,1
+0e2e916ab3c258e2908c9fc37743f497,mixed,product_quality,"Unfortunately, it freezes a lot! — On delivery you deserve congratulations. It arrived well before the expected date. Too bad the tablet freezes a lot and the system uses much of the internal storage, which isn't much to begin with.",claude-code-session,1
+0eb5a2a03c3fda90ec8fe976b9d426e4,positive,general,"Of all the purchases I've made I've been successful, I never had any problems, I recommend it.",claude-code-session,1
+0ecdb4af6f9fc1a95e66f301156c34a0,positive,other,Excellent prices and services.,claude-code-session,1
+1091989a307dcb3dbc6a54bdf30eb216,positive,general,I recommend it — It meets my needs,claude-code-session,1
+1099858d380ce886773ca0a89cf8f0cf,positive,general,Reliable,claude-code-session,1
+11c8f4e202fcafaee923baadd473c769,positive,general,I recommend it — Very good,claude-code-session,1
+1389fd3d86ebbb6775fa68f7526c5b4b,negative,wrong_or_missing_item,I'd like to know what to do — I received the product partially.. the sheet set is missing,claude-code-session,1
+148a29e2b4fe4895f482a99164c16fac,positive,product_quality,"Very satisfied — Satisfied with the product, with the quality, the delivery time.",claude-code-session,1
+14ed0b712913e0b6158a1c3fd35ff97d,positive,seller_service,Good — Good service,claude-code-session,1
+152e667120bd33933b44c745da0a768e,negative,delivery,The delivery time could be shorter,claude-code-session,1
+15cb66fca6bc4b85dd1346951f5b4a79,mixed,product_quality,"Delivered on time — It arrived within the deadline, but the curtain was a bit crooked at the bottom, I found the PVC part ""thin"", expensive shipping.",claude-code-session,1
+161a5fbb76adb8ba80008e5053308b79,negative,wrong_or_missing_item,The product arrived incomplete,claude-code-session,1
+16a27e5ffd29a7cdf0e4984b0cab46b7,positive,general,highly recommend,claude-code-session,1
+16bdfaa897bf8ceb413da6f38d6d5550,mixed,other,"The watch is very beautiful. However, I found the shipping expensive.",claude-code-session,1
+19077ba4e4d6bf42e976d2ea418abde2,negative,delivery,"I haven't received it yet, the post office's fault.",claude-code-session,1
+19758ffebdb563f21d67fd85a300610c,positive,delivery,thank you for the delivery before the expected date,claude-code-session,1
+1b444f947865b8a025fbb41f75f62110,mixed,delivery,"I'd like them to create a better delivery method, because with Sedex we have to pick it up at the post office, and it is very far from my home; otherwise the product is perfect",claude-code-session,1
+1d8072168c9820d0ef1298c642fc1f40,negative,wrong_or_missing_item,One pack of garbage bags was missing,claude-code-session,1
+1fe5f56995e85f4dd0e2ac35b6cf171d,positive,product_quality,"I liked the product, it met my expectations!!!",claude-code-session,1
+20a970303d522d99962595cfdd0cab23,negative,delivery,"shipping — And I want my shipping money back; you pay for shipping and have to pick it up at the post office, wasting time and money; if you won't deliver, why charge shipping? I'm going to Procon.",claude-code-session,1
+237141a00715b8bf1ee7b33e8a0d1441,negative,seller_service,"Slow to issue the invoice, no update on the status of the purchase!",claude-code-session,1
+245472b3007a91533b68c0bd84a89341,positive,product_quality,"I liked it. The product is exactly as shown, it's worth buying.",claude-code-session,1
+24818aa283c05d0d99a007ea07b56a0e,negative,product_quality,"I just thought the bear on the bag was printed on the bag itself, not glued-on fabric. Because looking at the site it seems to be part of the leather itself",claude-code-session,1
+253c1413b2b550b3799ee9b7f53ed20f,mixed,delivery,"yes, I recommend it *** — When I bought it I was told the product would be delivered by 10/08/2018, and so far it has not been delivered...",claude-code-session,1
+26c93c97cc43f0cfa355c4ed188150d6,positive,general,I recommend it,claude-code-session,1
+27ea65ee0d60d74b35b86f3905c6dbbe,negative,product_quality,too bad you can only choose one colour,claude-code-session,1
+28182a0b45f3e327c285d4864b7694a2,negative,seller_service,glass bottle cutter — I'm waiting for the refund of the product I didn't receive before placing a new order.,claude-code-session,1
+2834b9b28fb5ba9ea763569096cb4f07,neutral,product_quality,I don't know yet whether it is the right product because I haven't installed it.,claude-code-session,1
+2a3ddf0bea2f67d4100758ddc238ca8d,positive,product_quality,QUALITY POWER SUPPLY.,claude-code-session,1
+2c112d399ef1aeff1d5615c7529bfd08,negative,product_quality,For the price I expected the product to be better. The material is low quality and the lid is a bit loose. I didn't like it given the absurd price. It's not worth it.,claude-code-session,1
+2f97a0e75596224896b36a3fe920d68c,negative,seller_service,"they don't answer emails, there was a problem with the delivery and they gave neither much explanation nor importance",claude-code-session,1
+2ff6d818c9fc0832abb92c1c89256dd6,positive,general,Super,claude-code-session,1
+30bf4e22ca3839250ec258ff0b7a6e30,positive,product_quality,"Great — Good product, and at a wonderful price",claude-code-session,1
+317194cc5cad0cda0905be2bd5e9ada3,negative,delivery,"Dissatisfied only at having had to pick it up at the post office branch, since I paid for shipping.",claude-code-session,1
+3175d4531e6d38805c0f48c41c61e5ff,positive,product_quality,Very good watch.,claude-code-session,1
+31843114e7578d47252c985710729c43,negative,delivery,"I didn't receive the product — So far I have received neither the product nor my money back; I have tried several times to get a refund, but I run into problems on the site when I try to fill in the form.",claude-code-session,1
+331c2fea3f2c1512a9ca1889436a6904,mixed,other,"The site's service was great this time. As for the product + shipping = not good value for money; for the price it could be better finished, the stand has only two tilt levels.",claude-code-session,1
+33a4dfb18e78b711de26237112a2d503,negative,product_quality,The product is not good quality.,claude-code-session,1
+358834ddbcfbb9da4f5f9edab5f55f46,negative,delivery,I was charged shipping and the goods didn't reach my house. I had to pick them up at the post office.,claude-code-session,1
+37d49169bbe9ebae22e1a173b998da52,negative,delivery,"a bit slow to ship, but the biggest delay is the post office, which gives customers a terrible service",claude-code-session,1
+3802b02e5c6afc053b5c9cb109b6bc75,positive,delivery,"Delivered sooo fast, excellent product",claude-code-session,1
+3871fbbf3f0d3d972070444d247744cf,negative,product_quality,"The product had a functioning problem, it doesn't connect to the smartphone (any phone)",claude-code-session,1
+3af0c84579dd7573c098da99a26dd1d7,negative,delivery,"Good morning! I'm dissatisfied with the second purchase, as it was to be delivered by 27/04/2017 and so far I haven't received it. I've already finished paying and the goods were not delivered to me.",claude-code-session,1
+3be32536d1f13ad5dede569d6ca97b3c,negative,other,I didn't understand this purchase!! I tried to buy the HD together with the case and the card approved the purchase of the CASE only. The site could have called me to cancel the purchase of the smaller product,claude-code-session,1
+3c7e9141160ca87d7a8844bc40c5635e,positive,product_quality,I liked the product,claude-code-session,1
+3d5f2e0e1f5266ce5e7777980844b32c,positive,delivery,Very good. Early delivery makes a difference;,claude-code-session,1
+3ed3e205c397ff9317d7417026f687b7,mixed,delivery,"right products, I just thought they should have been delivered together since it was a single purchase. And I found the delivery a bit slow.",claude-code-session,1
+3fc7603c8068b56d25493f6b47b44d35,negative,seller_service,"The seller didn't update the status of the goods, which made me feel insecure. The status until delivery was: awaiting invoice issue",claude-code-session,1
+40acd7e881a1e1b1fecef521e1da46d6,mixed,product_quality,"Correct order, before the deadline. However, the screen protector already came slightly cracked on the left side.",claude-code-session,1
+40c40d0bf2ac35de2827afe7e2b6f3c2,positive,delivery,I recommend it — Product received in perfect condition and on time.,claude-code-session,1
+4209ad469741bc0df8f87d74bb68b89e,mixed,product_quality,"I recommend the store because it met the deadline exactly, but the product is very bad... terrible quality.",claude-code-session,1
+42b3cd1634f9613559f38187611136d3,negative,wrong_or_missing_item,One chair came missing the backrest part.,claude-code-session,1
+42bfd6d4c31e3b09289828aec945c52d,neutral,delivery,"As soon as I receive the item I will rate it truthfully, and the recommendations too.",claude-code-session,1
+437934b3f4e53e8b5aa77f5b5b0eb1b9,mixed,general,good — Until before this purchase it was correct,claude-code-session,1
+439a1a8d34cad4d8a933f3387f7c605f,positive,seller_service,I recommend buying from the lannister stores,claude-code-session,1
+46e8c1cb0c0907e92889eca7a68fa119,negative,seller_service,Cheated — The product was stolen at the post office on 24/04/18 and the store didn't offer to send a new one.,claude-code-session,1
+4795244d1f5ce48a127037c883008809,neutral,product_quality,I think it could work as a lid that lifts at the front and stays fixed at the back.,claude-code-session,1
+492d9c7ee7e7d4246a23af2175e0721f,negative,product_quality,Description of the iron pan doesn't match,claude-code-session,1
+4baf65ba0f4dc753e9cf3d8863433da0,negative,seller_service,"Lack of consideration for the customer, because there was a problem with the delivery and at no point was the problem handled. Two purchases, one with delivery dates 15 and 21/02, both were late, I called on the 23rd to complain",claude-code-session,1
+4cc3444a8fea71ac32a1f60967ca6d43,negative,delivery,"I don't know where the product got lost, but it left Curitiba and didn't arrive in Rio. No explanation at all",claude-code-session,1
+4cc9dc519327a019f0193e75e34c851d,negative,delivery,Delay — I still haven't received the product.,claude-code-session,1
+4d7c0147ddac232be7629e5f38d6e11f,positive,delivery,"Very good, I bought the product, the delivery time was long, but I received it well before the final deadline.",claude-code-session,1
+50362410563e38241afcc077395037ac,negative,wrong_or_missing_item,"They didn't deliver the product I bought. They delivered another one of a different model, which doesn't suit me",claude-code-session,1
+517bc634e0c9979d4ce2f7e22a2b9878,negative,wrong_or_missing_item,The only problem was that I bought 3 tubs of varnish bath (1 kg) and only received 1 tub of 1 kg.,claude-code-session,1
+51809daf94b60a0e22174ac981aa0415,positive,seller_service,Buying from lannister is excellent. The service is perfect.,claude-code-session,1
+539b4310c05efaac7dd838f0da7b6c91,positive,general,Excellent,claude-code-session,1
+542c3f2a430552c07ff9b3e8087f70db,positive,product_quality,"Very beautiful, quality product",claude-code-session,1
+55e4446fe447003bf083f459685284d6,negative,wrong_or_missing_item,"The seller only sold me one item. I don't know who the other one was from and it wasn't delivered. Site error, I bought two items and paid a single shipping fee. Just look at the invoice",claude-code-session,1
+577d4e68daeaa5c35ea3b59d96a67e50,negative,wrong_or_missing_item,"Only half of the purchase came, I didn't receive my pink microfibre crib blanket. The red bag came.",claude-code-session,1
+5a14337c098ddd7f94233817a0130e81,negative,wrong_or_missing_item,I ordered 5 bottles and only 1 bottle was delivered. I complained by phone and they said they would send them,claude-code-session,1
+5aa9f3f1f48f40b063f84a198408dcb7,negative,wrong_or_missing_item,"I BOUGHT TWO PIECES OF WIRE AND ONLY ONE ARRIVED, WITH AN INVOICE LISTING BOTH PIECES.",claude-code-session,1
+5b223e3c1d90dce36559f0d6101c5f29,negative,delivery,I found that the store takes far too long to deliver the product and the shipping is expensive,claude-code-session,1
+5b299837de4a5e10209ecb5955aac5cd,positive,delivery,"THE PRODUCT ARRIVED IN PERFECT CONDITION AND BEFORE THE DEADLINE, I LOVED IT!",claude-code-session,1
+5b54b7a29fc339eea574bb663f7ff196,negative,wrong_or_missing_item,I bought 3 units and only 1 unit was delivered to me.,claude-code-session,1
+5c1eb826c95066f12350aa95a0d4e32b,positive,seller_service,"I have nothing to complain about, the lannister stores' site deserves congratulations, I never had problems with a purchase or the delivery.",claude-code-session,1
+5c48f27c1f70de038a712cd4a2c1478e,positive,other,The price was excellent and the delivery was made before the requested deadline. Congratulations!,claude-code-session,1
+5c9702b9945b61753646f683acb96cda,negative,product_quality,"The only defect was that the watch was switched on, meaning the battery was in use and already shows signs of being weak",claude-code-session,1
+5d82d6a7a18f056c040adfb208885cf9,positive,general,I recommend it,claude-code-session,1
+5e13c06cf3e841f2d1c76cce488f566c,negative,delivery,UP TO NOW I HAVE NOT RECEIVED THE PRODUCT.,claude-code-session,1
+5e94cdd99c764328967c2c658108e89c,negative,delivery,Good morning. I didn't receive the product and I didn't get any notice from the post office either. I'm upset about it.,claude-code-session,1
+606b6258c1c9d5c091b2857bae6e526a,negative,delivery,I still haven't received the product and it already shows as delivered,claude-code-session,1
+628138699c23a1d6bc14a8e4765a2fa3,positive,product_quality,same as in the photo,claude-code-session,1
+65c75cafea381976d39b350997874598,positive,delivery,I haven't used it yet but the delivery was great,claude-code-session,1
+65fba10ef4086df6bc4d1630cb48adef,negative,delivery,Product not delivered = dissatisfied customer. I need an answer from stark on whether the product will still be delivered or not.,claude-code-session,1
+663de98451ef8785972482d84156ac0d,negative,wrong_or_missing_item,"This time my product was not delivered correctly. I ordered and paid for 4 units, but actually received only 3. I'm waiting for an answer from the store.",claude-code-session,1
+668c3ab37481f9d477fba77ae8803def,positive,product_quality,"I really loved it, very beautiful and practical. I recommend it!!",claude-code-session,1
+669bbf8d352ca8add7be6b951d17c5e0,negative,product_quality,"expired battery, old and useless",claude-code-session,1
+6741fb52112ee3b08a870cd4dd05ad19,negative,delivery,Second purchase I make through the app and I pay an absurd shipping fee for the product not to be delivered to my home. I started shopping online for the convenience of receiving at home and I have to pick it up at the post office,claude-code-session,1
+679f8a075757a34f71334f807820eb0d,negative,wrong_or_missing_item,"I'm waiting for the delivery of the screen protector and the clear case. I bought 2 TVs, 3 phones and other products. I always received them. The products mentioned are missing. Why?",claude-code-session,1
+68854e50b649cc8afd0a2f7b360e48b2,negative,delivery,I still haven't received the product,claude-code-session,1
+69049b97da1868d57b4cdd1394bd7fba,negative,product_quality,The product claims to be large but doesn't fit the child!,claude-code-session,1
+69884aa380b172aadf8757b32435e9a6,positive,delivery,"IN MY OPINION I RECOMMEND IT, MY PRODUCT WAS DELIVERED BEFORE THE DEADLINE",claude-code-session,1
+6b18714d607e24ae45f26d0359584999,positive,seller_service,Excellent seller! — Everything perfect! Delivered two weeks before the final deadline.,claude-code-session,1
+6b341682ab39af9fa00d72d7388c903b,negative,wrong_or_missing_item,Rating 3 — Buying a product that's right on the box but something else inside.???????,claude-code-session,1
+6bccb495126cf04a3464e3b33de2990e,negative,delivery,The product was delivered very late,claude-code-session,1
+6c592f1af0e9d96d4e86efce1ce8b01f,positive,general,I recommend it!!!,claude-code-session,1
+6c99a3aef68e5330e0b621b38fd742ce,negative,delivery,"because the expected delivery was 03/04/2018, the credit card bill is almost here and the product hasn't arrived to this day; I've never bought a product online that took this long.",claude-code-session,1
+6d018edd90af718118c3d525167b4bcb,positive,general,I recommend it,claude-code-session,1
+6d22562cc287fa8c6e1b8ad4e8d74b02,mixed,product_quality,"Good product — The only problem is that the ink doesn't ""stick"" well to the pen.. You have to dip it several times to be able to use it (as if it were diluted). But it may be a problem only I'm having. Worth it",claude-code-session,1
+6d73860dfc4a6279a8f4e0fdc8bf3445,negative,delivery,Don't buy — You pay expensive shipping and they don't deliver to your house.,claude-code-session,1
+6e0b1f8e0de9fc84b3586033d02e333a,mixed,product_quality,"medium hold, but good for everyday use",claude-code-session,1
+6ee93eca27c9c2bb09603ebe5f506b21,negative,product_quality,"Doesn't work — I received everything on time, but the remote control simply doesn't work!",claude-code-session,1
+6f019513437635e75c3d17f091af2de5,mixed,delivery,The delivery could have been faster! But I received the product in great condition!,claude-code-session,1
+6faba0c70369c63f6e99f49c836fe2c9,negative,wrong_or_missing_item,The store issued the invoice with the 2 products and there was only 1 item,claude-code-session,1
+7096ad4bffd239f78cdba05aaae3e889,neutral,general,Crib purchase,claude-code-session,1
+73c1bbdd87169a7b2e8ac5961be57167,negative,product_quality,"Incomplete functioning. I cancelled, because the product should work and it doesn't work properly, even though it is new.",claude-code-session,1
+73c7022e9c03489a71ab552179ff464b,positive,delivery,"Arrived within the stated deadline and the product is good quality, I recommend it",claude-code-session,1
+73cc55bcec896339ed49bccda8b522c9,negative,delivery,"I can't recommend it, because the product didn't reach the post office's processing centre in Brasilia, and so far the company hasn't contacted me to try to explain the delay.",claude-code-session,1
+741349cb000a30501ec46c677241b5aa,negative,wrong_or_missing_item,Incorrect goods — 10 rolls of labels were missing from the delivery,claude-code-session,1
+741636090aea4137dab025ec6d0409e3,negative,wrong_or_missing_item,"Good evening, on 25/7 I received only the tyre, the chain kit was not delivered.",claude-code-session,1
+748bceb2d47f389666460f7ddab1977a,negative,delivery,"I didn't receive the product, horrible service!",claude-code-session,1
+751687e8cff49a56b8d369bb39172123,positive,delivery,Delivered earlier than expected,claude-code-session,1
+76be8253fb9258cdd4c1210a6dfe9503,negative,seller_service,IT TOOK FAR TOO LONG TO TELL ME THE PRODUCT WAS OUT OF STOCK.,claude-code-session,1
+77b046b9fa3b97a30503d023dbc818af,negative,delivery,"I bought roller skates from the store and delivery was expected on 05/01/18, to this day I haven't received them.",claude-code-session,1
+78506167e7bd88b9872369f1f08cfbbf,positive,general,All good,claude-code-session,1
+78d34a698553de7e7c2e9a0bad66dd7a,positive,delivery,delivered correctly,claude-code-session,1
+78d37dd0a2f9fd4997373fea9f4f69be,negative,wrong_or_missing_item,"I ordered two items from this store and so far they have delivered only one. Which makes no sense, since they are complementary items and according to the site they were shipped together.",claude-code-session,1
+791f31f7ab8846592122420409c41203,mixed,other,I recommend it — It should be cheaper!,claude-code-session,1
+7a320269f8b88a481bda8b16286b9eb1,mixed,product_quality,"I received the watch with a mark from a fall, but working.",claude-code-session,1
+7a5beccd35361db7013579c7ac4ad694,positive,product_quality,"product as advertised, delivered on the date",claude-code-session,1
+7ba7e53cd523e971e460e526ba0a516d,positive,product_quality,"I recommend it 100% — Original product with warranty, and I have already tested the pressure cooker with a viewing window, it is very good and beautiful",claude-code-session,1
+7c2013da5deb234dd801f4f59f3db5ae,negative,delivery,I still haven't received the delivery,claude-code-session,1
+7d62f058700dfe645a791000950d4d3a,positive,product_quality,"I loved them, they are beautiful",claude-code-session,1
+7d9da71ec31738461497b83d74eb75aa,positive,delivery,"great purchase, fast delivery. I recommend it",claude-code-session,1
+7dcd9012da02a79fb7b0eeff1bf4b8d4,positive,product_quality,The watch is very beautiful!,claude-code-session,1
+7e005868f6be23ce5856294c707c581e,negative,product_quality,Terrible product.,claude-code-session,1
+7f2b2e3011916bb319d1920680cbb990,positive,delivery,"I've been buying from these online stores since last year and I'm very happy, highly recommended, my orders always arrived before the deadline, I like it 😍",claude-code-session,1
+7fb2c642dd46a5e1dd22761b710ec7be,mixed,wrong_or_missing_item,"I ordered it in beige and it came brown, but that's fine, we're happy anyway; however, next time I'll return it.",claude-code-session,1
+7fcbc2c1fd1c619254dbd58c3ebb0a64,negative,wrong_or_missing_item,I didn't receive the complete product,claude-code-session,1
+807f313a7352ee7f73b3e09a6d96c9b7,mixed,delivery,"NICE — GOOD DELIVERY, BUT IT ARRIVED A LITTLE AFTER THE DEADLINE.",claude-code-session,1
+81b4c0150f0f3b099b23e2362123f97e,negative,wrong_or_missing_item,"I bought two sheets and received a box with only one, without any explanation or notice. To make it worse, stark offers no communication channels to resolve these cases. Only the review or email. :(",claude-code-session,1
+81b964d7fd8249d928b939f1358c46d7,negative,wrong_or_missing_item,"I bought a barbecue grill (5 units in stock), after the purchase was approved the store contacted me claiming it was out of stock and suggested another model, and even so they sent a third, different model.",claude-code-session,1
+81bb707285914f2c46b84f7af8d0a2b4,negative,wrong_or_missing_item,PARTIAL DELIVERY — 4 UNITS WERE PURCHASED. SO FAR ONLY 2 UNITS HAVE BEEN DELIVERED,claude-code-session,1
+81e8fcbdfc77873a06e83ae35f512688,neutral,general,4,claude-code-session,1
+8255a20e11fd31d8b59d1583f1f7f21e,positive,delivery,I recommend it — I received it before the deadline,claude-code-session,1
+84775964cfaf2e4fa80f8657d4cdede8,negative,wrong_or_missing_item,Problems — They delivered only one product of the four items in the order... I want the rest of the order... Where is it?,claude-code-session,1
+85d4da15aa2657f044efe9a8dcf60e73,negative,wrong_or_missing_item,Fair — I bought 2 products and only 1 arrived. I'm waiting for an answer.,claude-code-session,1
+86180d28009805b29dafecb0a672d273,negative,delivery,"I didn't receive my product, the latest delivery date was 26/03/17, I made the purchase on 18/3 and so far I have had no update from the company, total disregard, I'm outraged",claude-code-session,1
+86c939580304eb332f3fc6989f2446ec,positive,product_quality,"Gorgeous — I loved the pendant lamp! I haven't installed it yet, but it will look wonderful in my living room! =)",claude-code-session,1
+86dcc780bfae4d07dea804a16c88ddcc,negative,other,"Shipping — Paying shipping when buying everything through a single site is simply horrible. I know this is another store, but I don't intend to buy from lannister.com again",claude-code-session,1
+87da40649e1242018b4a046dc34ee8ff,positive,product_quality,"Product as described, arrived before the expected deadline.",claude-code-session,1
+88844b6fce664b6ba77aefc4a2e7e9b4,positive,delivery,Arrived fast and well packed.,claude-code-session,1
+898e8f3e52caa63be2db89cf5f34d557,negative,product_quality,"I WANT TO RETURN THE PRODUCT BECAUSE THE BELT DIDN'T FIT THE TREADMILL. I ENTERED THE RIGHT MODEL, BUT I HAVE NO WAY OF KNOWING WHETHER WHAT CAME IS THE SAME. THE INVOICE SPECIFIES NEITHER BRAND NOR MODEL.",claude-code-session,1
+8d8cdd4d20e7a3db938ce16c150a3030,positive,product_quality,"Very satisfied — I really liked the whole buying process. The product matches the description exactly and the quality is better than expected, after all the kit costs as much as a T-shirt. I will definitely buy again",claude-code-session,1
+8e4f627337d989f4ea20ca70d9e6995b,positive,delivery,Very good! — The product arrived before the estimated deadline.,claude-code-session,1
+8f0dbbc7977a92fea3ce079dc3c55a89,negative,delivery,They didn't deliver — I didn't receive the product,claude-code-session,1
+8f15621612e9eb89e4de80c4c2d20ccf,positive,product_quality,Very good quality!,claude-code-session,1
+8fc496637461d312472c424d55662b5f,negative,product_quality,Broken product — I received my product and it is broken. I can't return it because the Américas site doesn't let me. I need an answer,claude-code-session,1
+8feefe5eb09ece032f76fbbdaea27b84,mixed,product_quality,"I didn't know there was a 10 mm yoga mat, it's very good, there's just one detail: one side came with a black dirt stain.",claude-code-session,1
+91d696370490d901858c8492475a2cde,negative,wrong_or_missing_item,"Product came without a part — The product came without an important part for fixing the pendant lamp to the ceiling. I had to ""make do"" to get a similar part that isn't the same as shown in the ad's photo. I consider it false advertising.",claude-code-session,1
+923521f64e6b242cf17f9bc9eaa5eda3,positive,delivery,Highly recommend lannister. Delivers everything on time. 🖒🖒👏👏👏,claude-code-session,1
+924dc256092fdf81257724d99e5780d9,mixed,delivery,"Good — The product is good, only the delivery took long",claude-code-session,1
+92f29d3e97088c891cd0a839e2ff8995,negative,delivery,"I still haven't received my product, it's been more than 1 month since I bought it on the site and it still hasn't arrived at my home",claude-code-session,1
+940883016d9c7bf718dafcbbebfb7c61,negative,general,dissatisfied,claude-code-session,1
+940c83902a74ea7909fa90c495f4d999,negative,delivery,It's a pity it didn't arrive before Christmas. I hope it arrives by New Year!,claude-code-session,1
+954f5cd113cd5b0d23fed2cd1a848564,negative,wrong_or_missing_item,"The product came wrong and I got no support for an exchange or a refund, unfortunately I will have to file a lawsuit to solve my problem",claude-code-session,1
+97f07e03fa42ed1b34112357e6494415,mixed,delivery,"Excellent product, correct, well packed, but the delivery took far too long, considering it is a medicine.",claude-code-session,1
+981f95e25fec024e3fa92efdb059bced,positive,product_quality,"Identical to the ad, very beautiful",claude-code-session,1
+99f941267d617acf04070429436ce4d9,positive,general,all ok,claude-code-session,1
+99fab97e6572b9414ed5b954739d2d31,negative,delivery,"Maybe my opinion on the overall rating will change, but so far I haven't received the product.",claude-code-session,1
+9aea405ac411a6ec4e9d0c228b53ce57,negative,delivery,I'm writing to express my great dissatisfaction with the store and the seller of the product. I bought the product more than a month ago and didn't receive it; the seller said they would contact me and didn't answer me.,claude-code-session,1
+9b861df59ef2b550cb406594d9863dc0,positive,product_quality,"I recommend it — I liked it a lot, the product matches the ad's specifications!!! Very good ...",claude-code-session,1
+9e2b89b175b2c965043ce65bf8c1a9d5,positive,delivery,"The product arrived on time and with the box sealed, but I haven't tested it yet.",claude-code-session,1
+9ea616a99291930e927a7440d212d967,negative,wrong_or_missing_item,I DON'T RECOMMEND IT — I ordered the product in black and it came in white. I'm waiting for an answer from the company (LOJARIOPRETO) to exchange it for the right colour or refund the money.,claude-code-session,1
+9f1dc4cfc300e7a4f4c5fadf05b12e9f,positive,delivery,"All the products arrived well before the agreed date, I highly recommend it.",claude-code-session,1
+9fce506a03332fc1151d996ad657b0c2,positive,delivery,"Great — Product delivered successfully, on time, excellent product, the store deserves congratulations.",claude-code-session,1
+9fe8aad3ad46f27483a52858ab92517d,positive,delivery,Speed — I haven't used it yet but fast delivery,claude-code-session,1
+a061791c0bec3f4862936b05668466fd,negative,delivery,"Disappointed — The question is, when will you deliver my goods, which have already been paid for?",claude-code-session,1
+a0a179bbfab321b3c8fb25c6d9a55c3e,positive,general,Good — Good,claude-code-session,1
+a2cd6215401f66af4b352cce638f1b09,negative,delivery,"it wasn't delivered on time, I cancelled the purchase.",claude-code-session,1
+a3d3d770c3574d9847e5ed349a1e142e,positive,general,Great — Very good,claude-code-session,1
+a41ba9ad031cf9ec8e03b7950425642c,negative,product_quality,"The product is very bad, it's not the same as what was on the site. Very shoddy product",claude-code-session,1
+a50fd6cb5bde51ea6ec6debf883beaa0,negative,wrong_or_missing_item,"I bought 2 products in the store and only received 1, I'm waiting for the other product. I confess I didn't understand",claude-code-session,1
+a5275081e820b545810ef0916046d86f,negative,delivery,"TODAY IS ALREADY 29/03, THE DELIVERY WAS SCHEDULED FOR 27/03, AND THERE WAS NO FEEDBACK AT ALL FROM THE COMPANY ABOUT THE DELAY.",claude-code-session,1
+a61674502e5f7af4af9ac41def037c59,positive,general,"very good, I recommend it.",claude-code-session,1
+a63c8d8408b034aa7d91c22b9c6cc066,mixed,delivery,good — it took a while but it arrived!,claude-code-session,1
+a672fe3fe656d6985eb3810f23efd12f,negative,seller_service,"I asked for an update after the post office said they hadn't received the product, and the company gave no answer. Don't even waste time trying to buy from this company, I'm cancelling the purchase. Terrible!",claude-code-session,1
+a7bd78ebe6c42ea3c0c712cceb7e60b9,positive,general,good,claude-code-session,1
+a83fef0357d98cdb4a769a6e1895afa3,negative,product_quality,"the product is horrible, I'm going to use it as a floor cloth. Because what they sent can't be called a bath towel.",claude-code-session,1
+a862bf72d51efa0d1880ce7e0a7ddf1a,neutral,seller_service,I'm still checking the service for when we need to make an exchange or solve a problem; that is the benchmark of any service.,claude-code-session,1
+a9aa22dc2be36857d3ebf82a4026d7de,neutral,general,abs cdsf fsdfasd,claude-code-session,1
+aa6acc6f81d9091fcc3bfd95998084b1,mixed,product_quality,"Product delivered before the set deadline, it only fell short regarding the product's characteristics, I expected a thicker curtain, I wouldn't buy this item again.",claude-code-session,1
+aa8907781ed98659d92da283009efd0d,negative,product_quality,I have already requested the return — The product sent is counterfeit,claude-code-session,1
+ac09147de9a0cdbc89ab8ca92d1f0c82,positive,general,"Good, I recommend it!!",claude-code-session,1
+add1e5acda5773b4811c2fb755617127,negative,delivery,product not delivered,claude-code-session,1
+ae12ad0fe1aca5c9731a48cbedd0e755,positive,general,"I'm still a customer, everything went well",claude-code-session,1
+ae93f71c72582cf1a1a2f65fb687b419,negative,delivery,"I didn't receive the product, I'm requesting a refund!",claude-code-session,1
+af3f5c0c1c21fcf744153e95b12cd31a,positive,product_quality,"All OK — The cover arrived as purchased, satisfactory quality.",claude-code-session,1
+b0d9f9fc750e2415e787cf439eaa4a4d,positive,product_quality,Good — Great product delivered on time,claude-code-session,1
+b0fd08c22ab26385dbb09838bf0f1738,negative,product_quality,"I sent an email complaining that my product had the label/code on the inside very damaged, looking as if the product had already been used a lot. I'd like an explanation because I bought it new.",claude-code-session,1
+b1311ded9a365b87ecef3b95511db5bf,negative,product_quality,The backpack's material left something to be desired.,claude-code-session,1
+b3173575033936bce1045ffe655adcf2,negative,delivery,This is already the second product I buy where they report it delivered without the product having been delivered.,claude-code-session,1
+b370661a9286b652f0ee547c13cb03d1,negative,product_quality,"Defective product — The product arrived with the buttons not working. Since then I have been trying to contact lannister to exchange the product, without success.",claude-code-session,1
+b4896cdfac8760c6c20d2f2014709aea,positive,product_quality,"Very good — I received the product, installed it and everything is fine. Within the deadline",claude-code-session,1
+b52e83ec184ac5b005c8a2cbd23ba46a,positive,general,Very good,claude-code-session,1
+b5b0ec8502a19f8861292e17cb5b563f,positive,delivery,"Purchase made and goods received on time, very good, I recommend it.",claude-code-session,1
+b7b74bb522a4e3e744a485527e07a817,negative,wrong_or_missing_item,"The sword that arrived wasn't the one I ordered, it came in a different colour and size.",claude-code-session,1
+b7ea349809f2499dc9070ef311638a5d,positive,general,Great,claude-code-session,1
+b8024cabec0601e21c93df35acb9e1a9,negative,delivery,"I bought it and didn't receive the product, I'm going to take it to court",claude-code-session,1
+b89b4460c0b589c0614d9b0126ae755a,positive,product_quality,"Good product, in line with the price",claude-code-session,1
+b8a36aa1b77a98e947fcc51e69747530,positive,general,Excellent,claude-code-session,1
+b8ae7eb186dac68ab650a7a77b2be1c9,negative,product_quality,Within normal — The product doesn't match what was expected!,claude-code-session,1
+b8f705cd056211888cffa41a2122fb2e,positive,seller_service,"Very good — The store deserves congratulations along with the post office, very good product",claude-code-session,1
+bb720944f2d19acb9517021ffd5063dc,negative,product_quality,It should be a bit firmer. When we pay for shipping we expect to receive it at home. To go to the post office I had to take 2 minibuses and the metro (both ways). That's not right,claude-code-session,1
+bcf256cea811085b767f0de1bfdd0384,positive,product_quality,"The product came as agreed, and with great quality.",claude-code-session,1
+bd5c76e1a8c2936878f150451d061d88,negative,wrong_or_missing_item,"The product came wrong,",claude-code-session,1
+bd9fefd22d37f7517e49ff68f43def15,mixed,delivery,"It was within the deadline, but I think it could have been delivered sooner.",claude-code-session,1
+c16e56b93a73482b1961e460b1a9fcd6,negative,wrong_or_missing_item,"of the products listed above I only received the shampoo, I'm still waiting for the thermal cap to this day...",claude-code-session,1
+c18636fae81657b65354a21fdffed916,mixed,delivery,"Waiting time — Great quality product, arrived as described. But the delivery took longer than expected. The delivery time left something to be desired. VERY SLOW",claude-code-session,1
+c1b5d083a3cf11abfe53524dc35dca8f,negative,wrong_or_missing_item,"The products got lost, only the red sheet set arrived, and the invoice described two bed sets and only one came; the black one and the towels are missing.",claude-code-session,1
+c1c2edb8aa36a8fe4afb1a2055a0e598,positive,general,I liked it and would buy again,claude-code-session,1
+c1cb7fdf7c8144bbd0e47464b7fbf6c5,neutral,general,I'd like to know what happened,claude-code-session,1
+c200b35d1eb6bacb73eb7d1d6a12b67a,negative,wrong_or_missing_item,"In the ad on the site each kit contains a fuser roller and a pressure roller, I ordered two and only one came in the box, the invoice listed two kits.",claude-code-session,1
+c38a3b6480e18295eac0f29ec7822def,negative,product_quality,I want to return it because everything came different and very ugly for a child,claude-code-session,1
+c3c11948ab59fd1b7854a907740004a7,negative,wrong_or_missing_item,"I bought the product a second time because the outsourced company delivered the wrong one and didn't exchange it, and the second time the product came wrong too. Anyway, I don't trust targaryen",claude-code-session,1
+c557f1f8cc26c5d4acc80a7d850c1305,positive,product_quality,Great product,claude-code-session,1
+c6eb0a009b8da1bba0f65abf4957575d,negative,delivery,The product was not delivered on the expected date and the seller didn't tell me the reasons for the delay.,claude-code-session,1
+c74d80686fb27fa6299b68d15cc3f800,negative,delivery,"I paid shipping to receive it between the 16th and 22nd. The latest date was the 27th. Today is the 29th and nothing. I'm upset, it was a gift and it never arrives.",claude-code-session,1
+c7bd0f7e68f485c80c51a01def7172ee,negative,product_quality,"Bad — Product different from what was advertised. Very hard to return it, the site doesn't get in touch or answer my complaints. I don't recommend it!!!",claude-code-session,1
+c8164d4f454c84c063f7a3f4f725c31b,negative,product_quality,"the mouse I wanted came wrong, because the specifications aren't clear, I thought the mouse was wireless but it is wired. But according to what was ""ordered"", it came right.",claude-code-session,1
+c83d01e0d20a8e683130359049741d3f,mixed,delivery,"I like the store and the products, but I still haven't received mine.",claude-code-session,1
+c899c8813995b5e0620eda0120294e91,positive,product_quality,Quality products... highly recommended,claude-code-session,1
+c9990cefea383565c583eb05325cab2d,negative,delivery,"Not yet, because the hangers didn't arrive; as soon as I use them I'll come back here to rate",claude-code-session,1
+c9f806bd6910b2d673b98b82d87843db,negative,product_quality,I had a problem with the product and have already opened a complaint with stark,claude-code-session,1
+ca12c8a8f91388ea4ef50ddc7af1a1c2,positive,product_quality,"Satisfied — Great product, everything as in the ad, and the delivery was very fast, I'm very satisfied",claude-code-session,1
+ca8b93f626069ca2595f1c4c104190f9,positive,delivery,"Highly recommended — I recommend the company for its speed, packaging and excellent service. I wish you success and good business.",claude-code-session,1
+cad9ca7f182cf2861811d5855862e2fd,positive,delivery,I like buying from this store because we don't need to chase the delivery,claude-code-session,1
+cadf9426a5d725e7cb645fc3c9cb0b20,positive,other,"Value for money, it's worth it.",claude-code-session,1
+cb770d3c460119845882aa6a04606e56,negative,product_quality,product came damaged,claude-code-session,1
+cc447715e2aec11c07298c307536d02c,negative,wrong_or_missing_item,"I bought a table set meant to be of different heights, but they ended up sending the legs for both tables in the same size.",claude-code-session,1
+cd6ddf349c0230bbd2127865d119e492,negative,delivery,the product didn't arrive,claude-code-session,1
+cdbbdc7496399e37384c819fa823db74,positive,general,Thank you,claude-code-session,1
+cfa79cb33e0df39678b56d4cd070f3f7,negative,seller_service,"Product unavailable — I was told the product was out of stock, I didn't receive it, the purchase needs to be cancelled.",claude-code-session,1
+d065a52df69a90597f9de5b43ab6bbe7,negative,delivery,"I bought from stark thinking it would be delivered by a carrier, and they sent it by post, and there's no post office where I live, I had to cross the city to pick it up at the post office and come back by bus",claude-code-session,1
+d13d4b738793df3961abd83e69dfebab,neutral,product_quality,"I gave 3 stars because I still have to install the product, and I will only know its quality after installing it, which takes a while",claude-code-session,1
+d309f814b7a5800e12fb75908a5c0d57,positive,seller_service,"Seller targaryen, I really liked doing business with the company. stark too, always very correct.",claude-code-session,1
+d427002bb47b736fa7b521bc26c3009d,negative,delivery,Upset — Is the product still going to arrive?,claude-code-session,1
+d441ce1913115dc60f3fbd78d0ab376e,positive,product_quality,I bought this chair for my daughter and she loved it! Very well built and comfortable.,claude-code-session,1
+d4553ac6c45ff32d062a6e09863e445e,mixed,product_quality,"Pretty, but very simple — Finish and fragility of the product in line with the price paid! It came wrapped in plastic, very tacky",claude-code-session,1
+d54fba66ce0ba0004bcdf58476d5f51b,negative,delivery,I didn't receive the product,claude-code-session,1
+d75ccf43316ba5d0b5642c6590469038,negative,delivery,"The delivery deadline has already passed, but my purchase still hasn't been delivered to me. I'm still waiting. I hope it arrives on Monday.",claude-code-session,1
+d769d22720bf82190cb528aec9b264e1,negative,other,"There was just one problem with the packaging, because the product arrived a bit unglued",claude-code-session,1
+d79f9c99bdffaf88e97482766e6324a9,positive,delivery,"Arrived on time, great product, I'm already using it",claude-code-session,1
+d90f920d62afa397559f1e46240c2a84,negative,product_quality,"I always bought from Shop time. When we look at the item on the site, it gives the impression that it is fabric and not vinyl.",claude-code-session,1
+d972abebeb873c1b87b1fbaf882104ea,mixed,delivery,"There was a small discrepancy in the delivery, but I managed to resolve this friction together with the store. Overall it met my needs.",claude-code-session,1
+d98ae1d181d9230e7de946c2ef9f8231,positive,delivery,I RECOMMEND IT — FAST DELIVERY,claude-code-session,1
+dac10750804258eac8498fa2ad8c5947,positive,general,Excellent,claude-code-session,1
+dad7e57b753c8387959f0fc0da5e9e77,negative,delivery,"today, 22/06/17, I haven't received my order, while the lannister site says the parcel was delivered on 18/06/17; I don't know what is happening, please check with your representative,",claude-code-session,1
+db27636ea82d449a9e0d1bea6b419465,negative,delivery,MY PURCHASE DIDN'T ARRIVE!!,claude-code-session,1
+dd4bf233838e89a87e45fad7a6180fbe,mixed,product_quality,I recommend it — the store met the deadline but the product is very small,claude-code-session,1
+dde3e3744e0fe773d9929e458f2229db,positive,general,"I liked it a lot, it's worth trusting!",claude-code-session,1
+ddf5fe1190b81d358a37ae1c2e4f22c1,positive,general,I have always bought and never had any problem....,claude-code-session,1
+de3bd84fd91ea1554b2afefc0e6513c4,negative,delivery,"It arrived, but that's not all that counts; although it was within the deadline, the delivery took long. Tracking you only get by calling lannister, which is why I didn't give fewer stars.",claude-code-session,1
+deaee74cbcf568d0e3fcca927a80b5b9,positive,delivery,Fast delivery and good product.,claude-code-session,1
+df7a795f9d82be7df76d20192e6ace08,negative,wrong_or_missing_item,"only half of the purchase came, who do I contact?",claude-code-session,1
+e06c059207dad93c6808dd69aad29217,neutral,general,Flour dispenser,claude-code-session,1
+e1db3dfe4999562ba222a60c4919e389,positive,product_quality,"I did a test and it is completely waterproof, very practical.",claude-code-session,1
+e2602ea0e89b5b0787597ee38ea88673,positive,product_quality,"The product hasn't been used yet, but as a first test it's as expected. The delivery time, on the other hand, was excellent, it arrived earlier than expected.",claude-code-session,1
+e26cd58c58f691ff001bfde31d5bcbf0,mixed,wrong_or_missing_item,"The glasses came in perfect condition and arrived very fast, but they came without the cleaning cloth",claude-code-session,1
+e2b8e7ace19be686157be608e40c55f3,positive,delivery,Fast delivery and a really cool product!!!,claude-code-session,1
+e35932244a72e142a1acd5503274ec91,negative,product_quality,I didn't like it — The cover didn't fit the Cosco baby car seat. I don't recommend it.,claude-code-session,1
+e377ec9a49e168616675455e17618c95,positive,product_quality,Great — Wonderful and practical to put in place.,claude-code-session,1
+e42fae5637cb7fdadbf376e39f237a5c,negative,wrong_or_missing_item,"I received the wrong product, I bought one model and another one came",claude-code-session,1
+e53edc824fcaec7c94f6ed8b5d91a657,positive,product_quality,"4 stars — Very good, high-quality product, I recommend it.",claude-code-session,1
+e54c77234bc659b805999a68b5ca8309,positive,general,ok,claude-code-session,1
+e7c054f53e3bf6882ed9fe134ed85e1e,negative,delivery,"The product was not delivered, and they didn't even give me an explanation after I complained about the delay.",claude-code-session,1
+e9c7b21eae49f95d880790cc9805bc68,negative,seller_service,I need contact phone numbers for baratheon's customer service or the seller. URGENT,claude-code-session,1
+ed6b240aa7ce2019fbb65188193916f8,negative,wrong_or_missing_item,"I bought two units, however I received only one. I sent an email to stark reporting it and so far I have not received any kind of explanation. I'm still waiting.",claude-code-session,1
+ed6b6af7d56b1160432ea95606077efd,positive,delivery,I received it before the deadline. I liked it a lot.,claude-code-session,1
+f042bb5075dfb84954525296fd81b347,negative,delivery,I still haven't received the product,claude-code-session,1
+f0fba7c0175b15de6421b036db026595,positive,delivery,"I received the product before the deadline, super fast delivery. Great product!",claude-code-session,1
+f1bb08d34c167438b95b9540427e93fa,negative,seller_service,I cancelled the purchase and you want to send it to me?,claude-code-session,1
+f1e5cd1574a6be811fc8e285ab492741,positive,delivery,The product arrived before the deadline set by the site.,claude-code-session,1
+f224c8466df0f44bfd4248ce6231563d,mixed,delivery,"The product, the Barbie Medical Case, is beautiful, perfect, our niece loved it... Only the delivery was late, probably because it was sent via PAC by the post office.",claude-code-session,1
+f272faf0d6c2675b1ae864670df2b101,negative,other,They should just put the watch in proper packaging. It came wrapped in plastic,claude-code-session,1
+f51d16fb3eb4b3677e9ac2dcd9dd720f,positive,product_quality,"Good product, does what I need; I haven't tested charging the battery with solar power yet.",claude-code-session,1
+f520e55a4ce578d8377f900801bad44a,negative,wrong_or_missing_item,"I bought 2 barbecue grills on the same day and in the same order, however only 1 has been delivered so far.",claude-code-session,1
+f6cb845333e7ee556a011e36d43e6d93,positive,product_quality,"Emoji backpack — Beautiful, sturdy backpack, delivery was fast",claude-code-session,1
+f75aab521da4dfd6300635009bcb5440,positive,delivery,Very fast delivery — Great purchase,claude-code-session,1
+f9a2c6858549ff7d8e8ff8ef60fe719c,positive,product_quality,"I received it but haven't installed it yet. It came as I imagined. Beautiful, I hope it works perfectly.",claude-code-session,1
+f9b97f92134a04c49b083c5f96c8ee05,negative,product_quality,"car mats — Contrary to what was advertised, the set of car mats did NOT fit the Citroen Aircross 2018 properly, especially the driver's one. Even after cutting parts of it, it didn't look right.",claude-code-session,1
+f9cda94d8da7e37d67a5de2f18226a80,positive,product_quality,"Very good — I liked the product, delivered on time",claude-code-session,1
+fa94454046a98c1d86197d7140eacfba,positive,seller_service,Good company to buy from,claude-code-session,1
+fb7a20b2ddddef07d278997e18e1cd16,negative,wrong_or_missing_item,"Incomplete delivery — The purchase was of 2 items, but I only received 1 and the invoice lists 2. I await an answer with the proper action.",claude-code-session,1
+fddef16292d80be8cefaa10341b4589f,negative,delivery,I just found the delivery very slow,claude-code-session,1
+ff473614c924ed0aa20f2143b560ab01,positive,product_quality,Excellent product,claude-code-session,1
+fff423fa29671178879573a06995b199,neutral,delivery,I'm waiting to receive the product,claude-code-session,1
