@@ -405,6 +405,7 @@ def feed_status(
     orders_loaded: int,
     added_columns: dict[str, list[str]],
     dropped_columns: dict[str, list[str]],
+    labels_loaded: int = 0,
 ) -> dict[str, object]:
     """This run's order count and column changes + the raw orders table as it is now.
 
@@ -419,6 +420,8 @@ def feed_status(
         raise ValueError(f"max order_purchase_timestamp is not a timestamp: {last_order_at!r}")
     return {
         "orders_loaded": orders_loaded,
+        # New review labels are new data too: Airflow and the prod deploy rebuild for them
+        "labels_loaded": labels_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -520,9 +523,9 @@ def main() -> None:
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
         status = orders_status(pipeline)
-    load_review_labels(pipeline, LABELS_DIR)
+    labels_loaded = load_review_labels(pipeline, LABELS_DIR)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded)))
 
 
 if __name__ == "__main__":

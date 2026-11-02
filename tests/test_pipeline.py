@@ -381,10 +381,10 @@ def test_review_labels_load_with_the_first_run(run) -> None:
     assert len({r[3] for r in rows}) == 1
 
 
-def test_unchanged_review_labels_are_not_reloaded(run, capsys: pytest.CaptureFixture[str]) -> None:
-    run("--until", "2016-09")
+def test_unchanged_review_labels_are_not_reloaded(run) -> None:
+    assert run("--until", "2016-09")["labels_loaded"] == 2
     before = raw_labels(run.db)
-    run("--until", "2016-09")  # also an order run that skips its load
+    assert run("--until", "2016-09")["labels_loaded"] == 0  # also an order run that skips its load
     assert raw_labels(run.db) == before
 
 
@@ -392,7 +392,7 @@ def test_new_label_batch_reloads_on_a_skipped_order_run(run, tmp_path: Path) -> 
     run()
     write_labels(tmp_path / "labels" / "batch_001.csv", [("rv_o4", "mixed")])
     status = run("--next")  # dump used up: orders skip, labels still load
-    assert status["orders_loaded"] == 0
+    assert (status["orders_loaded"], status["labels_loaded"]) == (0, 3)
     rows = raw_labels(run.db)
     assert [r[0] for r in rows] == ["rv_o1", "rv_o3", "rv_o4"]
     assert len({r[3] for r in rows}) == 1
