@@ -6,7 +6,7 @@ against each other and against the dbt project:
 - the product owner is the owner of the dbt groups,
 - the output contract describes the public dbt marts column for column (names,
   types, primary keys), so a model change that breaks the promise fails CI,
-- the input contract covers exactly the dbt sources,
+- the input contracts together cover exactly the dbt sources,
 - every consumer agreement (consumers/*.yaml) points to an existing port, a compatible
   contract version, a dbt exposure and metrics, and only uses promised columns,
 - the versioning rule of check_compatibility.py, and the product page builds.
@@ -36,6 +36,8 @@ DESCRIPTOR = PRODUCT_DIR / "olist-commerce.odps.yaml"
 ODPS_SCHEMA = PRODUCT_DIR / "odps-json-schema-v1.1.0.json"
 # dbt groups outside the Olist product: `platform` = how the platform runs (cost mart, D71)
 NOT_PRODUCT_GROUPS = {"platform"}
+# dbt sources outside the product: BigQuery's own job history, read by the cost mart (D71)
+NOT_PRODUCT_SOURCES = {"bigquery"}
 
 # dbt column data types (DuckDB and BigQuery spellings) → ODCS logical types
 LOGICAL_TYPES = {
@@ -176,13 +178,13 @@ def test_metrics_port_points_to_the_semantic_layer(product: dict[str, Any], mani
     assert manifest["metrics"], "the dbt project defines no metrics"
 
 
-def test_input_contract_covers_the_dbt_sources(
+def test_input_contracts_cover_the_dbt_sources(
     product: dict[str, Any], contracts: dict[str, dict[str, Any]], manifest: dict[str, Any]
 ) -> None:
-    (port,) = product["inputPorts"]
-    contract = contracts[port["contractId"]]
-    sources = {s["name"] for s in manifest["sources"].values() if s["source_name"] == "olist"}
-    assert {obj["physicalName"] for obj in contract["schema"]} == sources
+    promised = [obj["physicalName"] for port in product["inputPorts"] for obj in contracts[port["contractId"]]["schema"]]
+    sources = {s["name"] for s in manifest["sources"].values() if s["source_name"] not in NOT_PRODUCT_SOURCES}
+    assert len(promised) == len(set(promised)), "a table in two input contracts"
+    assert set(promised) == sources
 
 
 @pytest.fixture(scope="module")

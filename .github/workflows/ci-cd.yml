@@ -267,6 +267,9 @@ jobs:
       - name: Input data contract (raw)
         run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server local
 
+      - name: Input data contract (review labels)
+        run: uv run datacontract ci data-product/contracts/review-labels.odcs.yaml --server local
+
       - name: dbt deps
         working-directory: transform
         run: uv run dbt deps

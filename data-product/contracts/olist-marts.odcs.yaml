@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.1.0
+version: 1.2.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -437,3 +437,66 @@ schema:
           select count(*) from {schema}.{model}
           where months_since_first_order = 0 and active_customers <> cohort_size
         mustBe: 0
+
+  - name: fct_review_topics
+    physicalName: fct_review_topics
+    physicalType: table
+    description: >-
+      What customers write about: one row per order whose review text has a label (sentiment,
+      topic, English translation), next to the order's delivery outcome. LLM-labelled; see the
+      review-labels input contract.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_review_topics
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: review_id
+        logicalType: string
+        required: true
+      - name: purchase_date
+        logicalType: date
+      - name: customer_state
+        logicalType: string
+      - name: category_name
+        logicalType: string
+      - name: review_score
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 1
+          maximum: 5
+      - name: sentiment
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [positive, negative, mixed, neutral]
+            mustBe: 0
+      - name: topic
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [delivery, product_quality, wrong_or_missing_item, seller_service, general, other]
+            mustBe: 0
+      - name: translation_en
+        logicalType: string
+        required: true
+      - name: is_delivered
+        logicalType: boolean
+      - name: is_delivered_late
+        logicalType: boolean
+      - name: days_delivered_before_estimate
+        logicalType: integer
+      - name: labeled_by
+        logicalType: string
+    quality:
+      - *not_empty_rule

@@ -76,6 +76,10 @@ jobs:
         if: steps.warehouse.outputs.available == 'true'
         run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server databricks-ci
 
+      - name: Input data contract (review labels)
+        if: steps.warehouse.outputs.available == 'true'
+        run: uv run datacontract ci data-product/contracts/review-labels.odcs.yaml --server databricks-ci
+
       - name: dbt deps
         if: steps.warehouse.outputs.available == 'true'
         working-directory: transform

@@ -8,14 +8,14 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: olist-commerce
 name: Olist commerce analytics
-version: 1.1.0
+version: 1.2.0
 status: active
 domain: commerce
 type: aggregate
 description:
   purpose: >-
     Trusted, tested analytics data on the orders of Olist, a Brazilian marketplace: sales,
-    delivery performance, reviews and customers, as a star schema and as metric definitions.
+    delivery performance, reviews (scores and what their texts are about) and customers, as a star schema and as metric definitions.
   limitations: >-
     Public dump 2016-09 to 2018-10, replayed one month per hour by a local Airflow, so the live
     data stops moving while that machine is off. People are pseudonymized by the source.
@@ -45,6 +45,12 @@ inputPorts:
     customProperties:
       - property: loader
         value: dlt (ingestion/pipeline.py), Kaggle dataset olistbr/brazilian-ecommerce
+  - name: review-labels
+    contractId: review-labels
+    version: 1.0.0
+    customProperties:
+      - property: loader
+        value: dlt (ingestion/pipeline.py), label batches in the repo (ingestion/review_labels), LLM-labelled
 
 outputPorts:
   - name: marts
@@ -53,10 +59,12 @@ outputPorts:
       Star schema in BigQuery (prod and hourly live feed) and DuckDB (local); also built and
       contract-tested weekly on Databricks (CI only).
     contractId: olist-marts
-    version: 1.1.0
+    version: 1.2.0
     inputContracts:
       - id: olist-raw
         version: 1.0.2
+      - id: review-labels
+        version: 1.0.0
     customProperties:
       - property: implementation
         value: dbt public models with enforced contracts (transform/models/marts)
@@ -68,7 +76,7 @@ outputPorts:
       warehouse.
     inputContracts:
       - id: olist-marts
-        version: 1.1.0
+        version: 1.2.0
     authoritativeDefinitions:
       - type: implementation
         url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__semantic_models.yml
