@@ -9,8 +9,8 @@ from warehouse import LOST_STATUSES, period, period_filter, query, table
 st.title("Customers & sellers")
 lost = ", ".join(f"'{s}'" for s in LOST_STATUSES)
 st.caption(
-    "A customer is a person (`customer_unique_id`): Olist's `customer_id` changes "
-    "with every order. Counts are within the selected period."
+    "A customer is a person (`customer_key`, a pseudonym of `customer_unique_id`, which the app "
+    "can't read): Olist's `customer_id` changes with every order. Counts are within the selected period."
 )
 
 kpi = kpis.customers(period())
@@ -30,10 +30,10 @@ c4.metric("Active sellers", f"{sellers_kpi.sellers:,.0f}", border=True)
 customer_states = query(f"""
     select
         c.state,
-        count(distinct o.customer_unique_id) as customers,
+        count(distinct o.customer_key) as customers,
         sum(case when o.order_status not in ({lost}) then o.order_amount end) as revenue
     from {table('fct_orders')} as o
-    inner join {table('dim_customers')} as c on o.customer_unique_id = c.customer_unique_id
+    inner join {table('dim_customers')} as c on o.customer_key = c.customer_key
     where {period_filter('o.purchase_date')}
     group by 1
     order by customers desc
