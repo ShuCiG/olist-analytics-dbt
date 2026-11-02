@@ -43,6 +43,9 @@ jobs:
     env:
       # Environment secret; the local equivalent is infra/terraform.tfvars
       TF_VAR_billing_account: ${{ secrets.BILLING_ACCOUNT }}
+      # The owner's Fine-Grained Reader on the PII policy tags (pii.tf); without it the
+      # plan would show those grants as to be destroyed
+      TF_VAR_owner_member: user:${{ secrets.IAM_OWNER }}
       TF_IN_AUTOMATION: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

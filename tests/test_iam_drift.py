@@ -172,6 +172,10 @@ def test_fine_grained_reader_granted_in_the_console_is_reported() -> None:
     ]
 
 
+def test_terraform_attribution_label_is_not_a_change() -> None:
+    assert check(api(labels={"goog-terraform-provisioned": "true"})) == []
+
+
 def test_service_agent_is_allowed() -> None:
     agent = f"serviceAccount:service-{NUMBER}@gcp-sa-bigquerydatatransfer.iam.gserviceaccount.com"
     assert check(api(extra_project=("roles/bigquerydatatransfer.serviceAgent", agent))) == []
