@@ -114,34 +114,48 @@ def next_batch(limit: int, out: Path) -> None:
     print(f"{len(open_keys)} texts -> {out}")
 
 
-def write_batch(labels_jsonl: Path, labeled_by: str) -> None:
-    groups = by_text(read_queue())
+def write_labels(
+    items: list[dict[str, str]], groups: dict[str, list[dict[str, str]]], labeled_by: str
+) -> Path | None:
+    """One new batch file: each label (by text `key`) for every review id with that text and no label yet.
+
+    Raises ValueError listing every bad item; returns None when nothing is new.
+    """
     existing = read_labels()
     rows: list[list[str | int]] = []
     errors: list[str] = []
-    for n, line in enumerate(labels_jsonl.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
-            continue
-        item = json.loads(line)
+    for n, item in enumerate(items, 1):
         key = item.get("key")
         if key not in groups:
-            errors.append(f"line {n}: unknown key {key!r}")
+            errors.append(f"item {n}: unknown key {key!r}")
             continue
-        errors += [f"line {n}: {e}" for e in check_label(item)]
+        errors += [f"item {n}: {e}" for e in check_label(item)]
         for review in groups[key]:
             if review["review_id"] not in existing:
                 rows.append([review["review_id"], item["sentiment"], item["topic"], item["translation_en"].strip(),
                              labeled_by, GUIDELINES_VERSION])
     if errors:
-        sys.exit("\n".join(errors))
+        raise ValueError("\n".join(errors))
     if not rows:
-        sys.exit("nothing new to write")
+        return None
     path = LABELS_DIR / f"batch_{datetime.now(UTC):%Y%m%dT%H%M%SZ}.csv"
     with path.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f, lineterminator="\n")
         w.writerow(LABEL_COLUMNS)
         w.writerows(sorted(rows))
     print(f"{len(rows)} reviews -> {path}")
+    return path
+
+
+def write_batch(labels_jsonl: Path, labeled_by: str) -> None:
+    lines = labels_jsonl.read_text(encoding="utf-8").splitlines()
+    items = [json.loads(line) for line in lines if line.strip()]
+    try:
+        path = write_labels(items, by_text(read_queue()), labeled_by)
+    except ValueError as e:
+        sys.exit(str(e))
+    if path is None:
+        sys.exit("nothing new to write")
     validate()
 
 
