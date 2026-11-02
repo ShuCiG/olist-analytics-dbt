@@ -227,11 +227,12 @@ run "drift_check" {
   command = plan
 
   # The drift check's account reads and never writes: viewer-type roles only
-  # (D60). serviceUsageConsumer lets it bill its API calls to the project.
+  # (D60). serviceUsageConsumer lets it bill its API calls to the project. Role names
+  # end in "Viewer" or, for some services, ".viewer" (roles/datacatalog.viewer).
   assert {
     condition = alltrue([
       for m in google_project_iam_member.terraform_plan :
-      can(regex("(Viewer|Reviewer|serviceUsageConsumer)$", m.role))
+      can(regex("(Viewer|Reviewer|\\.viewer|serviceUsageConsumer)$", m.role))
     ])
     error_message = "terraform-plan may hold viewer roles only on the project."
   }
