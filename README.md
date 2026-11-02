@@ -152,6 +152,8 @@ erDiagram
     fct_order_items_seller_as_of |o--|| fct_order_items : order_item_sk
     fct_order_items_seller_as_of }o--|| dim_sellers_history : seller_version_id
     fct_order_items }o--|| dim_date : purchase_date
+    fct_shipments }o--|| fct_orders : order_id
+    fct_shipments }o--|| dim_sellers : seller_id
 ```
 
 | Model | Grain | Notes |
@@ -164,6 +166,7 @@ erDiagram
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
 | `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) |
+| `fct_shipments` | order × seller | a seller's items in an order: seller (as of the purchase) and customer states, distance between their zip centroids (cross-engine haversine macro, same values on all four engines), delivery days and lateness; the dashboard shows delivery by distance band and the slowest routes ([D93](docs/DECISIONS.md#d93--2026-11-02--seller-to-customer-distance-cross-engine-haversine-fct_shipments)) |
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
