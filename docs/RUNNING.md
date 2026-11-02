@@ -302,6 +302,39 @@ variable `SNOWFLAKE_ACCOUNT` and secret `SNOWFLAKE_PRIVATE_KEY` (the PEM text of
 secret it skips. When the trial ends: delete the secret, `terraform destroy` in `infra/snowflake` (the database has
 `prevent_destroy`: remove it first), or keep everything on a paid account.
 
+## Engines comparison (re-measure)
+
+The README table "Same project, four engines" (D91): one commit, each engine's existing `raw`, `ci_eng_*` schemas.
+Use a profiles directory outside the repo with copies of `dev` (path to a copy of `data/olist.duckdb`), `ci`,
+`databricks` and `snowflake_ci` from `transform/profiles.yml`, each with `threads: 4` and schema / dataset `ci_eng`
+(Databricks: keep the token, catalog `olist`). Name them `ci_duckdb`, `ci`, `databricks_ci`, `snowflake_ci`: the
+drop macro accepts only these target names for `ci_*` schemas.
+
+```bash
+cd transform
+P=/path/to/eng-profiles                     # profiles.yml as above
+for t in ci_duckdb ci databricks_ci snowflake_ci; do
+  uv run dbt run --profiles-dir $P --target $t -s package:elementary -q        # not timed
+  date -u +%FT%TZ; time uv run dbt build --profiles-dir $P --target $t --exclude package:elementary
+  cp target/run_results.json $P/$t.run_results.json                           # elapsed_time, per-node times
+  [ $t = ci_duckdb ] || uv run dbt run-operation drop_isolated_datasets --profiles-dir $P --target $t
+done
+```
+
+Databricks Free Edition: log in to the workspace first if it was idle for a while; an unused workspace refuses even to
+start its warehouse (`denyReason: INACTIVE`, D91). The Python model leaves a notebook folder
+`/Users/<you>/dbt_python_models/olist/ci_eng_marts`: delete it in the workspace browser.
+
+Cost of each build, by its UTC time window:
+
+- BigQuery: `select count(*), sum(total_bytes_billed) from region-eu.INFORMATION_SCHEMA.JOBS_BY_USER where
+  creation_time between <start> and <end> and job_type = 'QUERY'`.
+- Snowflake (as `ACCOUNTADMIN`; `ACCOUNT_USAGE` lags up to ~3 h): warehouse up / down times from
+  `snowflake.account_usage.warehouse_events_history`, credits per hour from `warehouse_metering_history`, per query
+  from `query_attribution_history`. X-Small Gen2 = 1.35 credits/h.
+- Databricks: `select usage_start_time, sku_name, usage_quantity from system.billing.usage where usage_date = <day>`
+  (hourly rows, a few hours late). Free Edition bills nothing.
+
 ## Airflow
 
 ```bash

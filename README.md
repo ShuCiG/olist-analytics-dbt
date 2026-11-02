@@ -36,7 +36,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **One codebase, four warehouses.** The same dbt models run on DuckDB, BigQuery, Databricks and Snowflake with identical
   mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
   Databricks serverless and DuckDB. On Snowflake the project also runs inside the warehouse (dbt Projects on
-  Snowflake), scheduled by a Snowflake task graph that emails its failures. → [Snowflake](#snowflake-inside-the-warehouse)
+  Snowflake), scheduled by a Snowflake task graph that emails its failures. → [Snowflake](#snowflake-inside-the-warehouse),
+  [time and cost per engine](#same-project-four-engines)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets, with PR comments on what the change does to the marts
   (data diff vs prod) and what it bills. Every merge: prod deploy, docs, Airflow image to GHCR.
@@ -445,10 +446,31 @@ On a Snowflake trial account the project runs three ways, with the same marts ro
   ([`dbt_projects_profiles.yml`](transform/dbt_projects_profiles.yml)). `EXECUTE DBT PROJECT` builds it in 74 s.
 - **Tasks instead of Airflow**: [`snowflake/tasks.sql`](snowflake/tasks.sql) runs Elementary's models, then
   `dbt build`, daily on the X-Small warehouse; a finalizer task emails the failed tasks with dbt's error
-  (task error integrations take cloud queues only). ~0.05 credits a run.
+  (task error integrations take cloud queues only). ~0.075 credits a run, ~2.3 a month
+  ([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)).
 
 The account is code ([`infra/snowflake`](infra/snowflake)): warehouse with 60 s auto-suspend, an account-wide
 resource monitor (20 credits a month), roles, key-pair service users, the email integration.
+
+## Same project, four engines
+
+One commit, the full dump already in each engine's `raw` (same row counts on all four), 4 threads, Elementary's
+tables built first and not timed, then `dbt build --exclude package:elementary`
+([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)):
+
+| | DuckDB | Snowflake | BigQuery | Databricks |
+|---|---|---|---|---|
+| Runs on | a laptop, in process | X-Small Gen2 warehouse (trial, AWS eu-central-1) | on-demand, EU | Free Edition, serverless 2X-Small SQL warehouse (AWS us-east-2) |
+| `dbt build` (wall clock) | 38 s (48 s) | 108 s (126 s) | 150 s (165 s) | 294 s (315 s) |
+| without Elementary's on-run-end upload | 26 s | 66 s | 102 s | 219 s |
+| Result | PASS 194, WARN 7 | PASS 179, WARN 7 | PASS 179, WARN 7 | PASS 194, WARN 7 |
+| Cost of one build | none | 0.063 credits: 168 s of warehouse time incl. the 60 s auto-suspend (≈ $0.17–0.25 at list price) | 2.74 GiB billed by 294 jobs, most at the 10 MiB minimum (≈ $0.017 at list price, $0 in the free tier) | DBU_CELL |
+| What the engine needed | the reference: dev and every PR | integer division is `NUMBER(p, 6)` → `to_float()`; `TIMESTAMP_LTZ` for `_loaded_at`; one `week_of_year` for all engines ([D85](docs/DECISIONS.md#d85--2026-10-30--snowflake-as-a-fourth-engine-dbt-core-dbt-projects-on-snowflake-a-task-graph), [D86](docs/DECISIONS.md#d86--2026-10-31--one-week_of_year-on-every-engine)) | no parameterized types in `CAST` → `to_money()` dispatch, contract types per engine ([D15](docs/DECISIONS.md#d15--2026-10-11--bigquery-targets-and-cross-db-types)); day partitions on raw ([D70](docs/DECISIONS.md#d70--2026-10-25--raw-order-tables-partitioned-by-load-day-incremental-filter-that-prunes)); no Python model ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) | liquid clustering instead of partitions, `timestamp` / `string` types ([D58](docs/DECISIONS.md#d58--2026-10-21--databricks-as-a-third-engine-free-edition)); the Python model as a serverless notebook job ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) |
+
+DuckDB and Databricks also build the Python RFM model and its 14 tests (66 s of Databricks' time as a serverless
+job). Otherwise the slowest node on every engine is Elementary's on-run-end hook, which uploads the run's results to
+its tables: 12 s on DuckDB, 42–75 s on the cloud engines. The cloud times are mostly per-query overhead, not data:
+BigQuery processed 0.66 GiB for the whole build.
 
 ## Dashboard
 
