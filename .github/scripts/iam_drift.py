@@ -157,8 +157,11 @@ def read_live(session: Any, m: Managed) -> Live:
         for entry in dataset.get("access", []):
             role = DATASET_ROLES.get(entry["role"], entry["role"])
             live.bindings.add((f"dataset/{ds}", role, dataset_member(entry)))
-        if dataset.get("labels"):
-            live.labels[ds] = dataset["labels"]
+        # The Google provider labels what Terraform creates (pii_keys, D94); any other
+        # label was set outside Terraform
+        labels = {k: v for k, v in dataset.get("labels", {}).items() if k != "goog-terraform-provisioned"}
+        if labels:
+            live.labels[ds] = labels
 
     for name in m.buckets:
         bucket = get(f"https://storage.googleapis.com/storage/v1/b/{name}/iam")
