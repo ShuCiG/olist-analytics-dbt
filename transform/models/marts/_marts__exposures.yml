@@ -12,8 +12,9 @@ exposures:
       Streamlit app (`dashboard/`) with four data-product pages: sales overview
       (orders, revenue, top categories, payment mix), delivery & reviews (late
       rate, days to deliver, review scores of late vs on-time orders, late rate
-      by state), customers & sellers (repeat rate, spend, customer states, seller
-      map, top sellers), cohorts & retention (retention heatmap and curve, value
+      by state, delivery time and late rate by seller-to-customer distance,
+      slowest routes), customers & sellers (repeat rate, spend, customer states,
+      seller map, top sellers), cohorts & retention (retention heatmap and curve, value
       per acquired customer). Reads DuckDB locally; deployed, it reads the BigQuery
       marts of the Airflow `airflow` target (`airflow_marts`, refreshed hourly),
       or prod `marts` via the `MARTS_DATASET` setting.
@@ -26,3 +27,4 @@ exposures:
       - ref('dim_sellers')
       - ref('dim_products')
       - ref('fct_customer_cohorts')
+      - ref('fct_shipments')

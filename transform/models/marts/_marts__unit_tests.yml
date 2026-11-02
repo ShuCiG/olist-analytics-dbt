@@ -211,3 +211,31 @@ unit_tests:
         - {cohort_month: 2018-02-01, months_since_first_order: 1, activity_month: 2018-03-01, cohort_size: 1,
            active_customers: 0, retention_rate: 0, orders_count: 0, revenue: 0,
            cumulative_revenue: 40.00, cumulative_revenue_per_customer: 40.00}
+
+  - name: test_fct_shipments_one_row_per_seller_and_distance_band
+    model: fct_shipments
+    description: >
+      An order with two sellers is two shipments, each with its own item count and state. A seller
+      next to the customer falls in the first band (same point: 0 km); one without coordinates gets
+      no distance and the band 'unknown'.
+    given:
+      - input: ref('fct_order_items_seller_as_of')
+        rows:
+          - {order_id: o1, seller_id: s_near, seller_state: SP, seller_latitude: -23.55, seller_longitude: -46.63}
+          - {order_id: o1, seller_id: s_near, seller_state: SP, seller_latitude: -23.55, seller_longitude: -46.63}
+          - {order_id: o1, seller_id: s_lost, seller_state: RJ, seller_latitude: null, seller_longitude: null}
+      - input: ref('int_orders_joined_to_customers')
+        rows:
+          - {order_id: o1, zip_code_prefix: '01001', state: SP, purchased_at: 2018-01-01 10:00:00}
+      - input: ref('int_orders_delivery_metrics')
+        rows:
+          - {order_id: o1, is_delivered: true, days_to_deliver: 3, is_delivered_late: false}
+      - input: ref('int_zip_codes_located')
+        rows:
+          - {zip_code_prefix: '01001', latitude: -23.55, longitude: -46.63}
+    expect:
+      rows:
+        - {order_id: o1, seller_id: s_near, items_count: 2, seller_state: SP, is_same_state: true, distance_km: 0,
+           distance_band: '0-100 km', days_to_deliver: 3}
+        - {order_id: o1, seller_id: s_lost, items_count: 1, seller_state: RJ, is_same_state: false,
+           distance_km: null, distance_band: unknown, days_to_deliver: 3}

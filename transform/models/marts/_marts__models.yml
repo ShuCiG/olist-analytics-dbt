@@ -817,3 +817,93 @@ models:
       - name: is_seller_version_current
         description: False when the seller has changed (or disappeared) since the purchase.
         data_type: boolean
+
+  - name: fct_shipments
+    description: >
+      Delivery performance against distance: one row per shipment, i.e. the items of one seller in
+      one order. The seller is located where it was at the purchase (SCD2 history), the customer at the
+      order's zip prefix; both at their zip centroid, so `distance_km` is centroid to centroid
+      (haversine, `haversine_km`). Olist records one delivery date per order, shared by its shipments.
+    config:
+      group: orders
+      contract:
+        enforced: true
+    columns:
+      - name: shipment_sk
+        description: Surrogate key (order_id, seller_id). Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_type: string
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: seller_id
+        description: The seller shipping these items.
+        data_type: string
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_sellers')
+                field: seller_id
+      - name: purchase_date
+        description: Order purchase date.
+        data_type: date
+      - name: seller_state
+        description: Seller state as of the purchase.
+        data_type: string
+      - name: customer_state
+        description: Two-letter state code of the customer's address on the order.
+        data_type: string
+      - name: is_same_state
+        description: Seller and customer in the same state; null if either state is unknown.
+        data_type: boolean
+      - name: distance_km
+        description: Great-circle distance from the seller's to the customer's zip centroid, km; null if either has no coordinates.
+        data_type: *float_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              description: >-
+                Shipments longer than 5,000 km, more than any distance within Brazil. A zip centroid
+                lies outside the country: geolocation has a few points abroad or at sea (source
+                defect, a handful of shipments); a jump means coordinates or the formula broke.
+              arguments:
+                min_value: 0
+                max_value: 5000
+              config:
+                severity: warn
+                meta: {alert_unit: shipments}
+      - name: distance_band
+        description: "Distance in bands: 0-100, 100-500, 500-1000, 1000-2000, 2000+ km, or unknown."
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['0-100 km', '100-500 km', '500-1000 km', '1000-2000 km', '2000+ km', unknown]
+      - name: items_count
+        description: Order items this seller ships in the order.
+        data_type: bigint
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+      - name: is_delivered
+        description: True if the order has a delivery timestamp.
+        data_type: boolean
+      - name: days_to_deliver
+        description: Days from purchase to delivery; null if not delivered.
+        data_type: bigint
+      - name: is_delivered_late
+        description: Delivered after the estimated date (date comparison); false if not delivered.
+        data_type: boolean

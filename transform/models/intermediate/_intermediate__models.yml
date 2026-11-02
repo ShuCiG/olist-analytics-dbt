@@ -69,9 +69,10 @@ models:
 
   - name: int_zip_codes_located
     description: One centroid (avg lat/lng) per zip code prefix.
+    # Protected, not private: fct_shipments (group orders) locates the customer's zip
     config:
       group: parties
-      access: private
+      access: protected
     columns:
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }}"
