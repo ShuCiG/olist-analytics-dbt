@@ -82,3 +82,25 @@ output "pii_policy_tags" {
   description = "Policy tag resource names for dbt (transform/dbt_project.yml, var pii_policy_tags)"
   value       = { for tag, t in google_data_catalog_policy_tag.pii : tag => t.name }
 }
+
+# The secret behind `customer_key` (transform/macros/customer_key.sql, D94): one
+# value in pii_keys.customer_key, generated inside BigQuery by the owner once
+# (infra/README.md) and never written anywhere else; Terraform owns the dataset and
+# its readers, not the value. dbt-runner reads it through its project-level
+# dataEditor, the owner as project owner; CI needs it so its customer_key equals
+# prod's (the PR data diff compares them).
+resource "google_bigquery_dataset" "pii_keys" {
+  dataset_id  = "pii_keys"
+  location    = var.location
+  description = "Secret key of the customer_key pseudonym (D94). Readable by the accounts that build only."
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "google_bigquery_dataset_iam_member" "pii_keys_ci_reader" {
+  dataset_id = google_bigquery_dataset.pii_keys.dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_service_account.this["olist-ci"].member
+}

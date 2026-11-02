@@ -111,7 +111,7 @@ schema:
         logicalType: string
         required: true
         classification: internal
-        description: Pseudonym of the person (md5 of customer_unique_id); readable without access to the id.
+        description: Pseudonym of the person (keyed SHA-256 of customer_unique_id); readable without access to the id.
         relationships:
           - type: foreignKey
             to: dim_customers.customer_key
@@ -294,7 +294,7 @@ schema:
         required: true
         unique: true
         classification: internal
-        description: Pseudonym of the person (md5 of customer_unique_id); readable without access to the id.
+        description: Pseudonym of the person (keyed SHA-256 of customer_unique_id); readable without access to the id.
       - name: zip_code_prefix
         logicalType: string
         classification: restricted

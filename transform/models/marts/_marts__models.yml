@@ -53,7 +53,7 @@ models:
             warn_unenforced: false
         data_tests: [unique, not_null]
       - name: customer_key
-        description: "Pseudonym of the person: md5 of `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
+        description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
         data_type: string
         data_tests: [unique, not_null]
       - name: zip_code_prefix
@@ -455,7 +455,7 @@ models:
         data_type: string
         policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
       - name: customer_key
-        description: "Pseudonym of the person: md5 of `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
+        description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
         data_type: string
       - name: order_status
         description: "{{ doc('order_status') }}"

@@ -320,7 +320,8 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
 - **Column-level security on BigQuery:** the columns the output contract classifies `restricted` (the person id,
   the customer's address) carry Data Catalog policy tags, set by dbt on every build from a taxonomy in Terraform.
   Only the prod writer, CI and the owner may read them; the dashboard's account gets "access denied" there and
-  counts and joins people on `customer_key`, a hash of the id that dbt adds next to it. A test keeps
+  counts and joins people on `customer_key`, a SHA-256 of the id with a secret key that only lives in a BigQuery
+  table the build accounts can read (a plain hash of a public id would be reversible). A test keeps
   `restricted` and the tags equal, and the daily drift check covers who holds the tags
   ([D94](docs/DECISIONS.md#d94--2026-11-02--column-level-security-for-person-related-columns-policy-tags-customer_key)).
 

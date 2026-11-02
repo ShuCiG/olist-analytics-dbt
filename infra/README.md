@@ -9,7 +9,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `job_history.tf` | custom role `jobHistoryViewer` (`bigquery.jobs.listAll` only) for `dbt-runner`: the cost mart reads the project's job history (D71) |
-| `pii.tf` | column-level security (D94): taxonomy `olist-pii` with policy tags `person_id` and `person_location`, Fine-Grained Reader for `dbt-runner`, `olist-ci` and the owner (`owner_member` in `terraform.tfvars`), custom role `policyTagUser` (attach tags to columns) |
+| `pii.tf` | column-level security (D94): taxonomy `olist-pii` with policy tags `person_id` and `person_location`, Fine-Grained Reader for `dbt-runner`, `olist-ci` and the owner (`owner_member` in `terraform.tfvars`), custom role `policyTagUser` (attach tags to columns), dataset `pii_keys` with the secret behind `customer_key` (readable by `dbt-runner`, `olist-ci`, the owner) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
 | `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
@@ -22,6 +22,17 @@ Out of scope on purpose:
 - **Service account keys.** A key made by Terraform is stored in the state in plain text. GitHub Actions needs none (`wif.tf`); the local Airflow stack and Streamlit use keys created in the console.
 - **`ci_*` datasets.** Each lives for one PR CI run (`drop_isolated_datasets --target ci`).
 - **Tables.** dlt and dbt own everything inside the datasets.
+
+## The `customer_key` secret (once)
+
+After the first apply of `pii.tf`, create the key inside BigQuery; its value never leaves it (D94):
+
+```bash
+bq query --use_legacy_sql=false --project_id=olist-analytics-dbt-472315   'create table pii_keys.customer_key as select to_hex(sha256(generate_uuid() || generate_uuid())) as secret'
+```
+
+Replacing it changes every `customer_key` in the next build (fine for the dashboard, which reads the key and its
+join partner from the same build).
 
 ## Run
 
