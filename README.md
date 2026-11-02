@@ -46,7 +46,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 150 data tests, 8 unit tests, enforced model contracts, 278 Python tests; known
+- **Data quality at every layer.** 163 data tests, 9 unit tests, enforced model contracts, 279 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -121,14 +121,14 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | | Port | Contract / definition | What it says |
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
-| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 5 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
+| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 7 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__semantic_models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
-| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 29 columns and 11 metrics it relies on |
+| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 44 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 170 + 201 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 170 + 277 checks on the data;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -256,13 +256,13 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **151 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 4 singular tests; 9 more on the cost mart in prod | every `dbt build` |
-| **8 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention | every `dbt build` |
+| **163 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod | every `dbt build` |
+| **9 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 411 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 447 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **278 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **279 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
