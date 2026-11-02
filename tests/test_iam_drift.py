@@ -23,6 +23,9 @@ READER = f"dashboard-reader@{P}.iam.gserviceaccount.com"
 BUCKET = f"{P}-tfstate"
 ICEBERG = f"{P}-iceberg"
 CONN = f"https://bigqueryconnection.googleapis.com/v1/projects/{P}/locations/EU/connections/iceberg:getIamPolicy"
+TAG = f"projects/{P}/locations/eu/taxonomies/111/policyTags/222"
+TAG_IAM = f"https://datacatalog.googleapis.com/v1/{TAG}:getIamPolicy"
+DATA_POLICY_IAM = f"https://bigquerydatapolicy.googleapis.com/v1/projects/{P}/locations/eu/dataPolicies/person_id_sha256:getIamPolicy"
 
 
 def resource(type_: str, **values: Any) -> dict[str, Any]:
@@ -54,6 +57,21 @@ STATE = {
                     role="roles/bigquery.connectionAdmin",
                     member=f"serviceAccount:{RUNNER}",
                 ),
+                resource("google_data_catalog_policy_tag", name=TAG),
+                resource(
+                    "google_data_catalog_policy_tag_iam_member",
+                    policy_tag=TAG,
+                    role="roles/datacatalog.categoryFineGrainedReader",
+                    member=f"serviceAccount:{RUNNER}",
+                ),
+                resource("google_bigquery_datapolicy_data_policy", location="eu", data_policy_id="person_id_sha256"),
+                resource(
+                    "google_bigquery_datapolicy_data_policy_iam_member",
+                    location="eu",
+                    data_policy_id="person_id_sha256",
+                    role="roles/bigquerydatapolicy.maskedReader",
+                    member=f"serviceAccount:{READER}",
+                ),
                 resource("google_billing_account_iam_member", billing_account_id="000000-000000-000000", role="roles/billing.viewer", member="serviceAccount:tp@x"),
                 resource("google_iam_workload_identity_pool", name=f"projects/{NUMBER}/locations/global/workloadIdentityPools/github"),
             ]
@@ -71,6 +89,7 @@ def api(
     labels: dict | None = None,
     extra_sa: str | None = None,
     extra_connection: tuple[str, str] | None = None,
+    extra_tag: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """Live API responses as they look today, plus one optional change."""
     project = [("roles/bigquery.jobUser", f"serviceAccount:{RUNNER}"), ("roles/owner", f"user:{OWNER}")]
@@ -91,6 +110,8 @@ def api(
             ("roles/storage.legacyBucketOwner", f"projectOwner:{P}"), ("roles/storage.objectUser", "serviceAccount:bqcx@x")
         ),
         CONN: policy(("roles/bigquery.connectionAdmin", f"serviceAccount:{RUNNER}"), *([extra_connection] if extra_connection else [])),
+        TAG_IAM: policy(("roles/datacatalog.categoryFineGrainedReader", f"serviceAccount:{RUNNER}"), *([extra_tag] if extra_tag else [])),
+        DATA_POLICY_IAM: policy(("roles/bigquerydatapolicy.maskedReader", f"serviceAccount:{READER}")),
         "https://cloudbilling.googleapis.com/v1/billingAccounts/000000-000000-000000:getIamPolicy": policy(
             ("roles/billing.admin", f"user:{OWNER}"), ("roles/billing.viewer", "serviceAccount:tp@x")
         ),
@@ -151,6 +172,13 @@ def test_allowlisted_role_for_another_member_is_reported() -> None:
 def test_connection_grant_outside_terraform_is_reported() -> None:
     assert check(api(extra_connection=("roles/bigquery.connectionUser", "user:someone@example.com"))) == [
         "binding  connection/iceberg  roles/bigquery.connectionUser  user:someone@example.com"
+    ]
+
+
+def test_fine_grained_reader_granted_in_the_console_is_reported() -> None:
+    # Someone given the real PII outside Terraform
+    assert check(api(extra_tag=("roles/datacatalog.categoryFineGrainedReader", "user:someone@example.com"))) == [
+        "binding  policyTag/222  roles/datacatalog.categoryFineGrainedReader  user:someone@example.com"
     ]
 
 

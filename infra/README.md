@@ -9,6 +9,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `job_history.tf` | custom role `jobHistoryViewer` (`bigquery.jobs.listAll` only) for `dbt-runner`: the cost mart reads the project's job history (D71) |
+| `pii.tf` | column-level security (D94): taxonomy `olist-pii` with policy tags `person_id` and `person_location`, Fine-Grained Reader for `dbt-runner`, `olist-ci` and the owner (`owner_member` in `terraform.tfvars`), a SHA-256 masking policy on `person_id` for `dashboard-reader`, custom role `policyTagUser` (attach tags to columns) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
 | `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
