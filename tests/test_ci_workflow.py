@@ -262,7 +262,8 @@ def test_databricks_runs_on_main_only() -> None:
     # no pull_request trigger, so PR code never runs next to it
     workflow = _databricks()
     triggers = workflow[True]  # PyYAML reads the `on:` key as boolean True
-    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    # Weekly runs come from Cloud Scheduler as workflow_dispatch (D95)
+    assert set(triggers) == {"workflow_dispatch"}
     job = workflow["jobs"]["dbt-build-databricks"]
     assert job["environment"] == "databricks-ci"
     assert MAIN_ONLY in job["if"]
@@ -336,6 +337,10 @@ def test_drift_check_is_read_only_and_alerts() -> None:
     assert "-lock=false" in plan and "-detailed-exitcode" in plan and 'exit "$code"' in plan
     assert "apply" not in yaml.safe_dump(job)
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
+    # The watchdog of the weekly dispatch reads GitHub only: no GCP, no environment (D95)
+    weekly = jobs["weekly-runs"]
+    assert MAIN_ONLY in weekly["if"] and "environment" not in weekly and not _gcp_auth(weekly)
+    assert weekly["permissions"] == {"contents": "read", "actions": "read"}
 
 
 def test_schema_email_after_prod_load_without_the_prod_job_holding_smtp() -> None:
@@ -405,5 +410,3 @@ def test_databricks_skips_when_the_warehouse_is_unavailable() -> None:
     assert probe < names.index("Ingest raw data (dlt → Databricks)")
     for step in job["steps"][probe + 1:]:
         assert "steps.warehouse.outputs.available == 'true'" in step.get("if", ""), f"runs without a warehouse: {step['name']}"
-    cron = _databricks()[True]["schedule"][0]["cron"]
-    assert cron.split()[0] not in {"0", "00"}, "GitHub delays or drops schedules at the full hour"

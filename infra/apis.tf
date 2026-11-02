@@ -8,16 +8,23 @@ locals {
     "billingbudgets.googleapis.com",       # budget below
     "cloudbilling.googleapis.com",         # billing account IAM (drift.tf)
     "cloudresourcemanager.googleapis.com", # project IAM, Terraform itself
+    "cloudscheduler.googleapis.com",       # weekly dispatch jobs (scheduler.tf)
     "datacatalog.googleapis.com",          # policy tag taxonomy for column-level security (pii.tf)
     "iam.googleapis.com",                  # service accounts below
     "iamcredentials.googleapis.com",       # service account impersonation (wif.tf)
+    "secretmanager.googleapis.com",        # GitHub token of the weekly dispatch (scheduler.tf)
     "serviceusage.googleapis.com",         # quota override below
     "storage.googleapis.com",              # state bucket
     "sts.googleapis.com",                  # OIDC token exchange (wif.tf)
+    "workflowexecutions.googleapis.com",   # Scheduler starts the dispatch workflow (scheduler.tf)
+    "workflows.googleapis.com",            # the dispatch workflow (scheduler.tf)
   ])
 
   # Enabled by Terraform, not adopted (imports.tf)
-  services_added = toset(["sts.googleapis.com", "cloudbilling.googleapis.com", "datacatalog.googleapis.com"])
+  services_added = toset([
+    "sts.googleapis.com", "cloudbilling.googleapis.com", "datacatalog.googleapis.com",
+    "cloudscheduler.googleapis.com", "secretmanager.googleapis.com", "workflowexecutions.googleapis.com", "workflows.googleapis.com",
+  ])
 }
 
 resource "google_project_service" "this" {

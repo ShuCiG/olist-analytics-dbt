@@ -10,6 +10,7 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `job_history.tf` | custom role `jobHistoryViewer` (`bigquery.jobs.listAll` only) for `dbt-runner`: the cost mart reads the project's job history (D71) |
 | `pii.tf` | column-level security (D94): taxonomy `olist-pii` with policy tags `person_id` and `person_location`, Fine-Grained Reader for `dbt-runner`, `olist-ci` and the owner (`owner_member` in `terraform.tfvars`), custom role `policyTagUser` (attach tags to columns), dataset `pii_keys` with the secret behind `customer_key` (readable by `dbt-runner`, `olist-ci`, the owner) |
+| `scheduler.tf` | weekly engine runs (D95): Cloud Scheduler jobs → Cloud Workflows `github-dispatch` (`workflows/github_dispatch.yaml`) → GitHub `workflow_dispatch`; account `github-dispatch`, secret `github-dispatch-token` (value added with gcloud, never in the state) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
 | `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
@@ -58,8 +59,9 @@ terraform apply
 - GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests) and `terraform-plan` (from the `drift-check` environment), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
 - `terraform-plan` holds viewer-type roles only and reads only the state bucket and the billing account.
 - `jobHistoryViewer` holds `bigquery.jobs.listAll` only, and only `dbt-runner` holds it.
+- `github-dispatch` holds `workflows.invoker` and read access to its one secret; the weekly jobs run in UTC as that account.
 
-`tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
+`tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources and no secret versions (values), and every dataset and bucket has `prevent_destroy`.
 
 ```bash
 cd infra && terraform init -backend=false && terraform test

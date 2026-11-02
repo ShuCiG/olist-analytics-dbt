@@ -25,6 +25,8 @@ ICEBERG = f"{P}-iceberg"
 CONN = f"https://bigqueryconnection.googleapis.com/v1/projects/{P}/locations/EU/connections/iceberg:getIamPolicy"
 TAG = f"projects/{P}/locations/eu/taxonomies/111/policyTags/222"
 TAG_IAM = f"https://datacatalog.googleapis.com/v1/{TAG}:getIamPolicy"
+DISPATCH = f"github-dispatch@{P}.iam.gserviceaccount.com"
+SECRET_IAM = f"https://secretmanager.googleapis.com/v1/projects/{P}/secrets/github-dispatch-token:getIamPolicy"
 
 
 def resource(type_: str, **values: Any) -> dict[str, Any]:
@@ -63,6 +65,13 @@ STATE = {
                     role="roles/datacatalog.categoryFineGrainedReader",
                     member=f"serviceAccount:{RUNNER}",
                 ),
+                resource("google_secret_manager_secret", secret_id="github-dispatch-token"),
+                resource(
+                    "google_secret_manager_secret_iam_member",
+                    secret_id=f"projects/{P}/secrets/github-dispatch-token",
+                    role="roles/secretmanager.secretAccessor",
+                    member=f"serviceAccount:{DISPATCH}",
+                ),
                 resource("google_billing_account_iam_member", billing_account_id="000000-000000-000000", role="roles/billing.viewer", member="serviceAccount:tp@x"),
                 resource("google_iam_workload_identity_pool", name=f"projects/{NUMBER}/locations/global/workloadIdentityPools/github"),
             ]
@@ -81,6 +90,7 @@ def api(
     extra_sa: str | None = None,
     extra_connection: tuple[str, str] | None = None,
     extra_tag: tuple[str, str] | None = None,
+    extra_secret: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """Live API responses as they look today, plus one optional change."""
     project = [("roles/bigquery.jobUser", f"serviceAccount:{RUNNER}"), ("roles/owner", f"user:{OWNER}")]
@@ -102,6 +112,7 @@ def api(
         ),
         CONN: policy(("roles/bigquery.connectionAdmin", f"serviceAccount:{RUNNER}"), *([extra_connection] if extra_connection else [])),
         TAG_IAM: policy(("roles/datacatalog.categoryFineGrainedReader", f"serviceAccount:{RUNNER}"), *([extra_tag] if extra_tag else [])),
+        SECRET_IAM: policy(("roles/secretmanager.secretAccessor", f"serviceAccount:{DISPATCH}"), *([extra_secret] if extra_secret else [])),
         "https://cloudbilling.googleapis.com/v1/billingAccounts/000000-000000-000000:getIamPolicy": policy(
             ("roles/billing.admin", f"user:{OWNER}"), ("roles/billing.viewer", "serviceAccount:tp@x")
         ),
@@ -169,6 +180,13 @@ def test_fine_grained_reader_granted_in_the_console_is_reported() -> None:
     # Someone given the real PII outside Terraform
     assert check(api(extra_tag=("roles/datacatalog.categoryFineGrainedReader", "user:someone@example.com"))) == [
         "binding  policyTag/222  roles/datacatalog.categoryFineGrainedReader  user:someone@example.com"
+    ]
+
+
+def test_secret_reader_added_in_the_console_is_reported() -> None:
+    # Someone given the GitHub token of the weekly dispatch outside Terraform (D95)
+    assert check(api(extra_secret=("roles/secretmanager.secretAccessor", "user:someone@example.com"))) == [
+        "binding  secret/github-dispatch-token  roles/secretmanager.secretAccessor  user:someone@example.com"
     ]
 
 

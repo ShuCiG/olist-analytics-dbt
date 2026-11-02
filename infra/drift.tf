@@ -21,6 +21,9 @@ locals {
     "roles/iam.workloadIdentityPoolViewer",  # pool and provider (wif.tf)
     "roles/bigquery.metadataViewer",         # datasets and their access lists, no table data
     "roles/datacatalog.viewer",              # PII taxonomy and policy tags (pii.tf)
+    "roles/cloudscheduler.viewer",           # weekly dispatch jobs (scheduler.tf)
+    "roles/workflows.viewer",                # dispatch workflow (scheduler.tf)
+    "roles/secretmanager.viewer",            # the token's secret: metadata, never its value
     "roles/serviceusage.serviceUsageViewer", # enabled APIs, quota override
     # The provider bills API calls to the project (user_project_override in
     # versions.tf); this role allows that and nothing else
