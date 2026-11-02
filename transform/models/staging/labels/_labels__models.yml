@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_labels__review_labels
+    description: Review labels, typed. One row per review id.
+    columns:
+      - name: review_id
+        description: Review id from `order_reviews`; primary key here (one label per review id).
+        data_tests:
+          - unique
+          - not_null
+      - name: sentiment
+        description: The customer's attitude in the text (not the score).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [positive, negative, mixed, neutral]
+      - name: topic
+        description: The one aspect the review is mainly about (see the guidelines).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [delivery, product_quality, wrong_or_missing_item, seller_service, general, other]
+      - name: translation_en
+        description: Faithful English translation of title and message (title first, joined with " — ").
+        data_tests: [not_null]
+      - name: labeled_by
+        description: Who labelled it, e.g. `claude-code-session` (hand-checked gold set) or `claude-code-routine-<model>`.
+        data_tests: [not_null]
+      - name: guidelines_version
+        description: Version of the labelling guidelines the label follows.
+        data_tests: [not_null]

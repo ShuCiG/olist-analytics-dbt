@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: labels
+    description: >
+      Labels made for this project, not part of the Olist dump: CSV batches kept in the repo
+      (`ingestion/review_labels/`), loaded by `ingestion/pipeline.py` whenever the files change (D92).
+      Every column is a string, plus `labels_sha` and `_loaded_at`.
+    schema: "{{ env_var('DBT_RAW_SCHEMA', 'raw') }}"
+    tables:
+      - name: review_labels
+        description: >
+          One row per review id with a title or message: sentiment, topic and English translation of the
+          review text, labelled by a Claude Code session following `ingestion/review_labels/guidelines.md`.
+          Identical texts under different review ids share one label.
