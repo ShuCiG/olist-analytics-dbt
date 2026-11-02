@@ -25,7 +25,6 @@ ICEBERG = f"{P}-iceberg"
 CONN = f"https://bigqueryconnection.googleapis.com/v1/projects/{P}/locations/EU/connections/iceberg:getIamPolicy"
 TAG = f"projects/{P}/locations/eu/taxonomies/111/policyTags/222"
 TAG_IAM = f"https://datacatalog.googleapis.com/v1/{TAG}:getIamPolicy"
-DATA_POLICY_IAM = f"https://bigquerydatapolicy.googleapis.com/v1/projects/{P}/locations/eu/dataPolicies/person_id_sha256:getIamPolicy"
 
 
 def resource(type_: str, **values: Any) -> dict[str, Any]:
@@ -63,14 +62,6 @@ STATE = {
                     policy_tag=TAG,
                     role="roles/datacatalog.categoryFineGrainedReader",
                     member=f"serviceAccount:{RUNNER}",
-                ),
-                resource("google_bigquery_datapolicy_data_policy", location="eu", data_policy_id="person_id_sha256"),
-                resource(
-                    "google_bigquery_datapolicy_data_policy_iam_member",
-                    location="eu",
-                    data_policy_id="person_id_sha256",
-                    role="roles/bigquerydatapolicy.maskedReader",
-                    member=f"serviceAccount:{READER}",
                 ),
                 resource("google_billing_account_iam_member", billing_account_id="000000-000000-000000", role="roles/billing.viewer", member="serviceAccount:tp@x"),
                 resource("google_iam_workload_identity_pool", name=f"projects/{NUMBER}/locations/global/workloadIdentityPools/github"),
@@ -111,7 +102,6 @@ def api(
         ),
         CONN: policy(("roles/bigquery.connectionAdmin", f"serviceAccount:{RUNNER}"), *([extra_connection] if extra_connection else [])),
         TAG_IAM: policy(("roles/datacatalog.categoryFineGrainedReader", f"serviceAccount:{RUNNER}"), *([extra_tag] if extra_tag else [])),
-        DATA_POLICY_IAM: policy(("roles/bigquerydatapolicy.maskedReader", f"serviceAccount:{READER}")),
         "https://cloudbilling.googleapis.com/v1/billingAccounts/000000-000000-000000:getIamPolicy": policy(
             ("roles/billing.admin", f"user:{OWNER}"), ("roles/billing.viewer", "serviceAccount:tp@x")
         ),

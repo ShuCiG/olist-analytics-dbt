@@ -3,10 +3,10 @@
 # and the customer's address (zip prefix, city, coordinates in dim_customers).
 # dbt attaches the policy tags below to those columns on BigQuery; whoever reads a
 # tagged column needs a role on its tag, dataset-level read alone gets "access denied".
-# - person_id: readers who need the real id get Fine-Grained Reader; the dashboard
-#   gets a SHA-256 mask instead (same id, same hash: its distinct counts and joins
-#   still work, the real id never reaches the app)
-# - person_location: Fine-Grained Readers only; nothing reads it masked
+# - person_id, person_location: Fine-Grained Readers only. The dashboard reads
+#   neither: it counts and joins people on `customer_key`, a hash dbt adds next to
+#   the id. BigQuery's own masking (a SHA-256 data policy for the dashboard) needs
+#   the project to belong to an organization, which this one doesn't (D94).
 # Taxonomies are regional: "eu" for the EU datasets.
 
 locals {
@@ -58,24 +58,6 @@ resource "google_data_catalog_policy_tag_iam_member" "fine_grained_reader" {
   policy_tag = google_data_catalog_policy_tag.pii[each.value.tag].name
   role       = "roles/datacatalog.categoryFineGrainedReader"
   member     = each.value.member
-}
-
-# The dashboard's view of the person id: its SHA-256
-resource "google_bigquery_datapolicy_data_policy" "person_id_sha256" {
-  location         = local.pii_location
-  data_policy_id   = "person_id_sha256"
-  policy_tag       = google_data_catalog_policy_tag.pii["person_id"].name
-  data_policy_type = "DATA_MASKING_POLICY"
-  data_masking_policy {
-    predefined_expression = "SHA256"
-  }
-}
-
-resource "google_bigquery_datapolicy_data_policy_iam_member" "dashboard_masked_reader" {
-  location       = google_bigquery_datapolicy_data_policy.person_id_sha256.location
-  data_policy_id = google_bigquery_datapolicy_data_policy.person_id_sha256.data_policy_id
-  role           = "roles/bigquerydatapolicy.maskedReader"
-  member         = google_service_account.this["dashboard-reader"].member
 }
 
 # Attaching a tag to a column needs bigquery.tables.setCategory (only in BigQuery

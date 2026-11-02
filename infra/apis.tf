@@ -4,7 +4,6 @@ locals {
   services = toset([
     "bigquery.googleapis.com",             # warehouse (dlt, dbt, dashboard)
     "bigqueryconnection.googleapis.com",   # Cloud resource connections (on before Terraform; D90)
-    "bigquerydatapolicy.googleapis.com",   # data masking policies on PII policy tags (pii.tf)
     "bigquerystorage.googleapis.com",      # Storage Read API (datacontract-cli)
     "billingbudgets.googleapis.com",       # budget below
     "cloudbilling.googleapis.com",         # billing account IAM (drift.tf)
@@ -18,7 +17,7 @@ locals {
   ])
 
   # Enabled by Terraform, not adopted (imports.tf)
-  services_added = toset(["sts.googleapis.com", "cloudbilling.googleapis.com", "bigquerydatapolicy.googleapis.com", "datacatalog.googleapis.com"])
+  services_added = toset(["sts.googleapis.com", "cloudbilling.googleapis.com", "datacatalog.googleapis.com"])
 }
 
 resource "google_project_service" "this" {
