@@ -9,12 +9,14 @@ exposures:
     maturity: medium
     url: https://olist-analytics-dbt.streamlit.app/
     description: >
-      Streamlit app (`dashboard/`) with four data-product pages: sales overview
+      Streamlit app (`dashboard/`) with five data-product pages: sales overview
       (orders, revenue, top categories, payment mix), delivery & reviews (late
       rate, days to deliver, review scores of late vs on-time orders, late rate
       by state), customers & sellers (repeat rate, spend, customer states, seller
       map, top sellers), cohorts & retention (retention heatmap and curve, value
-      per acquired customer). Reads DuckDB locally; deployed, it reads the BigQuery
+      per acquired customer), what customers write (review topics and sentiment
+      from the labelled texts, late deliveries by topic, complaint rate by category,
+      translated complaints). Reads DuckDB locally; deployed, it reads the BigQuery
       marts of the Airflow `airflow` target (`airflow_marts`, refreshed hourly),
       or prod `marts` via the `MARTS_DATASET` setting.
     owner:
@@ -26,3 +28,4 @@ exposures:
       - ref('dim_sellers')
       - ref('dim_products')
       - ref('fct_customer_cohorts')
+      - ref('fct_review_topics')
