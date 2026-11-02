@@ -46,26 +46,35 @@ models:
       - name: customer_unique_id
         description: "{{ doc('customer_unique_id') }} Primary key."
         data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
         constraints:
           - type: not_null
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+      - name: customer_key
+        description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
+        data_type: string
+        data_tests: [unique, not_null]
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }} From the latest order."
         data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_location'] }}"]
       - name: city
         description: City of the latest order.
         data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_location'] }}"]
       - name: state
         description: Two-letter state code of the latest order.
         data_type: string
       - name: latitude
         description: "{{ doc('latitude') }}"
         data_type: &float_type "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+        policy_tags: ["{{ var('pii_policy_tags')['person_location'] }}"]
       - name: longitude
         description: "{{ doc('longitude') }}"
         data_type: *float_type
+        policy_tags: ["{{ var('pii_policy_tags')['person_location'] }}"]
       - name: first_order_at
         description: Purchase timestamp of the first order.
         data_type: timestamp
@@ -444,6 +453,10 @@ models:
         name: customer_unique_id
         description: "{{ doc('customer_unique_id') }}"
         data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
+      - name: customer_key
+        description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
+        data_type: string
       - name: order_status
         description: "{{ doc('order_status') }}"
         data_type: string
@@ -655,7 +668,7 @@ models:
           under its v1 name `payment_value`.
         columns:
           - include: all
-            exclude: [paid_amount]
+            exclude: [paid_amount, customer_key]
           - name: payment_value
             description: "{{ doc('paid_amount') }}"
             data_type: *money_type
@@ -715,6 +728,7 @@ models:
       - name: customer_unique_id
         description: "{{ doc('customer_unique_id') }}"
         data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
         data_tests:
           - relationships:
               arguments:

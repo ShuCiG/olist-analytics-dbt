@@ -29,14 +29,14 @@ provider:
   # Compatible versions: same major. A breaking contract change bumps the major
   # version (data-product/check_compatibility.py) and fails this agreement until
   # the dashboard is updated and the agreement renewed.
-  contractVersion: 1.2.0
+  contractVersion: 1.3.0
   server: live
   role: dashboard-reader
 
 # Columns read, per table. Taken from the dashboard's SQL and kept equal to it by the test.
 uses:
   fct_orders:
-    - customer_unique_id
+    - customer_key
     - order_status
     - purchase_date
     - order_amount
@@ -58,7 +58,7 @@ uses:
     - item_amount
     - _loaded_at
   dim_customers:
-    - customer_unique_id
+    - customer_key
     - state
   dim_products:
     - product_id

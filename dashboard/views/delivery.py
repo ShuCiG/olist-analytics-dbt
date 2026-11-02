@@ -59,7 +59,7 @@ states = query(f"""
         avg(case when o.is_delivered_late then 1.0 else 0.0 end) as late_rate,
         avg(o.days_to_deliver) as avg_days
     from {table('fct_orders')} as o
-    inner join {table('dim_customers')} as c on o.customer_unique_id = c.customer_unique_id
+    inner join {table('dim_customers')} as c on o.customer_key = c.customer_key
     where o.is_delivered and {period_filter('o.purchase_date')}
     group by 1
     having count(*) >= 100

@@ -20,6 +20,7 @@ locals {
     "roles/iam.serviceAccountViewer",        # service accounts
     "roles/iam.workloadIdentityPoolViewer",  # pool and provider (wif.tf)
     "roles/bigquery.metadataViewer",         # datasets and their access lists, no table data
+    "roles/datacatalog.viewer",              # PII taxonomy and policy tags (pii.tf)
     "roles/serviceusage.serviceUsageViewer", # enabled APIs, quota override
     # The provider bills API calls to the project (user_project_override in
     # versions.tf); this role allows that and nothing else

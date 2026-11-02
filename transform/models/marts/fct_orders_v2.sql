@@ -24,6 +24,8 @@ final as (
     select
         orders.order_id,
         orders.customer_unique_id,
+        -- Pseudonym of the person for readers without access to the id (D94)
+        {{ customer_key('orders.customer_unique_id') }} as customer_key,
         orders.order_status,
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,

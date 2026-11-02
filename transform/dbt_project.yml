@@ -33,6 +33,12 @@ flags:
   require_ref_searches_node_package_before_root: true
 
 vars:
+  # Column-level security on BigQuery (D94): the policy tags of infra/pii.tf
+  # (`terraform output pii_policy_tags`), set on the person-related columns of the
+  # marts (policy_tags in _marts__models.yml). Other adapters ignore policy_tags.
+  pii_policy_tags:
+    person_id: projects/olist-analytics-dbt-472315/locations/eu/taxonomies/7858280527972507286/policyTags/4966082808365662401
+    person_location: projects/olist-analytics-dbt-472315/locations/eu/taxonomies/7858280527972507286/policyTags/3919577397577050111
   # Elementary's clock (D38). Anomaly tests look back from "now"; the data is a
   # 2016-2018 dump, so "now" is the last order in the data, not the wall clock.
   # Default = the dump's last order (full loads: CI, prod); Airflow's replay passes

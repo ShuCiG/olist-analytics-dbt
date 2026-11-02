@@ -51,6 +51,7 @@ class Managed:
     billing_account: str = ""
     buckets: list[str] = field(default_factory=list)
     connections: list[tuple[str, str]] = field(default_factory=list)  # (location, id)
+    policy_tags: list[str] = field(default_factory=list)  # full names projects/.../policyTags/<id>
     datasets: list[str] = field(default_factory=list)
     service_accounts: set[str] = field(default_factory=set)  # emails
     bindings: set[Binding] = field(default_factory=set)
@@ -81,6 +82,10 @@ def managed(state: dict[str, Any]) -> Managed:
         elif t == "google_bigquery_connection_iam_member":
             # connection_id may be the full name (projects/.../connections/<id>)
             m.bindings.add((f"connection/{v['connection_id'].rsplit('/', 1)[-1]}", v["role"], v["member"]))
+        elif t == "google_data_catalog_policy_tag":
+            m.policy_tags.append(v["name"])
+        elif t == "google_data_catalog_policy_tag_iam_member":
+            m.bindings.add((f"policyTag/{v['policy_tag'].rsplit('/', 1)[-1]}", v["role"], v["member"]))
         elif t == "google_billing_account_iam_member":
             m.billing_account = v["billing_account_id"]
             m.bindings.add(("billingAccount", v["role"], v["member"]))
@@ -89,6 +94,7 @@ def managed(state: dict[str, Any]) -> Managed:
     m.datasets.sort()
     m.buckets.sort()
     m.connections.sort()
+    m.policy_tags.sort()
     return m
 
 
@@ -161,6 +167,11 @@ def read_live(session: Any, m: Managed) -> Live:
     for location, cid in m.connections:
         conn = f"https://bigqueryconnection.googleapis.com/v1/projects/{m.project}/locations/{location}/connections/{cid}"
         live.bindings |= policy_bindings(f"connection/{cid}", get(f"{conn}:getIamPolicy", post=True))
+
+    # Column-level security (pii.tf): who reads a tagged column
+    for name in m.policy_tags:
+        policy = get(f"https://datacatalog.googleapis.com/v1/{name}:getIamPolicy", post=True)
+        live.bindings |= policy_bindings(f"policyTag/{name.rsplit('/', 1)[-1]}", policy)
 
     billing = f"https://cloudbilling.googleapis.com/v1/billingAccounts/{m.billing_account}:getIamPolicy"
     live.bindings |= policy_bindings("billingAccount", get(billing))
