@@ -1,0 +1,30 @@
+# Cloud Workflows source (infra/scheduler.tf, D95): workflow_dispatch of one GitHub
+# workflow on main. Argument: {"workflow": "<file name>"}. A non-2xx answer from
+# GitHub fails the execution; the drift check's weekly-runs job reports the missing run.
+main:
+  params: [args]
+  steps:
+    - check:
+        switch:
+          - condition: ${not(args.workflow in ["databricks.yml", "snowflake.yml"])}
+            raise: '${"workflow not allowed: " + args.workflow}'
+    - token:
+        call: googleapis.secretmanager.v1.projects.secrets.versions.accessString
+        args:
+          secret_id: github-dispatch-token
+          project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+        result: token
+    - dispatch:
+        call: http.post
+        args:
+          url: ${"https://api.github.com/repos/ShuCiG/olist-analytics-dbt/actions/workflows/" + args.workflow + "/dispatches"}
+          headers:
+            Authorization: ${"Bearer " + token}
+            Accept: application/vnd.github+json
+            X-GitHub-Api-Version: "2022-11-28"
+            User-Agent: olist-github-dispatch
+          body:
+            ref: main
+        result: response
+    - done:
+        return: ${response.code}

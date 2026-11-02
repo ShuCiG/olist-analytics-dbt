@@ -7,9 +7,8 @@ name: Snowflake
 # environment `snowflake-ci`, which admits only main. The account is a trial: without
 # the secret (removed when the trial ends) the run skips instead of failing.
 on:
-  schedule:
-    # Off the full hour: GitHub delays or drops schedules at :00
-    - cron: "37 6 * * 1"  # Mondays 06:37 UTC
+  # Weekly: Cloud Scheduler dispatches it on Mondays 06:37 UTC (infra/scheduler.tf,
+  # D95); GitHub's own schedule fired hours late. The drift check flags a missed week.
   workflow_dispatch:
 
 concurrency:

@@ -413,7 +413,9 @@ service principal limited to its own catalog, tests both data contracts on those
 ([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md), [D81](docs/DECISIONS.md)). When Free Edition can't start the warehouse, the run waits up to
 20 minutes, then ends as skipped with a warning instead of a failure email ([D78](docs/DECISIONS.md)).
 A third workflow does the same on Snowflake every week (full load into per-run schemas, dropped after), then
-redeploys the in-warehouse project and its task graph from main ([D85](docs/DECISIONS.md)).
+redeploys the in-warehouse project and its task graph from main ([D85](docs/DECISIONS.md)). Cloud Scheduler starts
+both weekly workflows on time through GitHub's dispatch API (GitHub's own `schedule` fired hours late), and the daily
+drift check fails when a week was missed ([D95](docs/DECISIONS.md)).
 
 Two PR comments, updated on each push, come from the BigQuery build. The **data diff** compares every mart the build
 made with its prod table row by row on the primary key (`dbt-labs/audit_helper`): rows modified / added / removed,

@@ -52,6 +52,7 @@ class Managed:
     buckets: list[str] = field(default_factory=list)
     connections: list[tuple[str, str]] = field(default_factory=list)  # (location, id)
     policy_tags: list[str] = field(default_factory=list)  # full names projects/.../policyTags/<id>
+    secrets: list[str] = field(default_factory=list)  # secret ids
     datasets: list[str] = field(default_factory=list)
     service_accounts: set[str] = field(default_factory=set)  # emails
     bindings: set[Binding] = field(default_factory=set)
@@ -86,6 +87,11 @@ def managed(state: dict[str, Any]) -> Managed:
             m.policy_tags.append(v["name"])
         elif t == "google_data_catalog_policy_tag_iam_member":
             m.bindings.add((f"policyTag/{v['policy_tag'].rsplit('/', 1)[-1]}", v["role"], v["member"]))
+        elif t == "google_secret_manager_secret":
+            m.secrets.append(v["secret_id"])
+        elif t == "google_secret_manager_secret_iam_member":
+            # secret_id is the full name (projects/.../secrets/<id>)
+            m.bindings.add((f"secret/{v['secret_id'].rsplit('/', 1)[-1]}", v["role"], v["member"]))
         elif t == "google_billing_account_iam_member":
             m.billing_account = v["billing_account_id"]
             m.bindings.add(("billingAccount", v["role"], v["member"]))
@@ -95,6 +101,7 @@ def managed(state: dict[str, Any]) -> Managed:
     m.buckets.sort()
     m.connections.sort()
     m.policy_tags.sort()
+    m.secrets.sort()
     return m
 
 
@@ -176,6 +183,11 @@ def read_live(session: Any, m: Managed) -> Live:
         policy = get(f"https://datacatalog.googleapis.com/v1/{name}:getIamPolicy", post=True)
         live.bindings |= policy_bindings(f"policyTag/{name.rsplit('/', 1)[-1]}", policy)
 
+    # Who reads a secret's value (scheduler.tf)
+    for sid in m.secrets:
+        policy = get(f"https://secretmanager.googleapis.com/v1/projects/{m.project}/secrets/{sid}:getIamPolicy")
+        live.bindings |= policy_bindings(f"secret/{sid}", policy)
+
     billing = f"https://cloudbilling.googleapis.com/v1/billingAccounts/{m.billing_account}:getIamPolicy"
     live.bindings |= policy_bindings("billingAccount", get(billing))
     return live
@@ -236,7 +248,7 @@ def main() -> None:
 
     print(
         f"Checked {len(live.bindings)} bindings: project, {len(live.service_accounts)} service accounts, "
-        f"{len(m.datasets)} datasets, {len(m.buckets)} buckets, {len(m.connections)} connections, billing account"
+        f"{len(m.datasets)} datasets, {len(m.buckets)} buckets, {len(m.connections)} connections, {len(m.secrets)} secrets, billing account"
     )
     found = findings(m, live, entries)
     for line in found:

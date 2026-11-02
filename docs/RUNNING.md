@@ -404,7 +404,59 @@ The third job, **Service account keys** (D63), lists the user-managed keys of ev
 - `key on an account that should have none  <account>  <key id>` — a key nobody declared: delete it, or, if the
   account really needs one, add it to `infra/sa_keys.yaml` with where it is used.
 
+The fourth job, **Weekly engine runs** (D95), fails when `databricks.yml` or `snowflake.yml` has no successful run on
+main within 7.5 days: the Monday dispatch didn't happen (see *Weekly runs* below). A run that started and failed sends
+its own email.
+
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
+
+## Weekly runs (Cloud Scheduler)
+
+`databricks.yml` and `snowflake.yml` have no GitHub `schedule` (D95). Cloud Scheduler jobs `weekly-databricks`
+(Mondays 06:17 UTC) and `weekly-snowflake` (06:37) start the Cloud Workflows workflow `github-dispatch`
+(region `europe-west1`, `infra/scheduler.tf`), which calls GitHub's `workflow_dispatch` API with a token from
+Secret Manager. Terraform makes the secret `github-dispatch-token` empty; the token goes in by hand, so its value never
+sits in the Terraform state.
+
+**Token (once, then on expiry):**
+
+1. https://github.com/settings/personal-access-tokens/new: name `olist-github-dispatch`, expiration up to a year,
+   resource owner `ShuCiG`, *Only select repositories* → `olist-analytics-dbt`, *Repository permissions* →
+   **Actions: Read and write** (nothing else). Generate, copy.
+2. Store it as a new version (the workflow reads `latest`). In Windows PowerShell, with the token copied to the
+   clipboard, check its shape first (a fine-grained token is 93 characters and starts with `github_pat_`):
+
+   ```powershell
+   $p = (Get-Clipboard | Out-String).Trim()
+   "length=$($p.Length) github_pat=$($p.StartsWith('github_pat_'))"
+   $f = New-TemporaryFile
+   [IO.File]::WriteAllText($f, $p)
+   gcloud secrets versions add github-dispatch-token --data-file="$f" --project=olist-analytics-dbt-472315
+   Remove-Item $f; Remove-Variable p
+   ```
+
+   Through a file, not a pipe: Windows PowerShell 5.1 appends a line break to a string piped into a native command,
+   and GitHub rejects the token with it. Pasting into `Read-Host -AsSecureString` stored a wrong value once (401).
+   In bash: `read -rs TOKEN; printf '%s' "$TOKEN" | gcloud secrets versions add github-dispatch-token --data-file=-`.
+
+3. On rotation, disable the old version afterwards: `gcloud secrets versions list github-dispatch-token`, then
+   `gcloud secrets versions disable <n> --secret=github-dispatch-token`.
+
+**Check or trigger a dispatch** (a trigger starts a real engine run):
+
+```bash
+gcloud scheduler jobs run weekly-databricks --location=europe-west1 --project=olist-analytics-dbt-472315
+gcloud workflows executions list github-dispatch --location=europe-west1 --project=olist-analytics-dbt-472315 --limit=5
+gh run list -w databricks.yml -L 3
+```
+
+The first `terraform apply` can fail with `Workflows service agent does not exist`: the API was enabled seconds
+earlier and Google creates its service agent with a delay. Plan and apply again a few minutes later (or create it:
+`gcloud beta services identity create --service=workflows.googleapis.com`).
+
+A failed execution (`state: FAILED`) shows GitHub's answer in `gcloud workflows executions describe <id>`:
+401 = token expired or revoked (new token, step 2), 404 = token lacks access to the repository, 422 = workflow file
+or `workflow_dispatch` trigger missing on main.
 
 ## Service account keys
 
