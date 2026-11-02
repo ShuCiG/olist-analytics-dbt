@@ -10,7 +10,10 @@ no other context. Never touch `main` or any other branch, never open a PR, chang
 2. Read `ingestion/review_labels/guidelines.md` completely. It is the only labelling standard.
 3. Look at 30 labelled examples: `head -31 ingestion/review_labels/labels/batch_000.csv` (hand-checked gold set).
 4. `python3 ingestion/review_labels/labels.py status`. If no texts are open, stop: report "all labelled".
-5. Note the start time (`date -u`). Repeat chunks of 100 until 45 minutes have passed or no text is open:
+5. Note the start time (`date -u`). Repeat chunks of 100 until 45 minutes have passed or no text is open. Time is
+   the only reason to stop: earlier context is compacted automatically, and a run is expected to do 30 or more chunks.
+   If the Agent tool is available, hand each chunk's labelling (step 2) to a subagent with the guidelines file path,
+   the input file and the output file, so this session's context stays small; check its output with step 3.
    1. `python3 ingestion/review_labels/labels.py next --limit 100 --out ingestion/review_labels/work/next.jsonl`
    2. Read `work/next.jsonl`. For every line write one JSON line to `ingestion/review_labels/work/labels.jsonl`:
       `{"key": "<key from the input>", "sentiment": "...", "topic": "...", "translation_en": "..."}`.

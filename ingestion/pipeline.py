@@ -61,6 +61,7 @@ the SCHEMA email.
 import argparse
 import csv
 import functools
+import hashlib
 import json
 import os
 import re
@@ -81,6 +82,9 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
+# Review labels (sentiment, topic, English translation): CSV batches kept in the repo,
+# not part of the dump (ingestion/review_labels/, D92)
+LABELS_DIR = ROOT / "ingestion" / "review_labels" / "labels"
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -232,6 +236,60 @@ def olist_source(
             # 4,000 partitions per table for about 11 years of daily loads
             bigquery_adapter(resource, partition="_loaded_at")
         yield resource
+
+
+def read_review_labels(labels_dir: Path) -> tuple[pa.Table, str]:
+    """Every label batch as one table of strings, and a short sha of the files' content."""
+    paths = sorted(labels_dir.glob("*.csv"))
+    sha = hashlib.sha256()
+    for path in paths:
+        sha.update(path.name.encode())
+        sha.update(path.read_bytes())
+    tables = [
+        pacsv.read_csv(
+            path,
+            parse_options=pacsv.ParseOptions(newlines_in_values=True),
+            convert_options=pacsv.ConvertOptions(
+                column_types={name: pa.string() for name in csv_header(path)},
+                strings_can_be_null=True,
+            ),
+        )
+        for path in paths
+    ]
+    return pa.concat_tables(tables) if tables else pa.table({}), sha.hexdigest()[:16]
+
+
+def loaded_labels_sha(pipeline: dlt.Pipeline) -> str | None:
+    try:
+        with pipeline.sql_client() as client:
+            labels = client.make_qualified_table_name("review_labels")
+            rows = client.execute_sql(f"select max(labels_sha) from {labels}")
+    except DatabaseUndefinedRelation:
+        return None
+    return rows[0][0] if rows else None
+
+
+def load_review_labels(pipeline: dlt.Pipeline, labels_dir: Path) -> int:
+    """Replace raw.review_labels when the label files changed; returns the rows loaded.
+
+    Not tied to the order months: labels change with the repo, not with the dump, and
+    a run that skips the orders still has to bring new labels (prod deploys, Airflow).
+    The files' sha is stored in every row, so an unchanged repo costs one query.
+    """
+    table, sha = read_review_labels(labels_dir)
+    if not table.num_rows:
+        print("No review label files: review_labels not loaded")
+        return 0
+    if loaded_labels_sha(pipeline) == sha:
+        print(f"Review labels unchanged ({sha}): load skipped")
+        return 0
+    table = table.append_column("labels_sha", pa.array([sha] * table.num_rows, type=pa.string()))
+    table = with_loaded_at(with_required(table, ["review_id"]), datetime.now(UTC))
+    pipeline.run(
+        dlt.resource([table], name="review_labels", write_disposition="replace", primary_key="review_id")
+    )
+    print(f"Review labels {sha}: {table.num_rows} rows loaded")
+    return table.num_rows
 
 
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
@@ -462,6 +520,7 @@ def main() -> None:
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
         status = orders_status(pipeline)
+    load_review_labels(pipeline, LABELS_DIR)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
     print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns)))
 
