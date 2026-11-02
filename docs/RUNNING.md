@@ -423,12 +423,21 @@ sits in the Terraform state.
 1. https://github.com/settings/personal-access-tokens/new: name `olist-github-dispatch`, expiration up to a year,
    resource owner `ShuCiG`, *Only select repositories* → `olist-analytics-dbt`, *Repository permissions* →
    **Actions: Read and write** (nothing else). Generate, copy.
-2. Store it as a new version (the workflow reads `latest`), from a shell with your gcloud login:
+2. Store it as a new version (the workflow reads `latest`). In Windows PowerShell, with the token copied to the
+   clipboard, check its shape first (a fine-grained token is 93 characters and starts with `github_pat_`):
 
-   ```bash
-   read -rs TOKEN && printf '%s' "$TOKEN" | gcloud secrets versions add github-dispatch-token \
-     --data-file=- --project=olist-analytics-dbt-472315 && unset TOKEN
+   ```powershell
+   $p = (Get-Clipboard | Out-String).Trim()
+   "length=$($p.Length) github_pat=$($p.StartsWith('github_pat_'))"
+   $f = New-TemporaryFile
+   [IO.File]::WriteAllText($f, $p)
+   gcloud secrets versions add github-dispatch-token --data-file="$f" --project=olist-analytics-dbt-472315
+   Remove-Item $f; Remove-Variable p
    ```
+
+   Through a file, not a pipe: Windows PowerShell 5.1 appends a line break to a string piped into a native command,
+   and GitHub rejects the token with it. Pasting into `Read-Host -AsSecureString` stored a wrong value once (401).
+   In bash: `read -rs TOKEN; printf '%s' "$TOKEN" | gcloud secrets versions add github-dispatch-token --data-file=-`.
 
 3. On rotation, disable the old version afterwards: `gcloud secrets versions list github-dispatch-token`, then
    `gcloud secrets versions disable <n> --secret=github-dispatch-token`.
@@ -440,6 +449,10 @@ gcloud scheduler jobs run weekly-databricks --location=europe-west1 --project=ol
 gcloud workflows executions list github-dispatch --location=europe-west1 --project=olist-analytics-dbt-472315 --limit=5
 gh run list -w databricks.yml -L 3
 ```
+
+The first `terraform apply` can fail with `Workflows service agent does not exist`: the API was enabled seconds
+earlier and Google creates its service agent with a delay. Plan and apply again a few minutes later (or create it:
+`gcloud beta services identity create --service=workflows.googleapis.com`).
 
 A failed execution (`state: FAILED`) shows GitHub's answer in `gcloud workflows executions describe <id>`:
 401 = token expired or revoked (new token, step 2), 404 = token lacks access to the repository, 422 = workflow file
