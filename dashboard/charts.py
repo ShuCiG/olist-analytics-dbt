@@ -84,6 +84,33 @@ def bar_h(
     _show(chart, height or max(160, 30 * len(df)))
 
 
+def bar_v(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    title: str,
+    fmt: str,
+    order: list[str],
+    extra_tooltip: list[alt.Tooltip] | None = None,
+    height: int = 260,
+) -> None:
+    """Single-series vertical bars over an ordered category (bands, buckets), in `order`, not by value."""
+    chart = (
+        alt.Chart(df)
+        .mark_bar(color=series_colors()[0], cornerRadiusEnd=4)
+        .encode(
+            x=alt.X(f"{x}:N", title=None, sort=order, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y(f"{y}:Q", title=title, axis=alt.Axis(format=fmt)),
+            tooltip=[
+                alt.Tooltip(f"{x}:N", title=x.replace("_", " ").capitalize()),
+                alt.Tooltip(f"{y}:Q", title=title, format=fmt),
+                *(extra_tooltip or []),
+            ],
+        )
+    )
+    _show(chart, height)
+
+
 def bar_grouped(
     df: pd.DataFrame, x: str, y: str, group: str, title: str, fmt: str, height: int = 260
 ) -> None:

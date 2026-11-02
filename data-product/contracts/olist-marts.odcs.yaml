@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.1.0
+version: 1.2.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -437,3 +437,59 @@ schema:
           select count(*) from {schema}.{model}
           where months_since_first_order = 0 and active_customers <> cohort_size
         mustBe: 0
+
+  - name: fct_shipments
+    physicalName: fct_shipments
+    physicalType: table
+    description: >-
+      Delivery against distance: one row per shipment (the items of one seller in one order), with
+      the seller-to-customer distance between zip centroids and the order's delivery outcome.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_shipments
+    properties:
+      - name: shipment_sk
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: order_id
+        logicalType: string
+        required: true
+      - name: seller_id
+        logicalType: string
+        required: true
+      - name: purchase_date
+        logicalType: date
+      - name: seller_state
+        logicalType: string
+      - name: customer_state
+        logicalType: string
+      - name: is_same_state
+        logicalType: boolean
+      - name: distance_km
+        logicalType: number
+        logicalTypeOptions:
+          minimum: 0
+      - name: distance_band
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: ['0-100 km', '100-500 km', '500-1000 km', '1000-2000 km', '2000+ km', unknown]
+            mustBe: 0
+      - name: items_count
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 1
+      - name: is_delivered
+        logicalType: boolean
+      - name: days_to_deliver
+        logicalType: integer
+      - name: is_delivered_late
+        logicalType: boolean
+    quality:
+      - *not_empty_rule

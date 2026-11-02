@@ -37,3 +37,12 @@ data_tests:
       week on this engine; check macros/week_of_year.sql and the dbt_date dispatch.
     config:
       meta: {alert_unit: days}
+
+  - name: assert_haversine_known_distances
+    description: >-
+      City pairs whose distance from the haversine_km macro is more than 0.5 km off a value
+      computed independently (São Paulo–Rio 360.75 km, São Paulo–Manaus, Porto Alegre–Manaus,
+      a point to itself 0, null for a missing coordinate). A failure means the distance formula is wrong on this engine,
+      so every seller-to-customer distance is too.
+    config:
+      meta: {alert_unit: city pairs}
