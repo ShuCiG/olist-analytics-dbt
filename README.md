@@ -574,6 +574,11 @@ Options that were tried or priced, then left out:
   with a BigLake catalog. Builds took about 2× as long, readers need a metadata export after every build, and dropped or
   replaced tables leave billed files in the bucket
   ([D90](docs/DECISIONS.md#d90--2026-11-01--iceberg-tables-for-the-marts-biglake-read-from-duckdb-evaluated-rejected)).
+- **dbt Mesh: a consumer project for cohorts and RFM (dbt-loom).** The split built with the same marts (0 diffs), but
+  unit tests can't mock the other project's models, YAML anchors, doc blocks, generic tests and macros had to be copied,
+  and the dbt v2 parser refuses the plugin. One owner deploys one repo: groups, access levels and contracts already
+  draw the boundaries inside the project
+  ([D97](docs/DECISIONS.md#d97--2026-11-03--dbt-mesh-producer-and-consumer-projects-dbt-loom-evaluated-rejected)).
 - **dbt deps inside Snowflake, the repo as a Git repository source.** Both need an external access integration,
   which trial accounts don't allow; the packages go up with the code instead ([D85](docs/DECISIONS.md)).
 
