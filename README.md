@@ -584,6 +584,6 @@ Options that were tried or priced, then left out:
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dropping `fct_orders` v1 after its deprecation date (2026-11-10, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dropping `fct_orders` v1 after its deprecation date (2026-11-04, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

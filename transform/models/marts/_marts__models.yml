@@ -662,7 +662,7 @@ models:
                     column_anomalies: [average]
                   config: *anomaly_config
       - v: 1
-        deprecation_date: 2026-11-10T00:00:00Z
+        deprecation_date: 2026-11-04T00:00:00Z
         description: >
           Deprecated, use the latest version. Same rows as v2, with `paid_amount`
           under its v1 name `payment_value`.
