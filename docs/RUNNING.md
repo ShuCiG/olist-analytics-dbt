@@ -182,6 +182,7 @@ App secrets:
 DASHBOARD_BACKEND = "bigquery"
 MARTS_DATASET = "airflow_marts"   # default "marts" (prod)
 # COSTS_DATASET = "marts"         # cost page (BigQuery only): where fct_dbt_job_costs lives, default prod "marts"
+# ML_DATASET = "marts"            # BigQuery ML page: where the ML marts live (D96), default prod "marts"
 
 [gcp_service_account]   # fields of the service account's JSON key
 type = "service_account"

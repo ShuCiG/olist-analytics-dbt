@@ -1,0 +1,190 @@
+version: 2
+
+# BigQuery ML (D96): training, prediction and evaluation as dbt models. The ml_
+# nodes are BigQuery ML models (materialization `bqml_model`, macros/bqml_model.sql),
+# not tables: dbt can't test them, so the tests sit on the tables that read them.
+# BigQuery only, not in the Airflow replay; protected, not in the data product.
+models:
+  - name: ml_sales_forecast
+    description: >
+      BigQuery ML ARIMA_PLUS model, one time series per category (top 7 by revenue
+      and `all categories`) and measure (orders, revenue), weekly, trained on the
+      whole history window. Forecasts the 13 weeks after the window
+      (fct_sales_forecast).
+    config:
+      group: ml
+
+  - name: ml_sales_forecast_backtest
+    description: >
+      The ARIMA_PLUS of ml_sales_forecast trained without the last 13 weeks of the
+      history window: its forecast of those months against what happened is the
+      forecast's accuracy (fct_ml_model_metrics).
+    config:
+      group: ml
+
+  - name: ml_repeat_purchase
+    description: >
+      BigQuery ML logistic regression: does a person order again within 180 days
+      of their first order, from what that first order looked like. Trained on
+      labelled first orders before the last 90 days of labelled ones, evaluated on
+      those 90 days (custom split in time); classes weighted (~3 % come back).
+    config:
+      group: ml
+
+  - name: fct_sales_forecast
+    description: >
+      Weekly orders and revenue per series (top 7 categories by revenue and `all
+      categories`): actuals over the history window, the backtest forecast of its
+      last 13 weeks and the forecast of the 13 weeks after it, with 90 %
+      prediction intervals. From ml_sales_forecast and ml_sales_forecast_backtest.
+    config:
+      group: ml
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start_date, category_name, measure]
+      # Every series is forecast over the whole horizon by both models
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "prediction_type is null or predicted_value is not null"
+    columns:
+      - name: forecast_sk
+        description: Surrogate key (week_start_date, category_name, measure). Primary key.
+        data_tests: [unique, not_null]
+      - name: week_start_date
+        description: Monday of the ISO week.
+        data_tests: [not_null]
+      - name: category_name
+        description: Product category (English) or `all categories`.
+        data_tests: [not_null]
+      - name: measure
+        description: "`orders` (distinct orders with an item of the series) or `revenue` (item price + freight, BRL)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [orders, revenue]
+      - name: actual_value
+        description: What happened; null after the history window.
+      - name: prediction_type
+        description: >
+          `backtest` (the last 13 weeks of the window, predicted without them),
+          `forecast` (the 13 weeks after the window), null (no prediction).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [backtest, forecast]
+      - name: predicted_value
+        description: Forecast for the week.
+      - name: predicted_lower_bound
+        description: Lower bound of the 90 % prediction interval.
+      - name: predicted_upper_bound
+        description: Upper bound of the 90 % prediction interval.
+
+  - name: fct_repeat_purchase_scores
+    description: >
+      One row per person (`customer_key`) whose first order is in the history
+      window: the probability from ml_repeat_purchase that they order again within
+      180 days. `sample` = `train` / `eval` (labelled; compare with `ordered_again`)
+      / `unlabelled` (first order too recent for a label: the people to act on).
+    config:
+      group: ml
+    columns:
+      - name: customer_key
+        description: Pseudonym of the person, as `customer_key` in dim_customers (D94).
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: first_purchase_date
+        description: Purchase date of the person's first order.
+        data_tests: [not_null]
+      - name: sample
+        description: "`train`, `eval` or `unlabelled` (see int_customer_first_orders_featured)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [train, eval, unlabelled]
+      - name: ordered_again
+        description: Label, another order on a later day within 180 days; null for `unlabelled`.
+      - name: repeat_probability
+        description: Probability of `ordered_again` from the model. Classes are weighted in training, so it ranks people well but overstates the real rate.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: probability_decile
+        description: 1-10 within the sample, 1 = the tenth with the highest probability.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                quote: false
+
+  - name: fct_ml_model_metrics
+    description: >
+      How well the BigQuery ML models do, one row per model, subject and metric.
+      ml_sales_forecast_backtest per series (category_name, measure): weekly error
+      measures from ML.EVALUATE over the 13 held-out weeks, and `holdout_total_ape`
+      (the 13 weeks summed up vs actual). ml_repeat_purchase on its
+      evaluation sample: ML.EVALUATE's classifier metrics, `eval_rows`,
+      `eval_repeat_rate`, `top_decile_lift`, and `attribution` per feature
+      (ML.GLOBAL_EXPLAIN).
+    config:
+      group: ml
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [model_name, category_name, measure, feature_name, metric_name]
+    columns:
+      - name: metric_sk
+        description: Surrogate key (model_name, category_name, measure, feature_name, metric_name). Primary key.
+        data_tests: [unique, not_null]
+      - name: model_name
+        description: The BigQuery ML model evaluated.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ml_sales_forecast_backtest, ml_repeat_purchase]
+      - name: category_name
+        description: Series of the forecast; null for ml_repeat_purchase.
+      - name: measure
+        description: Measure of the forecast series; null for ml_repeat_purchase.
+      - name: feature_name
+        description: Feature of ml_repeat_purchase for `attribution`; null otherwise.
+      - name: metric_name
+        description: >
+          Forecast: mean_absolute_error, root_mean_squared_error,
+          mean_absolute_percentage_error, symmetric_mean_absolute_percentage_error
+          (weekly, ML.EVALUATE), holdout_total_ape. Classifier: precision, recall,
+          accuracy, f1_score, log_loss, roc_auc, eval_rows, eval_repeat_rate,
+          top_decile_lift, attribution.
+        data_tests: [not_null]
+      - name: metric_value
+        description: Value of the metric (ratios as fractions, errors in the measure's unit).
+
+exposures:
+  - name: olist_dashboard_ml
+    label: Dashboard page "Forecasts & repeat buyers"
+    type: dashboard
+    maturity: low
+    url: https://olist-analytics-dbt.streamlit.app/
+    description: >
+      Page of the Streamlit app (`dashboard/views/ml.py`), shown on the BigQuery
+      backend only: the sales forecast vs actuals per series with its backtest
+      error, and the repeat-purchase model's ROC AUC, repeat rate by score tenth
+      and top feature attributions. Reads prod `marts` whatever `MARTS_DATASET`
+      says (setting `ML_DATASET`): the Airflow replay doesn't build these marts.
+    owner:
+      name: Aliaksandr Letsko
+    config:
+      enabled: "{{ target.type == 'bigquery' and target.name != 'airflow' }}"
+    depends_on:
+      - ref('fct_sales_forecast')
+      - ref('fct_ml_model_metrics')
+      - ref('fct_repeat_purchase_scores')

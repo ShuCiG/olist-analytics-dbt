@@ -35,6 +35,8 @@ MARTS_DATASET = _setting("MARTS_DATASET", "marts")
 # The cost mart (fct_dbt_job_costs, D71) is built in prod only, so the cost page
 # reads prod `marts` also when the order pages read the Airflow feed
 COSTS_DATASET = _setting("COSTS_DATASET", "marts")
+# The BigQuery ML marts (D96) are not built by the Airflow replay either: prod `marts`
+ML_DATASET = _setting("ML_DATASET", "marts")
 # Same default and env var as transform/profiles.yml, resolved from the repo root
 DUCKDB_PATH = os.environ.get(
     "DBT_DUCKDB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "olist.duckdb")
@@ -65,6 +67,11 @@ def table(name: str) -> str:
 def costs_table() -> str:
     """The cost mart on BigQuery (dataset `COSTS_DATASET`); no DuckDB twin."""
     return f"`{GCP_PROJECT}.{COSTS_DATASET}.fct_dbt_job_costs`"
+
+
+def ml_table(name: str) -> str:
+    """A BigQuery ML mart (dataset `ML_DATASET`); no DuckDB twin."""
+    return f"`{GCP_PROJECT}.{ML_DATASET}.{name}`"
 
 
 def source_label() -> str:

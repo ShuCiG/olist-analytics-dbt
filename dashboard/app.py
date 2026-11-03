@@ -12,8 +12,9 @@ pages = [
     st.Page("views/customers.py", title="Customers & sellers", icon=":material/storefront:"),
     st.Page("views/cohorts.py", title="Cohorts & retention", icon=":material/group_add:"),
 ]
-# The cost mart exists on BigQuery only (D71)
+# The cost mart (D71) and the BigQuery ML marts (D96) exist on BigQuery only
 if warehouse.BACKEND == "bigquery":
+    pages.append(st.Page("views/ml.py", title="Forecasts & repeat buyers", icon=":material/insights:"))
     pages.append(st.Page("views/costs.py", title="dbt cost on BigQuery", icon=":material/savings:"))
 page = st.navigation(pages)
 

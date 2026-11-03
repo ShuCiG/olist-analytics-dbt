@@ -1,0 +1,129 @@
+version: 2
+
+# Inputs of the BigQuery ML models (D96), enabled with them: BigQuery only, not in
+# the Airflow replay (dbt_project.yml). BigQuery SQL, like the models that read them.
+models:
+  - name: int_order_history_bounded
+    description: >
+      One row: the time window the BigQuery ML models learn from. From 2017-01-01
+      (2016 is sparse) to the end of the last complete month (at least 10 % of the
+      busiest month's orders: the dump ends with a stub of Sep-Oct 2018); first
+      orders up to 180 days before its end have a known repeat label.
+    config:
+      group: ml
+      access: private
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          arguments:
+            value: 1
+    columns:
+      - name: history_start_date
+        description: First day of the window.
+        data_tests: [not_null]
+      - name: history_end_date
+        description: Last day of the window, the end of the last complete month.
+        data_tests: [not_null]
+      - name: labelled_until_date
+        description: Latest first order with a known repeat label (`history_end_date` - 180 days).
+        data_tests: [not_null]
+
+  - name: int_category_sales_aggregated_weekly
+    description: >
+      Input of the sales forecast: one row per ISO week wholly inside the history
+      window, series and measure. Series = the top categories by revenue in the
+      window (var `forecast_top_categories`, 7) plus `all categories`; measure
+      `orders` (distinct orders with an item of the series) or `revenue` (item
+      price + freight, BRL). Orders not canceled/unavailable; weeks without sales
+      are 0. The last 13 weeks are the backtest's holdout.
+    config:
+      group: ml
+      access: private
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start_date, category_name, measure]
+    columns:
+      - name: week_start_date
+        description: Monday of the ISO week of purchase.
+        data_tests: [not_null]
+      - name: category_name
+        description: Product category (English) or `all categories`.
+        data_tests: [not_null]
+      - name: measure
+        description: "`orders` or `revenue`."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [orders, revenue]
+      - name: value
+        description: The measure's value that week.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: is_backtest_holdout
+        description: One of the last 13 weeks, which the backtest model doesn't train on.
+        data_tests: [not_null]
+
+  - name: int_customer_first_orders_featured
+    description: >
+      Input of the repeat-purchase model: one row per person (`customer_key`, not
+      the id) whose first order is in the history window, described by that first
+      order. `ordered_again` = another order on a later day within 180 days (any
+      status), null while 180 days of history don't follow yet.
+    config:
+      group: ml
+      access: private
+    columns:
+      - name: customer_key
+        description: Pseudonym of the person, as `customer_key` in dim_customers (D94).
+        data_tests: [unique, not_null]
+      - name: first_purchase_date
+        description: Purchase date of the person's first order.
+        data_tests: [not_null]
+      - name: sample
+        description: >
+          `train` (labelled, before the last 90 days of labelled first orders),
+          `eval` (labelled, those last 90 days: the model's evaluation set),
+          `unlabelled` (too recent for a label; scored only).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [train, eval, unlabelled]
+      - name: ordered_again
+        description: Label. Another order on a later day within 180 days of the first; null for `unlabelled`.
+        data_tests:
+          - not_null:
+              config:
+                where: "sample != 'unlabelled'"
+      - name: first_order_status
+        description: Status of the first order.
+      - name: first_category
+        description: Category of the first order's most expensive item; `none` without items.
+      - name: customer_state
+        description: The person's state (two letters).
+      - name: purchase_month
+        description: Month of the first order, `01`-`12` (seasonality, e.g. Black Friday buyers).
+      - name: paid_amount
+        description: Paid for the first order, BRL.
+      - name: items_count
+        description: Line items in the first order.
+      - name: distinct_sellers_count
+        description: Sellers in the first order.
+      - name: freight_share
+        description: Freight / order amount of the first order.
+      - name: main_payment_type
+        description: Payment type with the largest amount (`credit_card`, `boleto`, `voucher`, `debit_card`, `none`).
+      - name: used_voucher
+        description: Part of the first order was paid with a voucher.
+      - name: max_installments
+        description: Largest number of installments of the first order.
+      - name: delivery_outcome
+        description: "`on_time`, `late` or `not_delivered`."
+      - name: days_to_deliver
+        description: Days from purchase to delivery; null if not delivered (BigQuery ML imputes the mean).
+      - name: days_delivered_before_estimate
+        description: Days the delivery beat the estimate (negative = late); null if not delivered.
+      - name: review_score
+        description: Review score of the first order, `1`-`5` or `none`.
