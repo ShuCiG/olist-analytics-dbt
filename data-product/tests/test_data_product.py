@@ -35,7 +35,7 @@ TRANSFORM = REPO / "transform"
 DESCRIPTOR = PRODUCT_DIR / "olist-commerce.odps.yaml"
 ODPS_SCHEMA = PRODUCT_DIR / "odps-json-schema-v1.1.0.json"
 # dbt groups outside the Olist product: `platform` = how the platform runs (cost mart, D71)
-NOT_PRODUCT_GROUPS = {"platform"}
+NOT_PRODUCT_GROUPS = {"platform", "ml"}
 
 # dbt column data types (DuckDB and BigQuery spellings) → ODCS logical types
 LOGICAL_TYPES = {
