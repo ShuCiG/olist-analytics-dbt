@@ -438,8 +438,8 @@ models:
       - dbt_expectations.expect_table_row_count_to_equal_other_table:
           arguments:
             compare_model: ref('stg_olist__orders')
-    # Shared by both versions. Columns with data tests are anchored (&x_col) and
-    # extended with their tests in version 2 below.
+    # Columns with data tests are anchored (&x_col) and extended with their tests
+    # in the version below.
     columns:
       - name: order_id
         description: "{{ doc('order_id') }} Primary key."
@@ -542,15 +542,13 @@ models:
         description: True if the order has at least one review.
         data_type: boolean
     # Model versions (D33): `ref('fct_orders')` resolves to latest_version, a consumer
-    # pins one with `ref('fct_orders', v=1)`. The latest version keeps the unsuffixed
-    # table name (alias) the dashboard reads; v1 is the table fct_orders_v1.
+    # pins one with `ref('fct_orders', v=2)`. The latest version keeps the unsuffixed
+    # table name (alias) the dashboard reads. v1 was dropped on its date (D98).
     latest_version: 2
     versions:
       - v: 2
         config:
           alias: fct_orders
-        # Data tests run once, here. v1 is a projection of v2: it inherits the
-        # contract and the primary-key tests, nothing else (no duplicate warnings).
         # `<<: *x_col` = the shared column above plus this version's tests.
         # Observability (Elementary, D38): each day of purchases against the days
         # before it. Warn only: an anomaly is a question for the business, not a bug.
@@ -661,17 +659,6 @@ models:
                     <<: *daily_anomalies
                     column_anomalies: [average]
                   config: *anomaly_config
-      - v: 1
-        deprecation_date: 2026-11-04T00:00:00Z
-        description: >
-          Deprecated, use the latest version. Same rows as v2, with `paid_amount`
-          under its v1 name `payment_value`.
-        columns:
-          - include: all
-            exclude: [paid_amount, customer_key]
-          - name: payment_value
-            description: "{{ doc('paid_amount') }}"
-            data_type: *money_type
 
   - name: fct_order_items
     description: >

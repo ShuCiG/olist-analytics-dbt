@@ -47,7 +47,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 165 data tests, 9 unit tests, enforced model contracts, 281 Python tests; known
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 281 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -159,7 +159,7 @@ erDiagram
 
 | Model | Grain | Notes |
 |---|---|---|
-| `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`), v1 deprecated (`fct_orders_v1`) |
+| `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English; untranslated ones keep the Portuguese name, missing ones `unknown` |
@@ -257,7 +257,7 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **165 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod | every `dbt build` |
+| **162 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod | every `dbt build` |
 | **9 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 455 checks of the input and output promises on the data | CI, after ingest and build |
@@ -312,8 +312,8 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   domains `orders` and `parties`, plus `platform` for the cost models, which are not part of the data product.
   Marts are `public` with enforced contracts; intermediate models used inside one group are `private`
   (a `ref` from another group fails at parse time).
-- **Model versions:** `fct_orders` v2 renamed a column, a breaking change, so v1 stays available as a projection of
-  v2 until its `deprecation_date`; `ref('fct_orders')` resolves to the latest version.
+- **Model versions:** `fct_orders` v2 renamed a column, a breaking change, so v1 stayed available as a projection of
+  v2 until its `deprecation_date`, then was dropped; `ref('fct_orders')` resolves to the latest version.
 - **[dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator)** gates every PR: naming, DAG shape
   (fan-out, rejoins), docs and key-test coverage, contracts on public models, exposures on public models only. Its
   first run led to the `int_orders_joined_to_customers` refactor; accepted exceptions are listed with reasons.
