@@ -266,6 +266,26 @@ def test_malformed_purchase_time_stops_a_used_up_next(run, dump: Path) -> None:
         run("--next")
 
 
+def test_conflicting_rows_of_one_key_stop_the_load(run, dump: Path) -> None:
+    run("--until", "2016-09")
+    orders = [(o, ts, "delivered") for o, ts in ORDERS]
+    header = ["order_id", "order_purchase_timestamp", "order_status"]
+    write_csv(dump / "olist_orders_dataset.csv", header, [*orders, ("o3", ORDERS[2][1], "canceled")])
+    with pytest.raises(Exception, match="conflicting rows"):  # dlt wraps it
+        run("--next")
+    # Nothing loaded, cursor untouched: once the file is fixed the feed goes on
+    write_csv(dump / "olist_orders_dataset.csv", header, orders)
+    assert run("--next")["last_order_at"][:7] == "2016-10"
+
+
+def test_identical_rows_of_one_key_load_once(run, dump: Path) -> None:
+    orders = [(o, ts, "delivered") for o, ts in ORDERS]
+    header = ["order_id", "order_purchase_timestamp", "order_status"]
+    write_csv(dump / "olist_orders_dataset.csv", header, [*orders, orders[0]])
+    run("--until", "2016-09")
+    assert raw_count(run.db, "orders") == 2
+
+
 def test_empty_reference_file_stops_the_load(run, dump: Path) -> None:
     write_csv(dump / pipeline.REFERENCE_TABLES["sellers"], ["id", "zip_code_prefix"], [])
     with pytest.raises(ValueError, match="no rows"):

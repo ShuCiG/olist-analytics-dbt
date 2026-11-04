@@ -100,6 +100,17 @@ uv run python data-product/build_site.py site/data-product      # product page +
 
 On Windows set `PYTHONUTF8=1` (the CLI prints emoji the console code page can't encode).
 
+## Fault injection
+
+```bash
+cd transform && uv run dbt deps && cd ..
+uv run pytest fault_injection                       # all scenarios, ~13 min (4 at a time)
+uv run pytest fault_injection -k missing_payments   # one scenario: baseline + its build
+```
+
+DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defect: a function and a `Scenario` in
+`fault_injection/scenarios.py`, a row in the README table.
+
 ## Semantic layer queries
 
 ```bash
