@@ -4,9 +4,11 @@
 -- item in the series) and revenue (item price + freight). Orders not
 -- canceled/unavailable. Only weeks wholly inside the window; weeks without sales
 -- are zeros, so every series is gapless. The last 13 weeks are the backtest's
--- holdout. Weekly, not daily: BigQuery ML bills ARIMA_PLUS training by input
--- bytes times candidate models, and daily series cost ~7 times as much (D96).
+-- holdout. A table, not a view: BigQuery ML bills training on what its input
+-- query scans, times the candidate models for ARIMA_PLUS (D96).
 -- BigQuery SQL: the models reading it are BigQuery ML.
+{{ config(materialized='table') }}
+
 {% set top_categories = var('forecast_top_categories', 7) %}
 {% set holdout_weeks = 13 %}
 

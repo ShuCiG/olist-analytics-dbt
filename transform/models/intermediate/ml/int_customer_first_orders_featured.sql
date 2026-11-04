@@ -4,8 +4,11 @@
 -- (any status, as `orders_count`); null while fewer than 180 days of history
 -- follow the first order. Sample: the last 90 days of labelled first orders are
 -- the evaluation set (a split in time, as the model would be used), the earlier
--- ones train, the unlabelled ones are only scored.
+-- ones train, the unlabelled ones are only scored. A table, not a view: BigQuery
+-- ML bills training on what its input query scans (D96).
 -- BigQuery SQL: the models reading it are BigQuery ML.
+{{ config(materialized='table') }}
+
 with window_bounds as (
     select * from {{ ref('int_order_history_bounded') }}
 ),

@@ -7,10 +7,22 @@
     list it; the tests go on the tables that read it.
     persist_docs: the model's description goes on the BigQuery model (ALTER
     MODEL), as table comments do for tables (D79).
+    Training is billed on what the SELECT scans, at 50 times a query's price and
+    quota: a view or ephemeral input fails here, before anything is trained (D96).
 #}
 {% materialization bqml_model, adapter='bigquery' -%}
     {%- set target_relation = this.incorporate(type='table') -%}
     {%- set ml_options = config.get('ml_options', {}) -%}
+
+    {%- for node_id in model.depends_on.nodes -%}
+        {%- set parent = graph.nodes.get(node_id) -%}
+        {%- if parent and parent.config.materialized in ['view', 'ephemeral'] -%}
+            {{ exceptions.raise_compiler_error(
+                model.name ~ " trains on " ~ parent.name ~ ", a " ~ parent.config.materialized
+                ~ ": BigQuery ML would bill its whole scan per training. Materialize it as a table (D96)."
+            ) }}
+        {%- endif -%}
+    {%- endfor %}
 
     {{ run_hooks(pre_hooks) }}
 
