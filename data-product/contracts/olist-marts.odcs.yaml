@@ -90,10 +90,10 @@ schema:
   - name: fct_orders
     physicalName: fct_orders
     physicalType: table
-    description: One row per order. dbt model fct_orders, version 2 (latest).
+    description: One row per order. dbt model fct_orders.
     authoritativeDefinitions:
       - type: businessDefinition
-        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_orders.v2
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_orders
     properties:
       - name: order_id
         logicalType: string

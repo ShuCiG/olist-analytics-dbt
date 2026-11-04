@@ -9,6 +9,8 @@ version: 2
 # every BigQuery build — expected (D24).
 # primary_key: DuckDB enforces it; BigQuery only records it (warn_unenforced: false),
 # the unique + not_null tests check it there.
+# Semantic layer (D99): `dimension: {type: time}`, not the short `dimension: time`,
+# with which dbt-core drops `granularity` and MetricFlow fails.
 
 models:
   - name: dim_date
@@ -17,7 +19,7 @@ models:
     config:
       group: orders
       access: protected
-    # Day-grain time spine of the semantic layer (_marts__semantic_models.yml):
+    # Day-grain time spine of the semantic layer (semantic_model on the marts below):
     # MetricFlow joins to it for time grains and cumulative / offset metrics
     time_spine:
       standard_granularity_column: date_day
@@ -52,6 +54,7 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+        entity: {name: customer, type: primary}
       - name: customer_key
         description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
         data_type: string
@@ -67,6 +70,7 @@ models:
       - name: state
         description: Two-letter state code of the latest order.
         data_type: string
+        dimension: categorical
       - name: latitude
         description: "{{ doc('latitude') }}"
         data_type: &float_type "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
@@ -78,6 +82,8 @@ models:
       - name: first_order_at
         description: Purchase timestamp of the first order.
         data_type: timestamp
+        dimension: {type: time}
+        granularity: day
       - name: last_order_at
         description: Purchase timestamp of the latest order.
         data_type: timestamp
@@ -95,6 +101,7 @@ models:
       - name: is_repeat_customer
         description: True if the person placed more than one order.
         data_type: boolean
+        dimension: categorical
       - name: lifetime_value
         description: Sum of payments on orders that are not canceled/unavailable, in BRL.
         data_type: &money_type "{{ 'numeric' if target.type == 'bigquery' else 'numeric(18, 2)' }}"
@@ -102,6 +109,33 @@ models:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
+    semantic_model:
+      enabled: true
+      name: customers
+      group: parties
+    agg_time_dimension: first_order_at
+    metrics:
+      - name: new_customers
+        label: New customers
+        description: People whose first order falls in the period.
+        agg: count
+        expr: customer_unique_id
+        config: {group: parties}
+      - name: repeat_customers
+        label: Repeat customers
+        description: New customers of the period who ordered more than once (ever).
+        agg: count
+        expr: customer_unique_id
+        filter: |
+          {{ Dimension('customer__is_repeat_customer') }} = true
+        config: {group: parties}
+      - name: repeat_customer_rate
+        label: Repeat customer rate
+        description: Share of new customers who came back for another order. Without a time filter = all customers.
+        type: ratio
+        numerator: repeat_customers
+        denominator: new_customers
+        config: {group: parties}
 
   - name: dim_customer_rfm
     description: >
@@ -206,13 +240,17 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+        entity: {name: cohort, type: primary}
       - name: cohort_month
         description: First day of the month of the cohort's first orders.
         data_type: date
+        dimension: {type: time}
+        granularity: month
         data_tests: [not_null]
       - name: months_since_first_order
         description: Calendar months between `cohort_month` and `activity_month`; 0 = the month of the first order.
         data_type: integer
+        dimension: categorical
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -258,6 +296,54 @@ models:
           `cumulative_revenue` / `cohort_size`: value per acquired person after this
           many months (LTV curve), in BRL.
         data_type: *money_type
+    semantic_model:
+      enabled: true
+      name: customer_cohorts
+      group: parties
+    agg_time_dimension: cohort_month
+    metrics:
+      # Sums over cohorts weight each by its size.
+      - name: cohort_size
+        label: Cohort size
+        description: People acquired; with a `months_since_first_order` filter, only cohorts old enough to have that month.
+        agg: sum
+        expr: cohort_size
+        config: {group: parties}
+      - name: retained_customers
+        label: Retained customers
+        description: People who ordered again in a given month after their first (group by months since first order).
+        agg: sum
+        expr: active_customers
+        config: {group: parties}
+      - name: cohort_retention_rate
+        label: Cohort retention rate
+        description: >
+          Retained customers / cohort size, per month since the first order (1 in
+          month 0). Without that dimension it averages over all months: group by it.
+        type: ratio
+        numerator: retained_customers
+        denominator: cohort_size
+        config: {group: parties}
+      - name: ltv_3_months
+        label: 3-month LTV, BRL
+        description: >
+          Revenue per acquired person in the calendar month of the first order and the
+          two after (months 0-2). Cohorts younger than that are left out.
+        type: ratio
+        numerator:
+          name: cohort_revenue_to_date
+          filter: &month_2 |
+            {{ Dimension('cohort__months_since_first_order') }} = 2
+        denominator:
+          name: cohort_size
+          filter: *month_2
+        config: {group: parties}
+      - name: cohort_revenue_to_date
+        label: Cohort revenue to date, BRL
+        description: Cumulative revenue of the cohorts up to a month since the first order (filter or group by that month).
+        agg: sum
+        expr: cumulative_revenue
+        config: {group: parties}
 
   - name: dim_sellers
     description: One row per seller with zip-prefix centroid coordinates.
@@ -431,15 +517,34 @@ models:
       group: orders
       contract:
         enforced: true
-      # dbt v2 (D83) creates a view named after the model for the latest version by
-      # default; v2 already takes the unsuffixed name (alias below). dbt-core: off anyway.
-      latest_version_pointer: {enabled: false}
     data_tests:
       - dbt_expectations.expect_table_row_count_to_equal_other_table:
           arguments:
             compare_model: ref('stg_olist__orders')
-    # Columns with data tests are anchored (&x_col) and extended with their tests
-    # in the version below.
+      # Observability (Elementary, D38): each day of purchases against the days
+      # before it. Warn only: an anomaly is a question for the business, not a bug.
+      - elementary.volume_anomalies:
+          description: >-
+            Days with an unusual number of orders compared with the same weekday in
+            the previous 14 weeks. A drop means orders stopped arriving (source feed or
+            checkout broken); a spike is a campaign (Black Friday) or duplicated loads.
+          # Each day vs the same weekday before it. With weekday seasonality
+          # Elementary multiplies the training period by 7: 14 days = 14 weeks.
+          arguments: &daily_anomalies
+            timestamp_column: purchased_at
+            time_bucket: {period: day, count: 1}
+            training_period: {period: day, count: 14}
+            detection_period: {period: day, count: 30}
+            seasonality: day_of_week
+          config: &anomaly_config
+            severity: warn
+            meta: {alert_unit: days}
+      - elementary.freshness_anomalies:
+          description: >-
+            Days whose gap since the previous order is unusually long. New orders
+            normally arrive every few minutes; a long gap means the feed stalled.
+          arguments: *daily_anomalies
+          config: *anomaly_config
     columns:
       - name: order_id
         description: "{{ doc('order_id') }} Primary key."
@@ -449,36 +554,88 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
-      - &customer_unique_id_col
-        name: customer_unique_id
+        entity: {name: order, type: primary}
+      - name: customer_unique_id
         description: "{{ doc('customer_unique_id') }}"
         data_type: string
         policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
+        entity: {name: customer, type: foreign}
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_unique_id
       - name: customer_key
         description: "Pseudonym of the person: SHA-256 of a secret key and `customer_unique_id`, the same in every mart. Untagged: readers without access to the id (the dashboard) count and join people on it (D94)."
         data_type: string
       - name: order_status
         description: "{{ doc('order_status') }}"
         data_type: string
-      - &purchase_date_col
-        name: purchase_date
+        dimension: categorical
+      - name: purchase_date
         description: "{{ doc('purchase_date') }}"
         data_type: date
+        dimension: {type: time}
+        granularity: day
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: purchased_at
         description: Purchase timestamp.
         data_type: timestamp
-      - &approved_at_col
-        name: approved_at
+      - name: approved_at
         description: Payment approval timestamp.
         data_type: timestamp
-      - &delivered_to_carrier_at_col
-        name: delivered_to_carrier_at
+        data_tests:
+          - is_not_before:
+              arguments:
+                earlier_column: purchased_at
+      - name: delivered_to_carrier_at
         description: Handed over to the logistics partner.
         data_type: timestamp
-      - &delivered_to_customer_at_col
-        name: delivered_to_customer_at
+        data_tests:
+          - is_not_before:
+              description: >-
+                Orders handed to the carrier before the payment was approved. The
+                approval-to-shipping time (seller handling KPI) is understated, even
+                negative, for them. Known in Olist (1,359 orders, approval likely recorded
+                late); a sharp rise means sellers ship unpaid orders or timestamps broke.
+              arguments:
+                earlier_column: approved_at
+              config:
+                severity: warn
+                meta: {alert_unit: orders}
+          - is_not_before:
+              description: >-
+                Orders handed to the carrier before the customer placed them, which is
+                impossible. Shipping-time KPIs for these orders are wrong. Known source
+                defect (166 orders); report a rise to the source system owner.
+              arguments:
+                earlier_column: purchased_at
+              config:
+                severity: warn
+                meta: {alert_unit: orders}
+      - name: delivered_to_customer_at
         description: Delivered to the customer.
         data_type: timestamp
+        data_tests:
+          - is_not_before:
+              arguments:
+                earlier_column: purchased_at
+          - is_not_before:
+              description: >-
+                Orders delivered to the customer before the carrier picked them up, which
+                is impossible. Their carrier transit time is negative, so the average
+                transit time is understated. Known source defect (23 orders).
+              arguments:
+                earlier_column: delivered_to_carrier_at
+              config:
+                severity: warn
+                meta: {alert_unit: orders}
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
         data_type: date
@@ -500,10 +657,19 @@ models:
       - name: payments_count
         description: Number of payment records.
         data_type: bigint
-      - &paid_amount_col
-        name: paid_amount
+      - name: paid_amount
         description: "{{ doc('paid_amount') }}"
         data_type: *money_type
+        data_tests:
+          - elementary.column_anomalies:
+              description: >-
+                Days with an unusual average paid amount per order. It moves with
+                prices, vouchers and the product mix; a jump also follows a currency
+                or decimal error in the payment feed.
+              arguments:
+                <<: *daily_anomalies
+                column_anomalies: [average]
+              config: *anomaly_config
       - name: max_installments
         description: Largest installment count among the order's payments.
         data_type: integer
@@ -531,137 +697,112 @@ models:
       - name: is_delivered
         description: True if a delivery timestamp exists.
         data_type: boolean
+        dimension: categorical
       - name: is_delivered_late
         description: Delivered after the estimated date (date comparison); false if not delivered.
         data_type: boolean
-      - &review_score_col
-        name: review_score
+        dimension: categorical
+      - name: review_score
         description: Score of the latest review, 1–5; null if no review.
         data_type: integer
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+          - elementary.column_anomalies:
+              description: >-
+                Days with an unusual average review score. A drop points to late
+                deliveries or a seller with bad products; check the delivery KPIs.
+              arguments:
+                <<: *daily_anomalies
+                column_anomalies: [average]
+              config: *anomaly_config
       - name: has_review
         description: True if the order has at least one review.
         data_type: boolean
-    # Model versions (D33): `ref('fct_orders')` resolves to latest_version, a consumer
-    # pins one with `ref('fct_orders', v=2)`. The latest version keeps the unsuffixed
-    # table name (alias) the dashboard reads. v1 was dropped on its date (D98).
-    latest_version: 2
-    versions:
-      - v: 2
-        # Set so the next deploy's manifest lets the version go: dbt accepts deleting a
-        # contracted version only past this date. The model becomes unversioned (D99).
-        deprecation_date: 2026-11-05
-        config:
-          alias: fct_orders
-        # `<<: *x_col` = the shared column above plus this version's tests.
-        # Observability (Elementary, D38): each day of purchases against the days
-        # before it. Warn only: an anomaly is a question for the business, not a bug.
-        data_tests:
-          - elementary.volume_anomalies:
-              description: >-
-                Days with an unusual number of orders compared with the same weekday in
-                the previous 14 weeks. A drop means orders stopped arriving (source feed or
-                checkout broken); a spike is a campaign (Black Friday) or duplicated loads.
-              # Each day vs the same weekday before it. With weekday seasonality
-              # Elementary multiplies the training period by 7: 14 days = 14 weeks.
-              arguments: &daily_anomalies
-                timestamp_column: purchased_at
-                time_bucket: {period: day, count: 1}
-                training_period: {period: day, count: 14}
-                detection_period: {period: day, count: 30}
-                seasonality: day_of_week
-              config: &anomaly_config
-                severity: warn
-                meta: {alert_unit: days}
-          - elementary.freshness_anomalies:
-              description: >-
-                Days whose gap since the previous order is unusually long. New orders
-                normally arrive every few minutes; a long gap means the feed stalled.
-              arguments: *daily_anomalies
-              config: *anomaly_config
-        columns:
-          - include: all
-          - <<: *customer_unique_id_col
-            data_tests:
-              - not_null
-              - relationships:
-                  arguments:
-                    to: ref('dim_customers')
-                    field: customer_unique_id
-          - <<: *purchase_date_col
-            data_tests:
-              - not_null
-              - relationships:
-                  arguments:
-                    to: ref('dim_date')
-                    field: date_day
-          - <<: *approved_at_col
-            data_tests:
-              - is_not_before:
-                  arguments:
-                    earlier_column: purchased_at
-          - <<: *delivered_to_carrier_at_col
-            data_tests:
-              - is_not_before:
-                  description: >-
-                    Orders handed to the carrier before the payment was approved. The
-                    approval-to-shipping time (seller handling KPI) is understated, even
-                    negative, for them. Known in Olist (1,359 orders, approval likely recorded
-                    late); a sharp rise means sellers ship unpaid orders or timestamps broke.
-                  arguments:
-                    earlier_column: approved_at
-                  config:
-                    severity: warn
-                    meta: {alert_unit: orders}
-              - is_not_before:
-                  description: >-
-                    Orders handed to the carrier before the customer placed them, which is
-                    impossible. Shipping-time KPIs for these orders are wrong. Known source
-                    defect (166 orders); report a rise to the source system owner.
-                  arguments:
-                    earlier_column: purchased_at
-                  config:
-                    severity: warn
-                    meta: {alert_unit: orders}
-          - <<: *delivered_to_customer_at_col
-            data_tests:
-              - is_not_before:
-                  arguments:
-                    earlier_column: purchased_at
-              - is_not_before:
-                  description: >-
-                    Orders delivered to the customer before the carrier picked them up, which
-                    is impossible. Their carrier transit time is negative, so the average
-                    transit time is understated. Known source defect (23 orders).
-                  arguments:
-                    earlier_column: delivered_to_carrier_at
-                  config:
-                    severity: warn
-                    meta: {alert_unit: orders}
-          - <<: *paid_amount_col
-            data_tests:
-              - elementary.column_anomalies:
-                  description: >-
-                    Days with an unusual average paid amount per order. It moves with
-                    prices, vouchers and the product mix; a jump also follows a currency
-                    or decimal error in the payment feed.
-                  arguments:
-                    <<: *daily_anomalies
-                    column_anomalies: [average]
-                  config: *anomaly_config
-          - <<: *review_score_col
-            data_tests:
-              - accepted_values:
-                  arguments:
-                    values: [1, 2, 3, 4, 5]
-                    quote: false
-              - elementary.column_anomalies:
-                  description: >-
-                    Days with an unusual average review score. A drop points to late
-                    deliveries or a seller with bad products; check the delivery KPIs.
-                  arguments:
-                    <<: *daily_anomalies
-                    column_anomalies: [average]
-                  config: *anomaly_config
+    semantic_model:
+      enabled: true
+      name: orders
+      group: orders
+    agg_time_dimension: purchase_date
+    metrics:
+      - name: orders
+        label: Orders
+        description: Orders placed, any status.
+        agg: count
+        expr: order_id
+        config: {group: orders}
+      - name: sold_orders
+        label: Sold orders
+        description: Orders not canceled or unavailable.
+        agg: count
+        expr: order_id
+        filter: &sold_filter |
+          {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+        config: {group: orders}
+      - name: revenue
+        label: Revenue, BRL
+        description: Items + freight of sold orders (not canceled or unavailable).
+        agg: sum
+        expr: order_amount
+        filter: *sold_filter
+        config: {group: orders}
+      - name: average_order_value
+        label: Average order value, BRL
+        description: Revenue per sold order.
+        type: ratio
+        numerator: revenue
+        denominator: sold_orders
+        config: {group: orders}
+      - name: customers
+        label: Customers
+        description: Distinct people who ordered in the period.
+        agg: count_distinct
+        expr: customer_unique_id
+        config: {group: orders}
+      - name: revenue_per_customer
+        label: Revenue per customer, BRL
+        description: Revenue / customers who ordered in the period.
+        type: ratio
+        numerator: revenue
+        denominator: customers
+        config: {group: orders}
+      - name: delivered_orders
+        label: Delivered orders
+        description: Orders with a delivery timestamp.
+        agg: count
+        expr: order_id
+        filter: |
+          {{ Dimension('order__is_delivered') }} = true
+        config: {group: orders}
+      - name: late_deliveries
+        label: Late deliveries
+        description: Orders delivered after the date promised at purchase.
+        agg: count
+        expr: order_id
+        filter: |
+          {{ Dimension('order__is_delivered_late') }} = true
+        config: {group: orders}
+      - name: late_delivery_rate
+        label: Late delivery rate
+        description: Share of delivered orders that arrived after the promised date.
+        type: ratio
+        numerator: late_deliveries
+        denominator: delivered_orders
+        config: {group: orders}
+      - name: avg_days_to_deliver
+        label: Avg days to deliver
+        description: Purchase to delivery, days; delivered orders only (null otherwise).
+        agg: average
+        expr: days_to_deliver
+        config: {group: orders}
+      - name: avg_review_score
+        label: Avg review score
+        description: Average latest review score, 1–5, of reviewed orders.
+        agg: average
+        expr: review_score
+        config: {group: orders}
 
   - name: fct_order_items
     description: >

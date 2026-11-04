@@ -71,7 +71,7 @@ outputPorts:
         version: 1.3.0
     authoritativeDefinitions:
       - type: implementation
-        url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__semantic_models.yml
+        url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__models.yml
 
 managementPorts:
   - name: docs

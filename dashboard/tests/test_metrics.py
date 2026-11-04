@@ -1,7 +1,7 @@
 """Dashboard KPIs = dbt Semantic Layer metrics, on the same warehouse.
 
 The pages compute their KPI tiles in their own SQL (dashboard/kpis.py); the
-metric definitions live in transform/models/marts/_marts__semantic_models.yml.
+metric definitions live in transform/models/marts/_marts__models.yml.
 This test asks MetricFlow (`mf query`) for the same numbers and compares, so a
 change to either side that makes them disagree fails CI.
 
