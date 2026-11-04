@@ -1,8 +1,7 @@
 -- BigQuery ML: ARIMA_PLUS per series (category x measure) on the whole history
 -- window, for the forecast of the 13 weeks after it (D96). Weekly: ~85 points
--- per series; daily data would add weekday seasonality and holidays but costs
--- ~7 times as much to train. auto_arima_max_order 3 (default 5) cuts the
--- candidate models BigQuery fits and bills per series.
+-- per series, no weekday seasonality or holidays to model. auto_arima_max_order
+-- 3 (default 5) cuts the candidate models BigQuery fits and bills per series.
 {{
     config(
         materialized='bqml_model',
