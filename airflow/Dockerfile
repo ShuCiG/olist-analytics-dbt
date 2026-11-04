@@ -10,7 +10,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61
 # sends (lineage/columns.py, D87); pinned against Airflow's constraint file
 RUN pip install --no-cache-dir \
     "apache-airflow==3.3.2" \
-    "astronomer-cosmos==1.15.1" \
+    "astronomer-cosmos==1.16.0" \
     sqlglot \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
 
