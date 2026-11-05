@@ -47,7 +47,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 296 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 318 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -69,7 +69,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
 - **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), ELT, cross-database SQL
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
-- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), GHCR images, branch protection,
+- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), column impact from manifests, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
 - **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, custom IAM roles, Workload Identity Federation, budget, quota, per-query byte caps, cost per dbt node from job labels and `INFORMATION_SCHEMA.JOBS`), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
@@ -265,7 +265,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **296 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **318 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -442,7 +442,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 |---|---|
 | sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main`, dbt v2 parse (warning only, [D83](docs/DECISIONS.md)) | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
-| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages (catalog re-read only for changed relations on slim deploys, [D77](docs/DECISIONS.md)); manifest kept for slim CI |
+| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the column impact of the change, the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages (catalog re-read only for changed relations on slim deploys, [D77](docs/DECISIONS.md)); manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
@@ -454,7 +454,10 @@ redeploys the in-warehouse project and its task graph from main ([D85](docs/DECI
 both weekly workflows on time through GitHub's dispatch API (GitHub's own `schedule` fired hours late), and the daily
 drift check fails when a week was missed ([D95](docs/DECISIONS.md)).
 
-Two PR comments, updated on each push, come from the BigQuery build. The **data diff** compares every mart the build
+Three PR comments, updated on each push, come from the BigQuery build. The **column impact** names who a change
+reaches: per changed column (added, removed, retyped, computed differently) the downstream columns, metrics, contract
+columns, usage agreement entries and exposures, from the manifests of the PR and of prod with no warehouse query
+([D101](docs/DECISIONS.md)). The **data diff** compares every mart the build
 made with its prod table row by row on the primary key (`dbt-labs/audit_helper`): rows modified / added / removed,
 the columns that differ, schema changes; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
 comment lists what the build billed, the most expensive nodes each next to its last prod build, Elementary's uploads
@@ -570,7 +573,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
-├── lineage/                     # column lineage (sqlglot) and exposure jobs for the OpenLineage events
+├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota

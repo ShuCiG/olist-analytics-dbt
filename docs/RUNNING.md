@@ -238,6 +238,20 @@ cd transform && uv run dbt run-operation drop_isolated_datasets --target ci   # 
 
 The model ignores `--full-refresh` (its rows outlive the 180 days of job history); drop the table to rebuild it.
 
+### PR column impact
+
+What slim CI posts on a PR (D101). Local: compile what the branch changes against the last prod deploy's manifest,
+then read both manifests. No warehouse data: `dbt compile` only needs BigQuery metadata for the deferral.
+
+```bash
+run_id=$(gh api "repos/ShuCiG/olist-analytics-dbt/actions/artifacts?name=prod-manifest" \
+  --jq '[.artifacts[] | select(.workflow_run.head_branch == "main")][0].workflow_run.id')
+gh run download "$run_id" --name prod-manifest --dir prod-state
+(cd transform && DBT_CI_SCHEMA=ci_impact_local uv run dbt compile --target ci --select state:modified+ \
+  --exclude package:elementary --defer --state ../prod-state)
+uv run python -m lineage.impact prod-state/manifest.json transform/target/manifest.json column-impact.md
+```
+
 ### PR data diff
 
 What slim CI posts on a PR (D73), run locally as `olist-ci`: build the changed models into throwaway datasets

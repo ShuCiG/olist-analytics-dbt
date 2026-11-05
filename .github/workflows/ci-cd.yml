@@ -442,6 +442,17 @@ jobs:
             uv run dbt build --target ci --exclude package:elementary
           fi
 
+      # Which columns this PR changes and who reads them (D101), from the manifests:
+      # no warehouse query. Before the data diff, whose run-operation overwrites the
+      # build's manifest. A report: never fails the build.
+      - name: Column impact
+        if: ${{ !cancelled() && steps.prod-state.outputs.slim == 'true' }}
+        continue-on-error: true
+        run: |
+          uv run python -m lineage.impact prod-state/manifest.json transform/target/manifest.json column-impact.md \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          cat column-impact.md >> "$GITHUB_STEP_SUMMARY"
+
       # The marts this build made vs their prod tables (audit_helper, D73), for the
       # PR comment of job pr-comments. Right after the build: it reads the build's
       # run_results.json. Before the cost step, which counts its bytes. Also after
@@ -465,13 +476,14 @@ jobs:
           cat ci-cost.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload PR comments
-        if: ${{ !cancelled() && hashFiles('ci-cost.md', 'data-diff.md') != '' }}
+        if: ${{ !cancelled() && hashFiles('ci-cost.md', 'data-diff.md', 'column-impact.md') != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pr-comments
           path: |
             ci-cost.md
             data-diff.md
+            column-impact.md
           retention-days: 7
 
       - name: Drop CI datasets
@@ -480,8 +492,11 @@ jobs:
         run: uv run dbt run-operation drop_isolated_datasets --target ci
 
   # The PR comments of the BigQuery build, each updated on every push: its cost
-  # (D72) and its data diff vs prod (D73); none when the build skipped (docs only,
-  # Dependabot). Each file's first line is its marker. A job of its own: the token
+  # (D72), its data diff vs prod (D73) and its column impact (D101); none when the
+  # build skipped (docs only, Dependabot). Each file's first line is its marker; a
+  # second line <!-- update-only --> only updates an earlier comment (no column
+  # changed: no new comment, but one from an earlier push must not stay as it was).
+  # A job of its own: the token
   # that writes PR comments never meets PR code (no checkout, the bodies are the
   # Markdown the build job uploaded).
   pr-comments:
@@ -500,17 +515,17 @@ jobs:
           PR: ${{ github.event.number }}
         run: |
           if ! gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name pr-comments; then
-            echo "::warning::No PR comments in this run: see steps 'Data diff vs prod' and 'BigQuery cost of this run'"
+            echo "::warning::No PR comments in this run: see steps 'Column impact', 'Data diff vs prod' and 'BigQuery cost of this run'"
             exit 0
           fi
-          for file in data-diff.md ci-cost.md; do
+          for file in column-impact.md data-diff.md ci-cost.md; do
             [ -f "$file" ] || { echo "::notice::No $file in this run"; continue; }
             marker=$(head -n 1 "$file")
             id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
               --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
             if [ -n "$id" ]; then
               gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$file" > /dev/null
-            else
+            elif ! sed -n 2p "$file" | grep -q '^<!-- update-only -->$'; then
               gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$file" > /dev/null
             fi
           done
