@@ -197,7 +197,7 @@ def test_needs_build(paths: list[str], build: bool) -> None:
 
 # Jobs that cost BigQuery bytes or minutes of image builds; they and their
 # dependants skip when `changes` says docs only
-GATED = {"dbt-project-evaluator", "airflow-dags", "dbt-build", "dbt-build-bigquery", "deploy-prod"}
+GATED = {"dbt-project-evaluator", "airflow-dags", "fault-injection", "dbt-build", "dbt-build-bigquery", "deploy-prod"}
 
 
 def test_expensive_jobs_skip_docs_only_changes() -> None:

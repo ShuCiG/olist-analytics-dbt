@@ -156,6 +156,17 @@ def read_orders(source_dir: Path) -> pa.Table:
     return orders
 
 
+def refuse_conflicting_rows(table: pa.Table, primary_key: list[str], file_name: str) -> None:
+    """Refuse two different rows with one key: dlt's merge would silently keep one.
+
+    Identical rows pass, the merge collapses them and nothing is lost.
+    """
+    distinct_rows = table.group_by(table.column_names).aggregate([]).num_rows
+    distinct_keys = table.group_by(primary_key).aggregate([]).num_rows
+    if distinct_rows > distinct_keys:
+        raise ValueError(f"{file_name}: {distinct_rows - distinct_keys} conflicting rows for one {primary_key}")
+
+
 def next_month(month: str) -> str:
     """'2017-12' -> '2018-01'."""
     year, mon = map(int, month.split("-"))
@@ -218,6 +229,7 @@ def olist_source(
     def order_rows(file_name: str, primary_key: list[str]):
         table = read_csv_as_strings(source_dir / file_name)
         table = table.filter(pc.is_in(table["order_id"], value_set=chunk_order_ids()))
+        refuse_conflicting_rows(table, primary_key, file_name)
         yield with_loaded_at(with_required(table, primary_key), loaded_at)
 
     for table_name, (file_name, primary_key) in ORDER_TABLES.items():

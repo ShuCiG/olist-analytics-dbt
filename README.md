@@ -47,7 +47,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 292 Python tests; known
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 296 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -264,7 +264,8 @@ flowchart LR
 | **Data contracts** | 455 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **292 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
+| **296 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -276,13 +277,45 @@ that the alert emails quote:
 |---|---|
 | `review_id` is not unique; 547 orders have several reviews | composite key `(review_id, order_id)`; latest review per order in `int_order_reviews_deduplicated` |
 | 278 customer zip prefixes missing from geolocation | `relationships` test, `severity: warn`; dims left-join the centroids |
-| 249 orders where amount paid ≠ items + freight (> 1 BRL) | singular test `assert_payments_match_order_amount`, `severity: warn` |
+| 250 orders where amount paid ≠ items + freight (> 1 BRL) | singular test `assert_payments_match_order_amount`, `severity: warn` |
 | 2 payments with 0 installments | range test, `severity: warn` |
 | 2 product categories have no English translation | `coalesce` fallback to the Portuguese name |
 | 1,359 orders handed to the carrier before payment approval (166 before purchase) | `is_not_before`, `severity: warn` |
 | 23 orders delivered to the customer before carrier pickup | `is_not_before`, `severity: warn` |
 
 </details>
+
+### Fault injection
+
+A passing test suite says little if a broken feed would pass too. [`fault_injection/`](fault_injection/)
+writes a small consistent dump, loads and builds its clean months once, then delivers the next month with one
+defect per scenario through the real loader and `dbt build` on DuckDB. Each scenario declares what must react, so a
+change that removes a reaction fails CI; a control month with no defect must stay silent
+([D100](docs/DECISIONS.md)).
+
+| Defect | What catches it | Effect |
+|---|---|---|
+| No defect (control) | nothing may react | |
+| Two different rows for one order | loader | load stops |
+| Duplicated customers | `unique` on staging | build fails |
+| Payment amounts × 100 | payment reconciliation test, Elementary column anomaly | warning |
+| Item prices × 100 | payment reconciliation test | warning |
+| Orders without payments | payment reconciliation test | warning |
+| Delivery before purchase | `is_not_before` on `fct_orders` | build fails |
+| Orders with an unknown customer | `relationships` on staging | build fails |
+| Order lines with an unknown product | `relationships` on staging and `fct_order_items` | build fails |
+| New source column | SCHEMA email, Elementary schema change | warning |
+| Optional source column removed | SCHEMA email | warning |
+| Required source column removed | SCHEMA email, input contract, `not_null` on staging | build fails |
+| Unknown order status | `accepted_values` on staging | build fails |
+| Feed delivers 5 % of the orders | Elementary volume and freshness anomalies | warning |
+| Well-formed but impossible purchase time | cast error in the first test that reads staging | build fails |
+| Review score out of range | `accepted_values` on staging | build fails |
+| Identical duplicate orders | nothing: the loader's merge collapses them, no harm | absorbed |
+| Late status change of a loaded order | **nothing: known gap** | raw keeps the old status |
+
+The known gap: the loader reads each purchase month once, so a later change to an already loaded order never
+arrives. Accepted for a static dump; a live feed would need a load by update time.
 
 ## Data observability
 
@@ -538,6 +571,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot) and exposure jobs for the OpenLineage events
+├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email

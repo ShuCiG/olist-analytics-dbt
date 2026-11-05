@@ -233,6 +233,31 @@ jobs:
             -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
             --entrypoint python olist-airflow:ci /opt/project/airflow/check_dags.py
 
+  # Fault injection (D100): corrupted dumps through the real loader and dbt on DuckDB,
+  # each defect's expected reaction checked. No warehouse, no Kaggle download.
+  fault-injection:
+    name: fault injection
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    needs: [changes, python-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: pytest fault_injection
+        run: uv run pytest fault_injection -q
+
   # Required check: gating it on pyright and the Python tests blocks merges with
   # type errors or failing tests. Skipped for docs-only changes (still passes)
   dbt-build:
@@ -853,7 +878,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
