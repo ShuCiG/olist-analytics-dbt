@@ -1,7 +1,7 @@
 """KPI tiles of the pages, one query each, for a purchase-date period.
 
 Kept out of the page scripts so a test can run the same SQL: these numbers must
-equal the dbt Semantic Layer metrics (transform/models/marts/_marts__semantic_models.yml),
+equal the dbt Semantic Layer metrics (transform/models/marts/_marts__models.yml),
 checked by dashboard/tests/test_metrics.py against `mf query`.
 """
 

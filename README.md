@@ -45,7 +45,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
-- **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
+- **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
 - **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 292 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
@@ -86,7 +86,7 @@ flowchart LR
 
     subgraph product[Data product olist-commerce · Product Owner]
         raw[raw<br/>8 tables] --> staging[staging<br/>8 views] --> intermediate[intermediate<br/>6 views] --> marts[marts<br/>star schema]
-        marts --> metrics[semantic layer<br/>14 metrics]
+        marts --> metrics[semantic layer<br/>19 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
 
@@ -123,7 +123,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
 | Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 7 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
-| Output | `metrics` | [semantic models](transform/models/marts/_marts__semantic_models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
+| Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
 | Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 44 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
@@ -314,7 +314,9 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   Marts are `public` with enforced contracts; intermediate models used inside one group are `private`
   (a `ref` from another group fails at parse time).
 - **Model versions:** `fct_orders` v2 renamed a column, a breaking change, so v1 stayed available as a projection of
-  v2 until its `deprecation_date`, then was dropped; `ref('fct_orders')` resolves to the latest version.
+  v2 until its `deprecation_date`, then was dropped. With one version left the model went back to unversioned: the
+  table name and `ref('fct_orders')` stayed, and dbt-core allows the inline semantic layer only on unversioned models
+  ([D99](docs/DECISIONS.md#d99--2026-11-04--semantic-layer-on-the-inline-yaml-spec-fct_orders-unversioned)).
 - **[dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator)** gates every PR: naming, DAG shape
   (fan-out, rejoins), docs and key-test coverage, contracts on public models, exposures on public models only. Its
   first run led to the `int_orders_joined_to_customers` refactor; accepted exceptions are listed with reasons.
@@ -328,9 +330,10 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
 
 ## Semantic layer
 
-14 metrics are defined once in [`_marts__semantic_models.yml`](transform/models/marts/_marts__semantic_models.yml)
-(MetricFlow): semantic models on `fct_orders` and `dim_customers` with entities, dimensions and measures, simple
-metrics with filters, ratio metrics, 2 saved queries, `dim_date` as time spine. MetricFlow writes the SQL for the
+19 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
+(MetricFlow, dbt's inline spec): semantic models on `fct_orders`, `dim_customers` and `fct_customer_cohorts`, entities
+and dimensions on the columns, simple metrics with filters, ratio metrics, 3
+[saved queries](transform/models/marts/_marts__semantic_models.yml), `dim_date` as time spine. MetricFlow writes the SQL for the
 current warehouse, joins included.
 
 | Metric | Definition |
