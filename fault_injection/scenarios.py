@@ -139,13 +139,13 @@ SCENARIOS = [
     Scenario(
         "Payment amounts × 100",
         payments_times_100,
-        ("warn:assert_payments_match_order_amount", "warn:elementary_column_anomalies_fct_orders_v2_average__paid_amount"),
+        ("warn:assert_payments_match_order_amount", "warn:elementary_column_anomalies_fct_orders_average__paid_amount"),
     ),
     Scenario("Item prices × 100", prices_times_100, ("warn:assert_payments_match_order_amount",)),
     Scenario(
         "Delivery before purchase",
         delivered_before_purchase,
-        ("fail:is_not_before_fct_orders_v2_delivered_to_customer_at__purchased_at",),
+        ("fail:is_not_before_fct_orders_delivered_to_customer_at__purchased_at",),
     ),
     Scenario(
         "Orders with an unknown customer",
@@ -179,7 +179,7 @@ SCENARIOS = [
     Scenario(
         "Feed delivers 5 % of the orders",
         feed_mostly_missing,
-        ("warn:elementary_volume_anomalies_fct_orders_v2", "warn:elementary_freshness_anomalies_fct_orders_v2"),
+        ("warn:elementary_volume_anomalies_fct_orders", "warn:elementary_freshness_anomalies_fct_orders"),
     ),
     Scenario(
         "Well-formed but impossible purchase time",
