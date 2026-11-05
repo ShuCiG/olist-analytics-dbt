@@ -16,6 +16,7 @@ No Airflow or OpenLineage imports: tested in the project venv (tests/test_lineag
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 import sqlglot
 from sqlglot import exp
@@ -25,6 +26,23 @@ from sqlglot.lineage import Node, lineage
 # output column -> its input columns, as (table, column); table = database.schema.name,
 # the dataset name OpenLineage's dbt integration gives each relation
 ColumnLineage = dict[str, list[tuple[str, str]]]
+
+
+@dataclass(frozen=True)
+class ColumnTrace:
+    inputs: list[tuple[str, str]]
+    # Every hop of the column through the query: equal strings = same computation
+    expression: str
+    # A branch ends on a column reference, not a table: no inputs means "not placed"
+    # rather than a constant or count(*)
+    reads_columns: bool
+
+
+@dataclass(frozen=True)
+class ModelTrace:
+    columns: dict[str, ColumnTrace]
+    # False: a star over unknown columns, or a column that reads something unplaced
+    complete: bool
 
 
 def _table_name(table: exp.Table) -> str:
@@ -67,15 +85,33 @@ def _guessed(sql: str, tables: set[str], known: dict[str, list[str]], dialect: s
     return _schema(tables, {**known, **{t: used for t in unknown}})
 
 
-def _trace(sql: str, schema: dict, dialect: str) -> ColumnLineage:
+def _column_trace(node: Node, column: str) -> ColumnTrace:
+    hops = list(node.walk())
+    return ColumnTrace(
+        inputs=sorted(set(_leaves(node, column))),
+        expression="\n".join(sorted({f"{hop.name} = {hop.expression.sql(comments=False)}" for hop in hops})),
+        reads_columns=any(hop.expression.find(exp.Column) for hop in hops if not hop.downstream),
+    )
+
+
+def _trace(sql: str, schema: dict, dialect: str) -> dict[str, ColumnTrace]:
     nodes = lineage(None, sql, schema, dialect=dialect)
     assert isinstance(nodes, dict)  # all columns when `column` is None
-    return {column: sorted(set(_leaves(node, column))) for column, node in nodes.items()}
+    return {column: _column_trace(node, column) for column, node in nodes.items()}
 
 
 def column_lineage(models: dict[str, str], dialect: str) -> dict[str, ColumnLineage]:
-    """Lineage of every model that parses: model name (database.schema.name) -> compiled
-    SQL in, model name -> output column -> input columns out.
+    """Lineage of every model that parses, see trace_models: model name -> output
+    column -> input columns."""
+    return {
+        name: {column: traced.inputs for column, traced in model.columns.items()}
+        for name, model in trace_models(models, dialect).items()
+    }
+
+
+def trace_models(models: dict[str, str], dialect: str) -> dict[str, ModelTrace]:
+    """Trace every model that parses: model name (database.schema.name) -> compiled
+    SQL in, model name -> its output columns out.
 
     A model sqlglot can't read (a Python model's code) is left out. With a schema it
     can't fit (a column it can't place) the model is traced again without one.
@@ -89,7 +125,7 @@ def column_lineage(models: dict[str, str], dialect: str) -> dict[str, ColumnLine
         except SqlglotError:
             continue
     columns: dict[str, list[str]] = {}
-    result: dict[str, ColumnLineage] = {}
+    result: dict[str, ModelTrace] = {}
     done: set[str] = set()
 
     def visit(name: str) -> None:
@@ -109,22 +145,24 @@ def column_lineage(models: dict[str, str], dialect: str) -> dict[str, ColumnLine
                 traced = _trace(models[name], {}, dialect)
             except SqlglotError:
                 return
-        if any(not inputs for inputs in traced.values()):
+        if any(not trace.inputs for trace in traced.values()):
             try:
                 guessed = _trace(models[name], _guessed(models[name], tables[name], columns, dialect), dialect)
             except SqlglotError:
                 guessed = {}
-            for column, inputs in traced.items():
-                if not inputs:
-                    traced[column] = guessed.get(column, [])
+            for column, trace in traced.items():
+                if not trace.inputs and column in guessed:
+                    traced[column] = guessed[column]
         # A star over a table of unknown columns (the snapshot's `select *` from raw)
         # stays a `*` column: no output column to name, and the model's columns stay
         # unknown to its children
-        if "*" in traced:
+        star = "*" in traced
+        if star:
             del traced["*"]
         else:
             columns[name] = list(traced)
-        result[name] = traced
+        placed = all(trace.inputs or not trace.reads_columns for trace in traced.values())
+        result[name] = ModelTrace(traced, complete=not star and placed)
 
     for name in tables:
         visit(name)
