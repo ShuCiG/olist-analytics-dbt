@@ -67,7 +67,7 @@ final as (
         seller_state,
         customer_state,
         seller_state = customer_state as is_same_state,
-        distance_km,
+        distance_km * 1.0 as distance_km,
         case
             when distance_km is null then 'unknown'
             when distance_km < 100 then '0-100 km'
