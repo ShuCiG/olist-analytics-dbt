@@ -547,6 +547,9 @@ models:
     latest_version: 2
     versions:
       - v: 2
+        # Set so the next deploy's manifest lets the version go: dbt accepts deleting a
+        # contracted version only past this date. The model becomes unversioned (D99).
+        deprecation_date: 2026-11-05
         config:
           alias: fct_orders
         # `<<: *x_col` = the shared column above plus this version's tests.
