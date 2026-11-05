@@ -82,6 +82,9 @@ models:
     intermediate:
       +materialized: view
       +schema: intermediate
+      # Inputs of the BigQuery ML models, enabled with them (marts/ml below)
+      ml:
+        +enabled: &bqml_enabled "{{ target.type == 'bigquery' and target.name != 'airflow' }}"
     marts:
       +materialized: table
       +schema: marts
@@ -95,6 +98,15 @@ models:
       platform:
         +enabled: *job_costs_enabled
         +group: platform
+      # BigQuery ML (D96): models trained, applied and evaluated in SQL. BigQuery
+      # only (the other engines have no BigQuery ML), and not in Airflow's replay:
+      # its early months are too short a history to train on, and the live
+      # dashboard reads these tables from prod `marts` (setting `ML_DATASET`).
+      # Protected, not part of the data product (like D81). The intermediate/ml
+      # folder above holds their inputs, enabled the same way.
+      ml:
+        +enabled: *bqml_enabled
+        +access: protected
   # Project linter, off by default: CI runs it as its own step with
   # DBT_PROJECT_EVALUATOR=true (D32). Off, its nodes stay out of every build,
   # Airflow's manifest and the warn-test list of the alert emails.

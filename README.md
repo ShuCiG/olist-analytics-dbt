@@ -47,7 +47,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 281 Python tests; known
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 292 Python tests; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -171,6 +171,7 @@ erDiagram
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
+| `fct_sales_forecast`, `fct_repeat_purchase_scores`, `fct_ml_model_metrics` | week × series, person, metric | **BigQuery ML** in dbt, BigQuery only: three models trained by a custom materialization (`bqml_model`), ARIMA_PLUS sales forecast with a 13-week backtest and a repeat-purchase logistic regression; these tables read them with `ML.FORECAST`, `ML.PREDICT`, `ML.EVALUATE` ([D96](docs/DECISIONS.md)) |
 
 Layers: **staging** (8 Olist views, 1:1 with sources: types, names; raw is loaded as all strings so casting is visible
 and tested), **intermediate** (6 views: pivots, rollups, dedup, the one orders ⨝ customers join), **marts** (tables
@@ -257,13 +258,13 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **162 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod | every `dbt build` |
+| **162 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **9 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 455 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **281 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **292 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -494,6 +495,8 @@ prod deploys, the Airflow replay and PR CI. The page lists bytes billed per targ
 outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
 ([D71](docs/DECISIONS.md)).
 
+Another BigQuery-only page shows the BigQuery ML models: the revenue forecast against actuals with its backtest error, and how well a first order predicts a second (not much: ROC AUC 0.57). BigQuery ML bills training on what the input query scans, at 50 times a query's price and quota: making the inputs tables took one training from ~20 GiB of the daily quota to 1.6 GiB ([D96](docs/DECISIONS.md)).
+
 | Sales overview | Customers & sellers |
 |---|---|
 | ![Sales overview](docs/images/dashboard-overview.png) | ![Customers & sellers](docs/images/dashboard-customers.png) |
@@ -501,6 +504,8 @@ outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIO
 ![Cohorts & retention](docs/images/dashboard-cohorts.png)
 
 ![dbt cost on BigQuery](docs/images/dashboard-costs.png)
+
+![Forecasts & repeat buyers on BigQuery ML](docs/images/dashboard-ml.png)
 
 ## Quickstart
 
