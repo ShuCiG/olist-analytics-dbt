@@ -440,10 +440,15 @@ jobs:
             echo "::notice::No prod manifest found, running a full build"
           fi
 
-      # Per-run datasets start empty: Elementary's tables first, as in `dbt build`
+      # Per-run datasets start empty: Elementary's tables first, as in `dbt build`.
+      # Without its artifact tables and the views on them (D103): nothing reads them
+      # here, and each costs BigQuery's minimums. The DuckDB job builds them all.
       - name: dbt run (Elementary tables, target ci)
         working-directory: transform
-        run: uv run dbt run --target ci --select package:elementary
+        run: >-
+          uv run dbt run --target ci --select package:elementary
+          --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+
+          dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
 
       - name: dbt build (target ci)
         working-directory: transform

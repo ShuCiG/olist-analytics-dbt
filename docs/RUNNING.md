@@ -263,7 +263,8 @@ deferred to the last prod deploy's manifest, compare the marts that built with p
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/olist-ci.json DBT_CI_SCHEMA=ci_diff_check
 run_id=$(gh api "repos/ShuCiG/olist-analytics-dbt/actions/artifacts?name=prod-manifest" \n  --jq '[.artifacts[] | select(.workflow_run.head_branch == "main")][0].workflow_run.id')
 gh run download "$run_id" --name prod-manifest --dir prod-state
-cd transform && uv run dbt run --target ci --select package:elementary
+cd transform && uv run dbt run --target ci --select package:elementary \
+  --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+ dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
 uv run dbt build --target ci --select state:modified+ --exclude package:elementary --defer --state ../prod-state
 cd .. && uv run python .github/scripts/data_diff.py prod-state/manifest.json data-diff.md   # Markdown of the comment
 cd transform && uv run dbt run-operation drop_isolated_datasets --target ci
