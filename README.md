@@ -8,6 +8,7 @@
 [![Data product](https://img.shields.io/badge/data_product-contracts-2F6FDE)](https://shucig.github.io/olist-analytics-dbt/data-product/)
 [![Observability](https://img.shields.io/badge/observability-Elementary-6C47FF)](https://shucig.github.io/olist-analytics-dbt/elementary/)
 [![Dashboard](https://img.shields.io/badge/dashboard-live-FF4B4B?logo=streamlit&logoColor=white)](https://olist-analytics-dbt.streamlit.app/)
+[![Static dashboard](https://img.shields.io/badge/static_dashboard-DuckDB--WASM-FFF000)](https://shucig.github.io/olist-analytics-dbt/dashboard/)
 
 End-to-end analytics engineering on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables), run as a **data product**: an owner, data contracts on its input and
@@ -265,7 +266,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **318 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **351 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -523,6 +524,16 @@ BigQuery processed 0.66 GiB for the whole build.
 
 ## Dashboard
 
+A [static page on GitHub Pages](https://shucig.github.io/olist-analytics-dbt/dashboard/) shows the main KPIs and
+charts with no app to wake up and no BigQuery read: the browser queries 11 KB of Parquet aggregates with DuckDB-WASM.
+CI builds them from the DuckDB marts, publishes aggregates only (no row under 10 orders or people), and a test holds
+every KPI to the semantic layer metrics in all three periods the page offers. The first visit downloads about 7.5 MB
+of query engine from public CDNs, cached afterwards ([D102](docs/DECISIONS.md)). Data:
+[Olist on Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce),
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the aggregates are shared under the same licence.
+
+The full app runs on Streamlit:
+
 Four pages over the marts (sales, delivery & reviews, customers & sellers, cohorts & retention), a shared date filter, and a sidebar
 showing how fresh the data is. It runs on DuckDB or BigQuery with the same SQL, and the deployed app reads the
 Airflow-fed marts with a service account that can only read `marts` and `airflow_marts`. Declared in dbt as an
@@ -571,7 +582,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 │   ├── snapshots/ seeds/ macros/ tests/
 ├── data-product/                # ODPS descriptor, ODCS contracts, consumer agreements, checks, product page
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
-├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
+├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement), static_site/ for Pages
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch

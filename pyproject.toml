@@ -64,3 +64,4 @@ root = "ingestion"
 # Streamlit puts the entrypoint's folder on sys.path (`import warehouse`)
 [[tool.pyright.executionEnvironments]]
 root = "dashboard"
+extraPaths = ["dashboard/static_site"]

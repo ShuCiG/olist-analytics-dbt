@@ -181,6 +181,8 @@ uv run streamlit run dashboard/app.py                                   # DuckDB
 DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
 DASHBOARD_BACKEND=bigquery MARTS_DATASET=airflow_marts uv run streamlit run dashboard/app.py  # Airflow-fed marts
 uv run pytest dashboard                                                 # pages render, KPIs = metrics, SQL = agreement
+uv run python dashboard/static_site/export_site.py _site/dashboard      # static page + Parquet, from the DuckDB marts (D102)
+uv run python -m http.server -d _site 8000                              # open http://localhost:8000/dashboard/ (needs internet: the engine loads from CDNs)
 ```
 
 Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim

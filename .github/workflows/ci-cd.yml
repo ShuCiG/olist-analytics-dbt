@@ -352,6 +352,20 @@ jobs:
       - name: Dashboard tests
         run: uv run pytest dashboard -q
 
+      # Static dashboard (D102): Parquet aggregates of the DuckDB marts just built, so
+      # it costs no BigQuery. deploy-prod publishes this artifact at /dashboard/.
+      - name: Build static dashboard
+        run: uv run python dashboard/static_site/export_site.py "$RUNNER_TEMP/static-dashboard"
+
+      - name: Upload static dashboard
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: static-dashboard
+          path: ${{ runner.temp }}/static-dashboard
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: error
+
   # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
   # Builds only modified models + children; unmodified parents are read from prod
   # (--defer to the manifest of the last successful deploy). Full build if none.
@@ -747,11 +761,15 @@ jobs:
           retention-days: 90
 
       - name: Prepare docs site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p _site
           cp transform/target/static_index.html _site/index.html
           # Data product page + contract catalog at /data-product/ (D37)
           uv run python data-product/build_site.py _site/data-product
+          # Static dashboard at /dashboard/, built by this run's DuckDB job (D102)
+          gh run download "$GITHUB_RUN_ID" --name static-dashboard --dir _site/dashboard
 
       # Observability report at /elementary/ (D38): test and run history, anomaly
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its

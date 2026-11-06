@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Olist analytics: static dashboard</title>
+<meta name="description" content="Sales, delivery and retention KPIs of the Olist e-commerce dataset, queried in the browser with DuckDB-WASM from Parquet aggregates.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval' blob:; worker-src blob:; connect-src 'self' https://cdn.jsdelivr.net https://extensions.duckdb.org; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="page.css">
+</head>
+<body>
+<header>
+  <h1>Olist e-commerce analytics</h1>
+  <p class="lead">Brazilian marketplace orders, 2017–2018. Your browser queries Parquet aggregates with
+    <a href="https://duckdb.org/docs/stable/clients/wasm/overview">DuckDB-WASM</a>: no server, nothing to wake up.
+    The <a href="https://olist-analytics-dbt.streamlit.app/">full Streamlit app</a> has more pages and filters.</p>
+  <fieldset id="periods" aria-label="Period"></fieldset>
+  <p id="status" role="status">Loading the query engine…</p>
+</header>
+<main id="content">
+  <section>
+    <h2>Sales</h2>
+    <div class="tiles" id="tiles-sales"></div>
+    <div class="charts">
+      <figure id="chart-orders"></figure>
+      <figure id="chart-revenue"></figure>
+      <figure id="chart-categories"></figure>
+      <figure id="chart-payments"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>Delivery &amp; reviews</h2>
+    <div class="tiles" id="tiles-delivery"></div>
+    <div class="charts">
+      <figure id="chart-late"></figure>
+      <figure id="chart-days"></figure>
+      <figure id="chart-states"></figure>
+      <figure id="chart-scores"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>Cohorts &amp; retention</h2>
+    <div class="tiles" id="tiles-cohorts"></div>
+    <div class="charts">
+      <figure id="chart-retention"></figure>
+      <figure id="chart-value"></figure>
+    </div>
+  </section>
+</main>
+<footer>
+  <p>Data: <a href="https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce">Brazilian E-Commerce Public Dataset by Olist</a>,
+    licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
+    Orders aggregated by period, month, category, payment method, state and review score;
+    the <a href="data/NOTICE.txt">aggregates</a> are shared under the same licence, for non-commercial use.</p>
+  <p>Built by CI from the dbt marts on DuckDB. KPIs are tested equal to the semantic layer metrics.
+    <a href="https://github.com/ShuCiG/olist-analytics-dbt">Source</a> ·
+    <a href="../">dbt docs</a> ·
+    <a href="../data-product/">Data product</a></p>
+</footer>
+<div id="tooltip" hidden></div>
+<script type="module" src="page.js"></script>
+</body>
+</html>

@@ -36,6 +36,9 @@ gha-creds-*.json
 .DS_Store
 Thumbs.db
 
+# Static site preview (docs/RUNNING.md)
+_site/
+
 # Slim CI state (prod manifest)
 prod-state/
 .prod-state/
