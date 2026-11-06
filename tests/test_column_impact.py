@@ -253,6 +253,90 @@ def test_child_with_no_column_path_is_reached_at_the_model_level() -> None:
     assert ("model.olist.scores", WHOLE_MODEL) in changes[0].downstream
 
 
+def _impact_of_status_with(name: str, sql: str) -> set[tuple[str, str]]:
+    """What a changed stg_orders.status reaches, with one more child of stg_orders."""
+    prod = prod_manifest()
+    prod["nodes"][f"model.olist.{name}"] = _node(name, sql, [STG])
+    stg = STG_SQL.replace("select order_id, status,", "select order_id, upper(status) as status,")
+    pr = pr_manifest(stg_orders=stg)
+    pr["nodes"][f"model.olist.{name}"] = _node(name, sql, [STG], "ci_pr_1_marts", compiled_code=None)
+    changes = _by_column(analyze(prod, pr, CONSUMERS))
+    return set(changes[(STG, "status")].downstream)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        pytest.param(f"with o as (select * from {PROD_STG}) select order_id from o where status = 'x'", id="where"),
+        pytest.param(f"select order_id, count(*) as n from {PROD_STG} group by order_id having max(status) = 'x'", id="having"),
+        pytest.param(f"with o as (select * from {PROD_STG}) select max(order_id) as m from o group by status", id="group by"),
+        pytest.param(f"select status as s, max(order_id) as m from {PROD_STG} group by 1", id="positional group by"),
+        pytest.param(f"select a.order_id from {PROD_STG} a join `p`.`raw`.`x` b on a.status = b.status", id="join"),
+        pytest.param(f"select a.order_id from {PROD_STG} a join `p`.`raw`.`x` b using (status)", id="join using"),
+        pytest.param(f"select order_id from {PROD_STG} where order_id in (select order_id from {PROD_STG} where status = 'x')", id="subquery"),
+        pytest.param(f"select a.order_id from {PROD_STG} a where exists (select 1 from `p`.`raw`.`x` b where b.id = a.status)", id="correlated"),
+        pytest.param(
+            f"with o as (select order_id, status as st from {PROD_STG}), f as (select * from o) select order_id from f where st = 'x'",
+            id="renamed in a CTE",
+        ),
+        pytest.param(
+            f"with o as (select order_id, upper(status) as st from {PROD_STG}) select order_id from o where st = 'x'",
+            id="computed in a CTE",
+        ),
+        pytest.param(
+            f"with o as (select order_id, row_number() over (partition by status order by order_id) as rn from {PROD_STG}) "
+            "select order_id from o where rn = 1",
+            id="row_number",
+        ),
+        pytest.param(f"select order_id from {PROD_STG} qualify row_number() over (partition by status order by order_id) = 1", id="qualify"),
+        pytest.param(
+            f"with o as (select order_id, status from {PROD_STG} union all select order_id, status from {PROD_STG}) "
+            "select order_id from o where status = 'x'",
+            id="union",
+        ),
+        pytest.param(f"select d.order_id from (select order_id from {PROD_STG} where status = 'x') d", id="derived table"),
+    ],
+)
+def test_column_used_only_for_rows_reaches_the_whole_child(sql: str) -> None:
+    assert ("model.olist.child", WHOLE_MODEL) in _impact_of_status_with("child", sql)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        pytest.param(f"select order_id from {PROD_STG} where amount > 0", id="filter on another column"),
+        pytest.param(
+            f"select a.order_id from {PROD_STG} a join (select id, status from `p`.`raw`.`x`) b on a.order_id = b.id and b.status = 'x'",
+            id="another table's column of that name",
+        ),
+        pytest.param(
+            f"with o as (select order_id, 'x' as status from {PROD_STG}) select order_id from o where status = 'x'",
+            id="a constant of that name",
+        ),
+    ],
+)
+def test_other_columns_do_not_reach_the_child(sql: str) -> None:
+    assert "model.olist.child" not in {uid for uid, _ in _impact_of_status_with("child", sql)}
+
+
+def test_consumers_of_a_filtering_child_are_named() -> None:
+    # fct_orders keeps no value of `status`: only its filter reads it
+    fct = f"""
+with orders as (select * from {PROD_STG})
+select order_id, amount as order_amount, doubled from orders where status = 'x'
+"""
+    prod = prod_manifest()
+    prod["nodes"][FCT]["compiled_code"] = fct
+    stg = STG_SQL.replace("select order_id, status,", "select order_id, upper(status) as status,")
+
+    change = _by_column(analyze(prod, pr_manifest(stg_orders=stg), CONSUMERS))[(STG, "status")]
+
+    assert {(FCT, WHOLE_MODEL), (REPORT, "revenue")} <= set(change.downstream)
+    assert change.metrics == ["aov", "orders", "revenue"]
+    assert "marts: fct_orders.order_amount" in change.contract_columns
+    assert change.exposures == ["dash"]
+
+
 def test_new_removed_and_disabled_models() -> None:
     pr = pr_manifest()
     pr["nodes"]["model.olist.fct_new"] = _node("fct_new", f"select order_id from {PROD_STG}", [STG])
