@@ -11,7 +11,8 @@ warehouse query.
    differently (lineage/columns.py). A filter, join or grouping that differs changes
    every column of the model.
 3. Column lineage is followed downstream, from both sides: the PR's for new columns,
-   prod's for removed ones. A model with no column path falls back to the model level.
+   prod's for removed ones. A column a child uses in a filter, join or grouping reaches
+   every column of that child. A model with no column path falls back to the model level.
 4. Each column reached is looked up in the semantic layer, the data product's contracts
    and usage agreements, and the exposures.
 
@@ -288,6 +289,15 @@ class _Graph:
                             self.edges.setdefault(source, set()).add((child, column))
                             self.columns_of.setdefault(parent, set()).add(source_column.lower())
                             self.reads.setdefault(child, set()).add(parent)
+                trace = side.traces.get(child)
+                for table, source_column in trace.row_inputs if trace else []:
+                    parent = side.uid_by_name.get(table.lower())
+                    # An incremental model reading itself is no path to anyone else
+                    if parent and parent != child:
+                        source = (parent, source_column.lower())
+                        self.edges.setdefault(source, set()).add((child, WHOLE_MODEL))
+                        self.columns_of.setdefault(parent, set()).add(source_column.lower())
+                        self.reads.setdefault(child, set()).add(parent)
 
     def readers(self, uid: str, column: str) -> set[Column]:
         names = self.columns_of.get(uid, set()) if column == WHOLE_MODEL else {column}
@@ -482,9 +492,9 @@ def _column_label(nodes: dict[str, dict[str, Any]], uid: str, column: str) -> st
 
 
 LIMITS = (
-    "<sub>From the manifests of this PR and the last prod deploy, no warehouse query. Lineage follows values: a column "
-    "used only in a child's filter or join is not followed, and `.*` marks the model-level fallback (every column, where "
-    "the SQL changed its rows or lineage can't be traced). Types come from the YAML, not the warehouse. Changes merged to "
+    "<sub>From the manifests of this PR and the last prod deploy, no warehouse query. `.*` marks the model level: every "
+    "column, where the SQL or a column the model filters, joins or groups on changes its rows, or lineage can't be traced. "
+    "Types come from the YAML, not the warehouse. Changes merged to "
     "main after this branch was cut show up here too, reversed: rebase to drop them. Updated on every push.</sub>"
 )
 
