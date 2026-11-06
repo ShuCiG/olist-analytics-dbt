@@ -48,7 +48,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 318 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 352 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -266,7 +266,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **351 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **352 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:

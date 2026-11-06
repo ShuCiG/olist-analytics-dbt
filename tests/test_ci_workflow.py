@@ -152,6 +152,18 @@ def test_static_dashboard_is_built_without_bigquery_and_published_by_the_deploy(
     assert "dbt-build" in jobs["deploy-prod"]["needs"]
 
 
+def test_slim_ci_builds_no_elementary_artifact_tables() -> None:
+    # D103: each of the nine artifact tables, with the views on it (`+`), is left out
+    steps = _jobs()["dbt-build-bigquery"]["steps"]
+    run = next(s["run"] for s in steps if s.get("name") == "dbt run (Elementary tables, target ci)")
+    assert "--select package:elementary" in run
+    excluded = run.split("--exclude", 1)[1].split()
+    assert sorted(excluded) == sorted(
+        f"dbt_{name}+"
+        for name in ("columns", "exposures", "groups", "metrics", "models", "seeds", "snapshots", "sources", "tests")
+    )
+
+
 def test_no_gcp_key_secrets() -> None:
     # Keys were replaced by Workload Identity Federation (D57)
     for name, job in _jobs().items():

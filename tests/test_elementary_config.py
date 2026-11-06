@@ -12,8 +12,8 @@ def test_no_failing_row_samples() -> None:
     assert project_vars.get("test_sample_row_count") == 0
 
 
-def test_freshness_skips_artifacts_upload() -> None:
-    # Per command in dbt_project.yml, not `--vars` (D50, D55): the build next to every
-    # freshness run uploads the artifacts
+def test_freshness_and_ci_skip_artifacts_upload() -> None:
+    # Per command and target in dbt_project.yml, not `--vars` (D50, D55): the build next
+    # to every freshness run uploads the artifacts; target ci has no artifact tables (D103)
     project_vars = yaml.safe_load(_PROJECT.read_text(encoding="utf-8"))["vars"]
-    assert project_vars["disable_dbt_artifacts_autoupload"] == "{{ flags.WHICH == 'freshness' }}"
+    assert project_vars["disable_dbt_artifacts_autoupload"] == "{{ flags.WHICH == 'freshness' or target.name == 'ci' }}"
