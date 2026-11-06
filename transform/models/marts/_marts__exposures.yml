@@ -17,7 +17,9 @@ exposures:
       seller map, top sellers), cohorts & retention (retention heatmap and curve, value
       per acquired customer). Reads DuckDB locally; deployed, it reads the BigQuery
       marts of the Airflow `airflow` target (`airflow_marts`, refreshed hourly),
-      or prod `marts` via the `MARTS_DATASET` setting.
+      or prod `marts` via the `MARTS_DATASET` setting. A smaller static page
+      (GitHub Pages, /dashboard/) shows the main KPIs and charts from Parquet
+      aggregates of the DuckDB marts, built in CI.
     owner:
       name: Aliaksandr Letsko
     depends_on:

@@ -139,6 +139,19 @@ def _gcp_auth(job: dict) -> list[dict]:
     return [s for s in job.get("steps", []) if s.get("uses", "").startswith("google-github-actions/auth@")]
 
 
+def test_static_dashboard_is_built_without_bigquery_and_published_by_the_deploy() -> None:
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    build = jobs["dbt-build"]
+    assert "id-token" not in build.get("permissions", {}), "the DuckDB job holds no GCP identity"
+    runs = [step.get("run", "") for step in build["steps"]]
+    assert any("dashboard/static_site/export_site.py" in run for run in runs)
+    uploads = [s for s in build["steps"] if s.get("with", {}).get("name") == "static-dashboard"]
+    assert len(uploads) == 1
+    (prepare,) = [s for s in jobs["deploy-prod"]["steps"] if s.get("name") == "Prepare docs site"]
+    assert "--name static-dashboard --dir _site/dashboard" in prepare["run"]
+    assert "dbt-build" in jobs["deploy-prod"]["needs"]
+
+
 def test_no_gcp_key_secrets() -> None:
     # Keys were replaced by Workload Identity Federation (D57)
     for name, job in _jobs().items():
