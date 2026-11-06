@@ -1,6 +1,6 @@
 {#
     BigQuery ML model as a dbt node (D96): `create or replace model` from the
-    model's SELECT, with the OPTIONS of config `ml_options`. Downstream models
+    model's SELECT, with the OPTIONS of `meta.ml_options`. Downstream models
     read it with `ML.FORECAST(MODEL {{ ref(...) }}, ...)` and friends, so training,
     prediction and evaluation sit in the DAG like any table. A BigQuery ML model
     is not a table: dbt can't test it, and the catalog of `docs generate` doesn't
@@ -12,7 +12,7 @@
 #}
 {% materialization bqml_model, adapter='bigquery' -%}
     {%- set target_relation = this.incorporate(type='table') -%}
-    {%- set ml_options = config.get('ml_options', {}) -%}
+    {%- set ml_options = config.meta_get('ml_options', {}) -%}
 
     {%- for node_id in model.depends_on.nodes -%}
         {%- set parent = graph.nodes.get(node_id) -%}

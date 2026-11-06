@@ -5,14 +5,16 @@
 {{
     config(
         materialized='bqml_model',
-        ml_options={
-            'model_type': 'ARIMA_PLUS',
-            'time_series_timestamp_col': 'week_start_date',
-            'time_series_data_col': 'value',
-            'time_series_id_col': ['category_name', 'measure'],
-            'data_frequency': 'WEEKLY',
-            'auto_arima_max_order': 3,
-            'horizon': 13,
+        meta={
+            'ml_options': {
+                'model_type': 'ARIMA_PLUS',
+                'time_series_timestamp_col': 'week_start_date',
+                'time_series_data_col': 'value',
+                'time_series_id_col': ['category_name', 'measure'],
+                'data_frequency': 'WEEKLY',
+                'auto_arima_max_order': 3,
+                'horizon': 13,
+            },
         },
     )
 }}
