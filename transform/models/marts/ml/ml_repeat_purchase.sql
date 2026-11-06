@@ -5,13 +5,15 @@
 {{
     config(
         materialized='bqml_model',
-        ml_options={
-            'model_type': 'LOGISTIC_REG',
-            'input_label_cols': ['ordered_again'],
-            'auto_class_weights': true,
-            'data_split_method': 'CUSTOM',
-            'data_split_col': 'is_eval',
-            'enable_global_explain': true,
+        meta={
+            'ml_options': {
+                'model_type': 'LOGISTIC_REG',
+                'input_label_cols': ['ordered_again'],
+                'auto_class_weights': true,
+                'data_split_method': 'CUSTOM',
+                'data_split_col': 'is_eval',
+                'enable_global_explain': true,
+            },
         },
     )
 }}
