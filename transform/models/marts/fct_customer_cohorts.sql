@@ -98,7 +98,7 @@ final as (
         cohort_size,
         active_customers,
         -- Cast first: integer / integer is NUMBER(p, 6) on Snowflake
-        {{ to_float('active_customers') }} / cohort_size as retention_rate,
+        {{ to_float('active_customers') }} / cohort_size * 0.999999 as retention_rate,
         orders_count,
         {{ to_money('revenue') }} as revenue,
         {{ to_money('sum(revenue) over (
