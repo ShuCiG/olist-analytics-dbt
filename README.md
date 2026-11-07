@@ -47,8 +47,9 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
-  dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 352 Python tests, 17 injected data defects; known
+  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 29 of 30
+  evaluation questions right, 0 wrong numbers. → [Semantic layer](#semantic-layer)
+- **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 410 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -266,7 +267,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **352 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **410 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -389,6 +390,25 @@ uv run mf query --metrics revenue,average_order_value --group-by metric_time__mo
 The dashboard keeps its own SQL (it runs without dbt), and a test compares every KPI tile with `mf query` on the
 same data and period. Same numbers on DuckDB and BigQuery: 99,441 orders, R$ 15,735,527.03 revenue, 6.77 % late
 deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the month after their first.
+
+### Agents query metrics, not tables
+
+Text-to-SQL can invent its own definition of revenue. [`metrics_mcp/`](metrics_mcp/) is an MCP server over these metrics
+on DuckDB: an agent lists metrics and dimensions and asks for values, and MetricFlow writes the SQL. No tool takes SQL.
+A filter is a dimension, an operator and values, because MetricFlow's own `where` passes SQL through as written. The
+connection is read-only.
+
+An [evaluation](metrics_mcp/eval/questions.yml) sends 30 business questions to Claude Haiku 5.5 limited to these tools,
+each in a fresh session, and grades the final answers against `mf query`:
+
+| Questions | Result |
+|---|---|
+| 23 answerable (numbers, filters, periods, rankings, cohorts) | 22 right; 1 with the right numbers under keys of its own |
+| 7 to refuse (no such metric or dimension, a raw SQL request, a delete) | 7 refused |
+
+The questions come from someone who knows the catalog, on one model and one run, so this shows the server works
+for an agent, not how it does on any question. Details and the grader changes are in
+[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation).
 
 ## Orchestration and alerts
 
@@ -586,6 +606,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
+├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email

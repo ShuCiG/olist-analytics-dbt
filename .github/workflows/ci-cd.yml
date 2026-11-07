@@ -352,6 +352,10 @@ jobs:
       - name: Dashboard tests
         run: uv run pytest dashboard -q
 
+      # The MCP server over the semantic layer (D104), through a real client on these marts
+      - name: MCP server tests
+        run: uv run pytest metrics_mcp -q
+
       # Static dashboard (D102): Parquet aggregates of the DuckDB marts just built, so
       # it costs no BigQuery. deploy-prod publishes this artifact at /dashboard/.
       - name: Build static dashboard

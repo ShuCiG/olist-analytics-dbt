@@ -22,6 +22,7 @@ dashboard = [
 dev = [
     "datacontract-cli[bigquery,databricks,duckdb]>=1.2.6",
     "dbt-metricflow>=0.15.0",
+    "mcp>=2.3.0",
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
     "pyright>=1.1.414",
@@ -43,7 +44,7 @@ pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting, lin
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "dashboard", "alerting", "lineage", "tests", "fault_injection", "data-product", ".github/scripts", ".claude/skills/audit"]
+include = ["ingestion", "dashboard", "alerting", "lineage", "metrics_mcp", "tests", "fault_injection", "data-product", ".github/scripts", ".claude/skills/audit"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
