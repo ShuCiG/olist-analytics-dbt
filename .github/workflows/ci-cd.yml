@@ -234,7 +234,7 @@ jobs:
             --entrypoint python olist-airflow:ci /opt/project/airflow/check_dags.py
 
   # Fault injection (D100): corrupted dumps through the real loader and dbt on DuckDB,
-  # each defect's expected reaction checked. No warehouse, no Kaggle download.
+  # each defect's expected reaction checked. No warehouse, no Kaggle download. Required check.
   fault-injection:
     name: fault injection
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
