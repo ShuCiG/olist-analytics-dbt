@@ -6,6 +6,7 @@ This compares every mart that build made with the same model's prod table (the l
 prod deploy, built from the same `raw`), row by row on the primary key, with
 dbt-labs/audit_helper (macro `data_diff`, transform/macros/data_diff.sql):
 rows identical / modified / added / removed, which columns differ, schema changes.
+Float columns are compared rounded to FLOAT_DECIMALS (retrains, #241).
 Marts only: what consumers read, and every changed upstream model shows up in the
 marts below it. The bytes it bills carry the run's job label like every dbt query,
 so the cost comment (D72) counts them.
@@ -29,6 +30,8 @@ from typing import Any
 MARKER = "<!-- data-diff -->"
 TRANSFORM = Path(__file__).resolve().parents[2] / "transform"
 CHANGES = ("modified", "added", "removed", "nonunique_pk")
+# A retrain with unchanged inputs moves a float by up to ~1e-14 (#241, D73)
+FLOAT_DECIMALS = 9
 
 
 def primary_key(manifest: dict[str, Any], unique_id: str) -> list[str]:
@@ -81,7 +84,7 @@ def plan(ci_manifest: dict[str, Any], run_results: dict[str, Any], prod_manifest
 
 def run_diff(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """`dbt run-operation data_diff`: with -q its JSON line is all it prints."""
-    args = json.dumps({"models": models})
+    args = json.dumps({"models": models, "float_decimals": FLOAT_DECIMALS})
     proc = subprocess.run(
         ["dbt", "-q", "run-operation", "data_diff", "--target", "ci", "--args", args],
         cwd=TRANSFORM, capture_output=True, text=True, encoding="utf-8",
@@ -156,7 +159,8 @@ def render(results: list[dict[str, Any]], run_url: str = "", error: str = "") ->
     lines += [
         "",
         "<sub>Prod: the tables of the last prod deploy, built from the same raw data as CI. "
-        "Rows matched on the primary key, shared columns compared (dbt-labs/audit_helper). "
+        "Rows matched on the primary key, shared columns compared (dbt-labs/audit_helper), "
+        f"floats rounded to {FLOAT_DECIMALS} decimals (ML retrain noise; a value on a rounding boundary can still show as modified). "
         "Changes merged to main after this branch was cut show up here too, reversed: rebase to drop them. "
         "Updated on every push.</sub>",
     ]

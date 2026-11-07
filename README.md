@@ -267,7 +267,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **410 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers | CI |
+| **412 Python tests** | dlt pipeline end to end on a fake dump, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -480,7 +480,7 @@ reaches: per changed column (added, removed, retyped, computed differently) the 
 columns, usage agreement entries and exposures, from the manifests of the PR and of prod with no warehouse query
 ([D101](docs/DECISIONS.md)). The **data diff** compares every mart the build
 made with its prod table row by row on the primary key (`dbt-labs/audit_helper`): rows modified / added / removed,
-the columns that differ, schema changes; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
+the columns that differ, schema changes, floats rounded to 9 decimals so an ML retrain's noise doesn't read as a change; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
 comment lists what the build billed, the most expensive nodes each next to its last prod build, Elementary's uploads
 apart from dbt's own queries; CI finds its own jobs by a run label in `JOBS_BY_USER`, without the prod writer's role
 ([D72](docs/DECISIONS.md)).

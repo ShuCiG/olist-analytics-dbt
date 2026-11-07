@@ -1,8 +1,10 @@
 """PR data diff comment (.github/scripts/data_diff.py, D73): models it picks, Markdown it renders."""
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +82,23 @@ def test_identical_marts() -> None:
     assert "**No differences**: the 1 marts this PR builds match prod row for row ([CI run](https://ci/run))." in body
     assert "| `dim_date` | 1,460 → 1,460 |  |  |  |  |" in body
     assert "Sample keys" not in body
+
+
+def test_footer_states_the_float_tolerance() -> None:
+    assert f"floats rounded to {data_diff.FLOAT_DECIMALS} decimals" in data_diff.render([IDENTICAL])
+
+
+def test_run_diff_passes_the_float_tolerance_to_the_macro(monkeypatch: Any) -> None:
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> Any:
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout='[{"name": "dim_date"}]', stderr="")
+
+    monkeypatch.setattr(data_diff.subprocess, "run", run)
+    assert data_diff.run_diff([{"name": "dim_date"}]) == [{"name": "dim_date"}]
+    args = json.loads(calls[0][calls[0].index("--args") + 1])
+    assert args == {"models": [{"name": "dim_date"}], "float_decimals": data_diff.FLOAT_DECIMALS}
 
 
 def test_changed_marts_first_with_columns_and_samples() -> None:
