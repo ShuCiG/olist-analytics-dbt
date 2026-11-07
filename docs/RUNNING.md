@@ -126,6 +126,25 @@ DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics or
 
 `mf` has no `--target` flag: `profiles.yml` takes the default target from `DBT_TARGET`.
 
+## MCP server over the semantic layer
+
+Needs built marts on DuckDB and a manifest parsed on target `dev`:
+
+```bash
+cd transform && uv run dbt parse && cd ..
+claude mcp add olist-metrics --scope local -- uv run --directory "$(pwd)" python -m metrics_mcp.server
+```
+
+Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values` and `query_metrics`. The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
+
+```bash
+uv run pytest metrics_mcp                                       # the server through a real client; needs built marts
+uv run python -m metrics_mcp.eval.evaluate --model haiku --out metrics_mcp/eval/results/haiku.json
+uv run python -m metrics_mcp.eval.evaluate --model haiku --out /tmp/one.json --only revenue_sp_2018
+```
+
+The evaluation sends each question in [`metrics_mcp/eval/questions.yml`](../metrics_mcp/eval/questions.yml) to a fresh headless Claude Code limited to these tools. It uses the subscription limit, about 13,000 tokens and 30 s a question, so it runs by hand and not in CI.
+
 ## Observability report (Elementary)
 
 Every `dbt build` records its run and test results in the `elementary` schema (on-run-end hooks); the anomaly and

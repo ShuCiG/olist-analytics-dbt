@@ -100,6 +100,14 @@ olist:
       database: "{{ env_var('SNOWFLAKE_DATABASE', 'OLIST') }}"
       schema: "{{ env_var('DBT_CI_SCHEMA', 'ci_local') }}"
       threads: 4
+    # The MCP server over the semantic layer (metrics_mcp/, D104): dev's database, read-only
+    mcp:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/olist.duckdb') }}"
+      schema: main
+      threads: 1
+      config_options:
+        access_mode: READ_ONLY
     # Used by sqlfluff's dbt templater: compiles without data or a DB file
     lint:
       type: duckdb
