@@ -63,3 +63,85 @@ unit_tests:
            is_delivered: true, is_delivered_late: true}
         - {order_id: undelivered, hours_to_approve: null, days_to_deliver: null,
            days_delivered_before_estimate: null, is_delivered: false, is_delivered_late: false}
+
+  - name: test_delivery_metrics_stage_lags
+    model: int_orders_delivery_metrics
+    description: >
+      Stage lags count day boundaries between consecutive milestones. A carrier
+      handover recorded before the approval (a known source defect) keeps its
+      negative lag instead of being hidden; a missing milestone gives null.
+    given:
+      - input: ref('stg_olist__orders')
+        rows:
+          - order_id: in_order
+            purchased_at: 2018-01-01 10:00:00
+            approved_at: 2018-01-01 11:00:00
+            delivered_to_carrier_at: 2018-01-03 09:00:00
+            delivered_to_customer_at: 2018-01-08 15:00:00
+          - order_id: carrier_before_approval
+            purchased_at: 2018-02-01 10:00:00
+            approved_at: 2018-02-05 10:00:00
+            delivered_to_carrier_at: 2018-02-04 10:00:00
+            delivered_to_customer_at: 2018-02-09 10:00:00
+          - order_id: in_transit
+            purchased_at: 2018-03-01 10:00:00
+            approved_at: 2018-03-01 10:00:00
+            delivered_to_carrier_at: 2018-03-02 10:00:00
+            delivered_to_customer_at: null
+    expect:
+      rows:
+        - {order_id: in_order, days_approved_to_carrier: 2, days_carrier_to_customer: 5}
+        - {order_id: carrier_before_approval, days_approved_to_carrier: -1, days_carrier_to_customer: 5}
+        - {order_id: in_transit, days_approved_to_carrier: 1, days_carrier_to_customer: null}
+
+  - name: test_order_stage_fulfilment_first
+    model: int_orders_staged
+    description: >
+      The stage is the furthest milestone reached. A review moves an order to
+      `reviewed` only once it is delivered: a review of a shipment that never
+      arrived leaves it `shipped`. Open = not delivered, canceled or unavailable,
+      so a canceled order is not stuck. A survey sent before a late delivery gives
+      a negative delivery-to-review lag.
+    given:
+      - input: ref('stg_olist__orders')
+        rows:
+          - {order_id: placed, order_status: created, purchased_at: 2018-01-01 10:00:00}
+          - {order_id: paid, order_status: processing, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00}
+          - {order_id: canceled_after_approval, order_status: canceled, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00}
+          - {order_id: lost_in_transit, order_status: shipped, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00, delivered_to_carrier_at: 2018-01-02 11:00:00}
+          - {order_id: delivered, order_status: delivered, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00, delivered_to_carrier_at: 2018-01-02 11:00:00,
+             delivered_to_customer_at: 2018-01-08 15:00:00}
+          - {order_id: reviewed, order_status: delivered, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00, delivered_to_carrier_at: 2018-01-02 11:00:00,
+             delivered_to_customer_at: 2018-01-08 15:00:00}
+          - {order_id: reviewed_before_late_delivery, order_status: delivered, purchased_at: 2018-01-01 10:00:00,
+             approved_at: 2018-01-01 11:00:00, delivered_to_carrier_at: 2018-01-02 11:00:00,
+             delivered_to_customer_at: 2018-01-20 15:00:00}
+      - input: ref('int_order_reviews_deduplicated')
+        rows:
+          - {order_id: lost_in_transit, review_created_at: 2018-01-25 00:00:00,
+             review_answered_at: 2018-01-26 08:00:00}
+          - {order_id: reviewed, review_created_at: 2018-01-09 00:00:00,
+             review_answered_at: 2018-01-10 16:00:00}
+          - {order_id: reviewed_before_late_delivery, review_created_at: 2018-01-17 00:00:00,
+             review_answered_at: 2018-01-17 09:00:00}
+    expect:
+      rows:
+        - {order_id: placed, order_stage: purchased, is_order_open: true,
+           days_delivered_to_review: null, hours_review_to_answer: null}
+        - {order_id: paid, order_stage: approved, is_order_open: true,
+           days_delivered_to_review: null, hours_review_to_answer: null}
+        - {order_id: canceled_after_approval, order_stage: approved, is_order_open: false,
+           days_delivered_to_review: null, hours_review_to_answer: null}
+        - {order_id: lost_in_transit, order_stage: shipped, is_order_open: true,
+           days_delivered_to_review: null, hours_review_to_answer: 32}
+        - {order_id: delivered, order_stage: delivered, is_order_open: false,
+           days_delivered_to_review: null, hours_review_to_answer: null}
+        - {order_id: reviewed, order_stage: reviewed, is_order_open: false,
+           days_delivered_to_review: 1, hours_review_to_answer: 40}
+        - {order_id: reviewed_before_late_delivery, order_stage: reviewed, is_order_open: false,
+           days_delivered_to_review: -3, hours_review_to_answer: 9}
