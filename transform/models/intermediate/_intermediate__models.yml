@@ -69,7 +69,7 @@ models:
 
   - name: int_orders_staged
     description: >
-      Review milestones of each order, the lags around them and the furthest stage
+      Latest review of each order (score, milestones), the lags around it and the furthest stage
       the order reached (fulfilment first: a review counts only after delivery).
       One row per order, including orders without a review.
     config:

@@ -18,10 +18,8 @@ delivery as (
     select * from {{ ref('int_orders_delivery_metrics') }}
 ),
 
-reviews as (
-    select * from {{ ref('int_order_reviews_deduplicated') }}
-),
-
+-- Review columns come through stages too: joining the reviews here as well would
+-- rejoin a model stages already reads (dbt_project_evaluator)
 stages as (
     select * from {{ ref('int_orders_staged') }}
 ),
@@ -68,8 +66,8 @@ final as (
         delivery.is_delivered,
         delivery.is_delivered_late,
 
-        reviews.review_score,
-        reviews.review_id is not null as has_review
+        stages.review_score,
+        stages.has_review
     from orders
     left join items
         on orders.order_id = items.order_id
@@ -77,8 +75,6 @@ final as (
         on orders.order_id = payments.order_id
     left join delivery
         on orders.order_id = delivery.order_id
-    left join reviews
-        on orders.order_id = reviews.order_id
     left join stages
         on orders.order_id = stages.order_id
 )

@@ -1,4 +1,5 @@
--- Review milestones, their lags and the furthest stage each order reached.
+-- Review of each order (latest), its milestones and lags, and the furthest stage
+-- each order reached.
 -- The stage follows fulfilment first: a review counts only once the order is
 -- delivered, so a review of an undelivered order (a complaint about a shipment
 -- that never arrived, a canceled order) leaves the order at its fulfilment stage.
@@ -13,6 +14,8 @@ reviews as (
 staged as (
     select
         orders.order_id,
+        reviews.review_score,
+        reviews.review_id is not null as has_review,
         reviews.review_created_at,
         reviews.review_answered_at,
         {{ dbt.datediff('orders.delivered_to_customer_at', 'reviews.review_created_at', 'day') }}
