@@ -149,13 +149,29 @@ jobs:
           terraform_version: 1.16.5
           terraform_wrapper: false
 
+      # Provider zips come from GitHub release assets, which sometimes answer 504
+      # (#258, D106): keep the unpacked providers between runs, keyed on the lock
+      # files, so a run downloads only after a provider bump
+      - name: Provider cache directory
+        working-directory: .
+        run: |
+          mkdir -p "$HOME/.terraform.d/plugin-cache"
+          echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
+
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('infra/.terraform.lock.hcl', 'infra/snowflake/.terraform.lock.hcl') }}
+
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
 
-      # Providers come from .terraform.lock.hcl (checksums), no backend access
+      # Providers come from .terraform.lock.hcl (checksums), no backend access;
+      # the init script retries download errors only
       - name: terraform validate
         run: |
-          terraform init -backend=false -lockfile=readonly -input=false
+          bash "$GITHUB_WORKSPACE/.github/scripts/terraform_init.sh" -backend=false -lockfile=readonly -input=false
           terraform validate
 
       # infra/tests/*.tftest.hcl: plan on mock providers, asserts the policy rules
@@ -166,7 +182,7 @@ jobs:
       - name: terraform validate + test (snowflake)
         working-directory: infra/snowflake
         run: |
-          terraform init -backend=false -lockfile=readonly -input=false
+          bash "$GITHUB_WORKSPACE/.github/scripts/terraform_init.sh" -backend=false -lockfile=readonly -input=false
           terraform validate
           terraform test
 
