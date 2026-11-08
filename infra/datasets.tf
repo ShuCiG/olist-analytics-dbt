@@ -9,6 +9,12 @@
 locals {
   dataset_layers = ["raw", "raw_staging", "staging", "intermediate", "marts", "seeds", "snapshots", "elementary"]
 
+  # Layers with tables of person rows (customers, orders; D105): a deleted person
+  # stays readable through time travel for its window, then 7 more days of
+  # fail-safe (only Google can restore from it). 48 h is BigQuery's minimum.
+  # staging holds views, seeds / snapshots / elementary no person rows.
+  person_layers = ["raw", "raw_staging", "intermediate", "marts"]
+
   datasets = toset(concat(
     local.dataset_layers,
     [for layer in local.dataset_layers : "airflow_${layer}"],
@@ -20,6 +26,8 @@ resource "google_bigquery_dataset" "this" {
 
   dataset_id = each.value
   location   = var.location
+
+  max_time_travel_hours = contains(local.person_layers, trimprefix(each.value, "airflow_")) ? "48" : null
 
   # No default_table_expiration_ms: tables never expire. (raw and seeds had
   # 60 days left over from the BigQuery sandbox.)

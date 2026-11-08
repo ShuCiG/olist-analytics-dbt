@@ -373,3 +373,77 @@ def test_staging_selects_source_columns_by_name() -> None:
         sql = model.read_text(encoding="utf-8").lower()
         assert re.search(r"\{\{\s*source\(", sql), f"{model.name}: expected a source() CTE"
         assert not re.search(r"select\s+\*\s+from\s+source\b|\bsource\.\*", sql), f"{model.name} passes source columns through"
+
+
+def request_deletion(db: Path, *people: str) -> None:
+    """A deletion request table as dbt's request_deletion makes it (D105)."""
+    with duckdb.connect(str(db)) as con:
+        con.execute("create schema if not exists pii_keys")
+        con.execute("create table if not exists pii_keys.deletion_requests (customer_unique_id varchar, requested_at timestamp)")
+        for person in people:
+            con.execute("insert into pii_keys.deletion_requests values (?, now())", [person])
+
+
+def with_people(dump: Path) -> None:
+    """Customers per order (c_<order>), o1 and o4 by person p1, the rest one person each."""
+    person = {"o1": "p1", "o2": "p2", "o3": "p3", "o4": "p1", "o5": "p5"}
+    write_csv(
+        dump / pipeline.REFERENCE_TABLES["customers"],
+        ["customer_id", "customer_unique_id", "customer_zip_code_prefix"],
+        [(f"c_{o}", p, "01001") for o, p in person.items()],
+    )
+    write_csv(
+        dump / "olist_orders_dataset.csv",
+        ["order_id", "customer_id", "order_purchase_timestamp", "order_status"],
+        [(o, f"c_{o}", ts, "delivered") for o, ts in ORDERS],
+    )
+
+
+def raw_ids(db: Path, table: str, column: str) -> list[str]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        return sorted(row[0] for row in con.execute(f"select {column} from raw.{table}").fetchall())
+
+
+def test_deletion_request_leaves_the_person_out_of_every_load(run, dump: Path) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    request_deletion(run.db, "p1")
+    # o4 (2016-12) of p1 arrives after the request, the customers are replaced
+    status = run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p2", "p3", "p5"]
+    # o1 was loaded before the request: apply_deletion_requests removes it, not the loader
+    assert raw_ids(run.db, "orders", "order_id") == ["o1", "o2", "o3"]
+    assert raw_ids(run.db, "order_items", "order_id") == ["o1", "o1", "o2", "o3"]
+    # The cursor still reaches the month of the left-out order
+    assert status["orders_total"] == 3
+    assert pipeline.loaded_until(pipeline.dlt.pipeline("olist_duckdb")) == "2016-12"
+
+
+def test_full_refresh_with_a_deletion_request_loads_everyone_else(run, dump: Path) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    request_deletion(run.db, "p1", "p1", "nobody")
+    run("--full-refresh")
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p2", "p3", "p5"]
+    assert raw_ids(run.db, "orders", "order_id") == ["o2", "o3"]
+    for table in ("order_items", "order_payments", "order_reviews"):
+        assert "o1" not in raw_ids(run.db, table, "order_id") and "o4" not in raw_ids(run.db, table, "order_id")
+
+
+def test_without_a_request_table_everyone_loads(run, dump: Path) -> None:
+    with_people(dump)
+    run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p2", "p3", "p5"]
+
+
+@pytest.mark.parametrize("name", ["pii_keys", "a.b.c", "x.y; drop table raw.orders", "a.b`"])
+def test_deletion_request_table_name_is_checked(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS", name)
+    with pytest.raises(ValueError, match="schema.table"):
+        pipeline.deletion_requests_table("duckdb")
+
+
+def test_deletion_request_table_on_bigquery_is_in_the_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OLIST_DELETION_REQUESTS", raising=False)
+    assert pipeline.deletion_requests_table("bigquery") == f"`{pipeline.GCP_PROJECT_ID}.pii_keys.deletion_requests`"
+    assert pipeline.deletion_requests_table("duckdb") == "pii_keys.deletion_requests"

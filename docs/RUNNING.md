@@ -109,7 +109,28 @@ uv run pytest fault_injection -k missing_payments   # one scenario: baseline + i
 ```
 
 DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defect: a function and a `Scenario` in
-`fault_injection/scenarios.py`, a row in the README table.
+`fault_injection/scenarios.py`, a row in the README table. `fault_injection/test_deletion.py` (a deletion request
+end to end, D105) shares the baseline: `uv run pytest fault_injection/test_deletion.py`, ~5 min.
+
+## Deletion requests (GDPR)
+
+A person's erasure request (D105): request, apply, rebuild, check. No load may run meanwhile (pause the Airflow
+DAG, no deploy running). The request table stays: the loader leaves its people out of every later load.
+
+```bash
+cd transform
+uv run dbt run-operation request_deletion --args "{customer_unique_id: <id>}"   # --target prod: as the owner
+uv run dbt run-operation apply_deletion_requests
+uv run dbt build --select source:olist+ --exclude config.materialized:bqml_model
+uv run dbt run-operation check_deletion_requests                                 # fails while anyone is left
+```
+
+- Prod: `--target prod` on each command. Then the Airflow BigQuery replay with the same request table:
+  `DBT_RAW_SCHEMA=airflow_raw` and `--target airflow` on apply, build and check.
+- Local / Airflow DuckDB: each DuckDB file has its own `pii_keys.deletion_requests` (`DBT_DUCKDB_PATH` picks the file).
+- Another request table: `OLIST_DELETION_REQUESTS=<schema>.<table>`, read by the loader and dbt alike.
+- Deleted rows stay readable through BigQuery time travel for 48 h on the person datasets (`infra/datasets.tf`),
+  then 7 days of fail-safe.
 
 ## Semantic layer queries
 

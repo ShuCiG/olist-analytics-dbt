@@ -362,6 +362,12 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   table the build accounts can read (a plain hash of a public id would be reversible). A test keeps
   `restricted` and the tags equal, and the daily drift check covers who holds the tags
   ([D94](docs/DECISIONS.md#d94--2026-11-02--column-level-security-for-person-related-columns-policy-tags-customer_key)).
+- **Deletion requests (GDPR erasure):** a request in a restricted table removes the person's customer rows, orders,
+  items, payments and reviews from raw and dlt's staging, patches the incremental models, and the loader leaves the
+  person out of every later load. A check then scans every table of every layer for the id, its `customer_key`, and
+  any order or customer id raw no longer has, so a stale copy fails it too. Time travel on the person datasets is
+  cut to BigQuery's 48 h minimum. Tested end to end on DuckDB on every PR and on BigQuery when the deletion code
+  changes ([D105](docs/DECISIONS.md#d105--2026-11-08--deletion-requests-a-person-removed-from-every-layer-verified)).
 
 ## Semantic layer
 

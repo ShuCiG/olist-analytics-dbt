@@ -175,7 +175,7 @@ def test_no_gcp_key_secrets() -> None:
 def test_gcp_auth_uses_federation() -> None:
     jobs = _jobs()
     users = {name for name, job in jobs.items() if _gcp_auth(job)}
-    assert users == {"dbt-build-bigquery", "deploy-prod"}
+    assert users == {"dbt-build-bigquery", "gdpr-deletion-bigquery", "deploy-prod"}
     for name in users:
         (step,) = _gcp_auth(jobs[name])
         assert step["with"]["workload_identity_provider"] == "${{ env.GCP_WIF_PROVIDER }}"
@@ -229,7 +229,10 @@ def test_needs_build(paths: list[str], build: bool) -> None:
 
 # Jobs that cost BigQuery bytes or minutes of image builds; they and their
 # dependants skip when `changes` says docs only
-GATED = {"dbt-project-evaluator", "airflow-dags", "fault-injection", "dbt-build", "dbt-build-bigquery", "deploy-prod"}
+GATED = {
+    "dbt-project-evaluator", "airflow-dags", "fault-injection", "dbt-build", "dbt-build-bigquery",
+    "gdpr-deletion-bigquery", "deploy-prod",
+}
 
 
 def test_expensive_jobs_skip_docs_only_changes() -> None:
@@ -240,6 +243,35 @@ def test_expensive_jobs_skip_docs_only_changes() -> None:
         assert "needs.changes.outputs.code == 'true'" in jobs[name]["if"], name
     for name in ("deploy-docs", "publish-airflow-image"):
         assert jobs[name]["needs"] == "deploy-prod"
+
+
+@pytest.mark.parametrize(
+    ("paths", "deletion"),
+    [
+        (["transform/macros/deletion_requests.sql"], True),
+        (["README.md", "ingestion/pipeline.py"], True),
+        (["transform/macros/customer_key.sql"], True),
+        (["transform/models/marts/fct_orders.sql", ".github/workflows/ci-cd.yml"], False),
+        ([], True),
+    ],
+)
+def test_deletion_job_runs_when_deletion_code_changes(paths: list[str], deletion: bool) -> None:
+    assert changed_paths.touches_deletion(paths) is deletion
+
+
+def test_deletion_job_deletes_only_from_its_own_datasets() -> None:
+    job = _jobs()["gdpr-deletion-bigquery"]
+    env = job["env"]
+    assert env["DBT_CI_SCHEMA"].startswith("ci_")
+    # Its own raw and request table, under the datasets the cleanup drops (suffix _raw)
+    assert env["DBT_RAW_SCHEMA"] == env["DBT_CI_SCHEMA"] + "_raw"
+    assert env["OLIST_DELETION_REQUESTS"] == env["DBT_RAW_SCHEMA"] + ".deletion_requests"
+    assert env["DBT_CI_SCHEMA"] != _jobs()["dbt-build-bigquery"]["env"]["DBT_CI_SCHEMA"]
+    runs = [s.get("run", "") for s in job["steps"]]
+    assert all("--target ci" in r for r in runs if "dbt " in r and "dbt deps" not in r)
+    assert job["steps"][-1]["if"] == "always()" and "drop_isolated_datasets" in runs[-1]
+    (step,) = _gcp_auth(job)
+    assert step["with"]["service_account"].startswith(CI_SA)
 
 
 def test_required_checks_are_not_path_filtered() -> None:

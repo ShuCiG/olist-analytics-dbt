@@ -91,13 +91,18 @@ def corrupted_dump(corrupt: Callable[[Rows], None], directory: Path) -> Path:
     return write_dump(rows, directory)
 
 
-def run_scenario(baseline: Path, work: Path, scenario: Scenario) -> tuple[list[str], object]:
-    """The reactions, and the value of the scenario's pinned query."""
+def copy_baseline(baseline: Path, work: Path) -> None:
+    """The warehouse and dlt state after the clean months, for the next month's run."""
     db_path(work).parent.mkdir(parents=True)
     shutil.copy(db_path(baseline), db_path(work))
     shutil.copytree(baseline / "dlt", work / "dlt")
     (work / "target").mkdir()
     shutil.copy(baseline / "target" / "partial_parse.msgpack", work / "target")
+
+
+def run_scenario(baseline: Path, work: Path, scenario: Scenario) -> tuple[list[str], object]:
+    """The reactions, and the value of the scenario's pinned query."""
+    copy_baseline(baseline, work)
 
     loaded = ingest(work, corrupted_dump(scenario.corrupt, work / "kaggle"), AS_OF_NEW, "--next")
     if loaded.returncode != 0:
