@@ -513,6 +513,16 @@ models:
     description: >
       One row per order with item, payment, delivery and review measures.
       `order_amount` = items + freight; `paid_amount` = what was paid (can differ: installment fees, vouchers).
+
+
+      Accumulating snapshot fact: the row carries one timestamp per milestone of the
+      order's life (purchase, approval, carrier handover, delivery, review survey sent,
+      review answered), null until reached, plus the lag between consecutive
+      milestones and `order_stage`, the furthest one reached. The table is rebuilt on
+      every run, so a row always shows the order's current state; the milestones are
+      not history (no row per change). Lags count calendar boundaries (`hours_` /
+      `days_` prefix) and keep known source defects: a milestone recorded before the
+      previous one gives a negative lag, flagged by the warn tests on the timestamps.
     config:
       group: orders
       contract:
@@ -545,6 +555,18 @@ models:
             normally arrive every few minutes; a long gap means the feed stalled.
           arguments: *daily_anomalies
           config: *anomaly_config
+      # The survey is a date, the purchase a timestamp: compared as dates
+      - dbt_utils.expression_is_true:
+          name: review_created_at_not_before_purchase_date_fct_orders
+          description: >-
+            Review surveys dated before the day the order was placed, which is
+            impossible. Known source defect (61 orders); a rise means review or
+            order dates are shifted in the feed.
+          arguments:
+            expression: "cast(review_created_at as date) >= purchase_date"
+          config:
+            severity: warn
+            meta: {alert_unit: orders}
     columns:
       - name: order_id
         description: "{{ doc('order_id') }} Primary key."
@@ -573,6 +595,29 @@ models:
         description: "{{ doc('order_status') }}"
         data_type: string
         dimension: categorical
+      - name: order_stage
+        description: >
+          Furthest milestone reached: `purchased`, `approved`, `shipped` (handed to
+          the carrier), `delivered`, `reviewed` (review answered). Fulfilment first: a
+          review counts only after delivery, so a review of an undelivered order (a
+          complaint about a lost shipment, a canceled order) leaves the order at its
+          fulfilment stage. A skipped milestone doesn't hold the stage back (an order
+          delivered without an approval timestamp is `delivered`).
+        data_type: string
+        dimension: categorical
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [purchased, approved, shipped, delivered, reviewed]
+      - name: is_order_open
+        description: >
+          True while the order is in progress: status neither delivered nor canceled
+          nor unavailable. An open order is stuck in its `order_stage` until it moves
+          on; in the latest weeks of data most open orders are simply in flight.
+        data_type: boolean
+        dimension: categorical
+        data_tests: [not_null]
       - name: purchase_date
         description: "{{ doc('purchase_date') }}"
         data_type: date
@@ -639,6 +684,19 @@ models:
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
         data_type: date
+      - name: review_created_at
+        description: >
+          Review survey sent to the customer (date only, midnight), of the latest
+          review; null if no review. Olist sends it about a day after delivery, or a
+          few days after the estimated date while the order is still undelivered.
+        data_type: timestamp
+      - name: review_answered_at
+        description: Customer answered the review survey (latest review); null if no review.
+        data_type: timestamp
+        data_tests:
+          - is_not_before:
+              arguments:
+                earlier_column: review_created_at
       - name: items_count
         description: Number of line items (0 if the order has none).
         data_type: bigint
@@ -688,6 +746,45 @@ models:
       - name: hours_to_approve
         description: Hours from purchase to approval (boundary count).
         data_type: bigint
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      # Non-negative unless the two milestones are out of order: a known source
+      # defect, already flagged (warn) on the timestamps. Fails on a broken lag
+      # formula without alerting the defect twice.
+      - name: days_approved_to_carrier
+        description: >
+          Days from approval to the carrier handover (seller handling time, boundary
+          count); null until both happened. Negative for orders handed over before
+          the recorded approval.
+        data_type: bigint
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 or delivered_to_carrier_at < approved_at"
+      - name: days_carrier_to_customer
+        description: >
+          Days from the carrier handover to delivery (transit time, boundary count);
+          null until delivered. Negative for orders delivered before the recorded handover.
+        data_type: bigint
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 or delivered_to_customer_at < delivered_to_carrier_at"
+      - name: days_delivered_to_review
+        description: >
+          Days from delivery to the review survey (boundary count); null unless
+          delivered and reviewed. Negative when the survey went out before a late
+          delivery (Olist sends it a few days after the estimated date), not a defect.
+        data_type: bigint
+      - name: hours_review_to_answer
+        description: Hours from the review survey to the customer's answer (boundary count); null if no review.
+        data_type: bigint
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
       - name: days_to_deliver
         description: Days from purchase to delivery; null if not delivered.
         data_type: bigint
@@ -802,6 +899,108 @@ models:
         description: Average latest review score, 1–5, of reviewed orders.
         agg: average
         expr: review_score
+        config: {group: orders}
+      # Order funnel (accumulating snapshot): median time per stage, and orders
+      # stuck in a stage, i.e. open (not delivered, canceled or unavailable) at it.
+      # Medians are approximate: dbt-core 1.12 turns `percentile_type: continuous`
+      # into MetricFlow's approximate continuous percentile, the only one it has on
+      # BigQuery (APPROX_QUANTILES). Close to exact on these whole-hour/day lags.
+      - name: median_hours_to_approve
+        label: Median hours to approve
+        description: "Stage 1, payment: purchase to approval, hours; approved orders."
+        agg: percentile
+        percentile: 0.5
+        percentile_type: continuous
+        expr: hours_to_approve
+        config: {group: orders}
+      - name: median_days_approved_to_carrier
+        label: Median days approved to carrier
+        description: "Stage 2, seller handling: approval to carrier handover, days; shipped orders."
+        agg: percentile
+        percentile: 0.5
+        percentile_type: continuous
+        expr: days_approved_to_carrier
+        config: {group: orders}
+      - name: median_days_carrier_to_customer
+        label: Median days in transit
+        description: "Stage 3, transit: carrier handover to delivery, days; delivered orders."
+        agg: percentile
+        percentile: 0.5
+        percentile_type: continuous
+        expr: days_carrier_to_customer
+        config: {group: orders}
+      - name: median_days_delivered_to_review
+        label: Median days delivered to review
+        description: "Stage 4, review: delivery to the review survey, days; delivered, reviewed orders. Negative = survey before a late delivery."
+        agg: percentile
+        percentile: 0.5
+        percentile_type: continuous
+        expr: days_delivered_to_review
+        config: {group: orders}
+      - name: median_hours_review_to_answer
+        label: Median hours to answer review
+        description: Review survey to the customer's answer, hours; reviewed orders.
+        agg: percentile
+        percentile: 0.5
+        percentile_type: continuous
+        expr: hours_review_to_answer
+        config: {group: orders}
+      - name: approved_orders
+        label: Approved orders
+        description: Orders that reached approval or a later stage.
+        agg: count
+        expr: order_id
+        filter: |
+          {{ Dimension('order__order_stage') }} <> 'purchased'
+        config: {group: orders}
+      - name: shipped_orders
+        label: Shipped orders
+        description: Orders handed to the carrier, or further.
+        agg: count
+        expr: order_id
+        filter: |
+          {{ Dimension('order__order_stage') }} in ('shipped', 'delivered', 'reviewed')
+        config: {group: orders}
+      - name: orders_awaiting_approval
+        label: Orders awaiting approval
+        description: Open orders not approved yet (stuck at `purchased`).
+        # A 0/1 sum, not a filtered count: a period with no stuck order is 0, not
+        # null, and so is its rate (dbt-core 1.12 drops `fill_nulls_with` on v2 metrics)
+        agg: sum
+        expr: case when order_stage = 'purchased' and is_order_open then 1 else 0 end
+        config: {group: orders}
+      - name: orders_awaiting_shipping
+        label: Orders awaiting shipping
+        description: Open approved orders not handed to the carrier yet (stuck at `approved`).
+        agg: sum
+        expr: case when order_stage = 'approved' and is_order_open then 1 else 0 end
+        config: {group: orders}
+      - name: orders_in_transit
+        label: Orders in transit
+        description: Open orders with the carrier, not delivered yet (stuck at `shipped`).
+        agg: sum
+        expr: case when order_stage = 'shipped' and is_order_open then 1 else 0 end
+        config: {group: orders}
+      - name: awaiting_approval_rate
+        label: Share awaiting approval
+        description: Orders awaiting approval / orders placed.
+        type: ratio
+        numerator: orders_awaiting_approval
+        denominator: orders
+        config: {group: orders}
+      - name: awaiting_shipping_rate
+        label: Share awaiting shipping
+        description: Orders awaiting shipping / approved orders.
+        type: ratio
+        numerator: orders_awaiting_shipping
+        denominator: approved_orders
+        config: {group: orders}
+      - name: in_transit_rate
+        label: Share in transit
+        description: Orders in transit / shipped orders. High in the latest weeks (orders in flight); older periods show orders never delivered.
+        type: ratio
+        numerator: orders_in_transit
+        denominator: shipped_orders
         config: {group: orders}
 
   - name: fct_order_items

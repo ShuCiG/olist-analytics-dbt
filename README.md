@@ -46,7 +46,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
-- **Semantic layer.** 19 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
+- **Semantic layer.** 32 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 29 of 30
   evaluation questions right, 0 wrong numbers. → [Semantic layer](#semantic-layer)
 - **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 410 Python tests, 17 injected data defects; known
@@ -88,7 +88,7 @@ flowchart LR
 
     subgraph product[Data product olist-commerce · Product Owner]
         raw[raw<br/>8 tables] --> staging[staging<br/>8 views] --> intermediate[intermediate<br/>6 views] --> marts[marts<br/>star schema]
-        marts --> metrics[semantic layer<br/>19 metrics]
+        marts --> metrics[semantic layer<br/>32 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
 
@@ -161,7 +161,7 @@ erDiagram
 
 | Model | Grain | Notes |
 |---|---|---|
-| `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
+| `fct_orders` | order | item, payment, delivery and review measures. Accumulating snapshot: one timestamp per milestone (purchase → approval → carrier → delivery → review survey → answer), the lag between each pair and `order_stage`, the furthest reached. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English; untranslated ones keep the Portuguese name, missing ones `unknown` |
@@ -208,6 +208,7 @@ flowchart LR
     int_items[int_order_items_aggregated_to_orders]:::int
     int_delivery[int_orders_delivery_metrics]:::int
     int_reviews[int_order_reviews_deduplicated]:::int
+    int_staged[int_orders_staged]:::int
     int_zip[int_zip_codes_located]:::int
     int_oc[int_orders_joined_to_customers]:::int
 
@@ -224,6 +225,8 @@ flowchart LR
     stg_items --> int_items
     stg_orders --> int_delivery
     stg_reviews --> int_reviews
+    stg_orders --> int_staged
+    int_reviews --> int_staged
     stg_geo --> int_zip
     stg_orders --> int_oc
     stg_customers --> int_oc
@@ -232,7 +235,7 @@ flowchart LR
     int_items --> fct_orders
     int_pay --> fct_orders
     int_delivery --> fct_orders
-    int_reviews --> fct_orders
+    int_staged --> fct_orders
 
     stg_items --> fct_order_items
     int_oc --> fct_order_items
@@ -371,9 +374,9 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
 
 ## Semantic layer
 
-19 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
+32 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
 (MetricFlow, dbt's inline spec): semantic models on `fct_orders`, `dim_customers` and `fct_customer_cohorts`, entities
-and dimensions on the columns, simple metrics with filters, ratio metrics, 3
+and dimensions on the columns, simple metrics with filters, percentile (median) and ratio metrics, 4
 [saved queries](transform/models/marts/_marts__semantic_models.yml), `dim_date` as time spine. MetricFlow writes the SQL for the
 current warehouse, joins included.
 
@@ -384,6 +387,8 @@ current warehouse, joins included.
 | `customers`, `revenue_per_customer` | people who ordered in the period; revenue / them |
 | `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
 | `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |
+| `median_hours_to_approve`, `median_days_approved_to_carrier`, `median_days_carrier_to_customer`, `median_days_delivered_to_review`, `median_hours_review_to_answer` | order funnel: median time per stage (approximate percentile, the only one MetricFlow has on BigQuery) |
+| `orders_awaiting_approval`, `orders_awaiting_shipping`, `orders_in_transit`; `awaiting_approval_rate`, `awaiting_shipping_rate`, `in_transit_rate` (over `orders`, `approved_orders`, `shipped_orders`) | open orders stuck at a stage; their share of the orders that reached it |
 | `new_customers`, `repeat_customers`, `repeat_customer_rate` | people by first order (cohort); of them, who ordered again; the share |
 | `cohort_size`, `retained_customers`, `cohort_retention_rate` | from `fct_customer_cohorts`, by `cohort__months_since_first_order`: people acquired; of them, who ordered in that month; the share |
 | `ltv_3_months`, `cohort_revenue_to_date` | revenue per acquired person in months 0–2 (cohorts old enough); cumulative cohort revenue |

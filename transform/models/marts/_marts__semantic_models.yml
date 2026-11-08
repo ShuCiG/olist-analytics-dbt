@@ -29,6 +29,22 @@ saved_queries:
     config:
       group: orders
 
+  - name: order_funnel_by_month
+    description: Median time per order stage and the share of orders stuck in each stage, by purchase month.
+    query_params:
+      metrics:
+        - median_hours_to_approve
+        - median_days_approved_to_carrier
+        - median_days_carrier_to_customer
+        - median_days_delivered_to_review
+        - awaiting_approval_rate
+        - awaiting_shipping_rate
+        - in_transit_rate
+      group_by:
+        - TimeDimension('metric_time', 'month')
+    config:
+      group: orders
+
   - name: cohort_retention_curve
     description: Retention and revenue per acquired person by month since the first order, over all cohorts (Customers page).
     query_params:

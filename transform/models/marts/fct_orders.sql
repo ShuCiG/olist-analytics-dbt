@@ -1,5 +1,7 @@
--- Grain: one row per order. Version 2 (latest): `payment_value` renamed to
--- `paid_amount`, like the other money columns. v1 is built from this model.
+-- Grain: one row per order. Accumulating snapshot: one column per milestone of the
+-- order's life, filled in as the order moves on, with the lags between them and the
+-- furthest stage reached. The table is rebuilt, so each run shows every order's
+-- current state.
 with orders as (
     select * from {{ ref('int_orders_joined_to_customers') }}
 ),
@@ -16,8 +18,10 @@ delivery as (
     select * from {{ ref('int_orders_delivery_metrics') }}
 ),
 
-reviews as (
-    select * from {{ ref('int_order_reviews_deduplicated') }}
+-- Review columns come through stages too: joining the reviews here as well would
+-- rejoin a model stages already reads (dbt_project_evaluator)
+stages as (
+    select * from {{ ref('int_orders_staged') }}
 ),
 
 final as (
@@ -27,12 +31,16 @@ final as (
         -- Pseudonym of the person for readers without access to the id (D94)
         {{ customer_key('orders.customer_unique_id') }} as customer_key,
         orders.order_status,
+        stages.order_stage,
+        stages.is_order_open,
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,
         orders.approved_at,
         orders.delivered_to_carrier_at,
         orders.delivered_to_customer_at,
         orders.estimated_delivery_date,
+        stages.review_created_at,
+        stages.review_answered_at,
 
         coalesce(items.items_count, 0) as items_count,
         coalesce(items.distinct_sellers_count, 0) as distinct_sellers_count,
@@ -49,13 +57,17 @@ final as (
         {{ to_money('coalesce(payments.debit_card_amount, 0)') }} as debit_card_amount,
 
         delivery.hours_to_approve,
+        delivery.days_approved_to_carrier,
+        delivery.days_carrier_to_customer,
+        stages.days_delivered_to_review,
+        stages.hours_review_to_answer,
         delivery.days_to_deliver,
         delivery.days_delivered_before_estimate,
         delivery.is_delivered,
         delivery.is_delivered_late,
 
-        reviews.review_score,
-        reviews.review_id is not null as has_review
+        stages.review_score,
+        stages.has_review
     from orders
     left join items
         on orders.order_id = items.order_id
@@ -63,8 +75,8 @@ final as (
         on orders.order_id = payments.order_id
     left join delivery
         on orders.order_id = delivery.order_id
-    left join reviews
-        on orders.order_id = reviews.order_id
+    left join stages
+        on orders.order_id = stages.order_id
 )
 
 select * from final
