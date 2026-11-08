@@ -36,6 +36,9 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
 - On BigQuery the order tables are partitioned by day of `_loaded_at`, so an
   incremental dbt run reads only the partitions since its cursor (D70). dlt sets
   partitioning only when it creates a table; existing tables are migrated by hand.
+- People with a deletion request (table `OLIST_DELETION_REQUESTS`, default
+  `pii_keys.deletion_requests`, D105) are left out of every load: their customer
+  rows, their orders and the orders' items, payments and reviews.
 
 Examples:
     python ingestion/pipeline.py --until 2017-06   # first chunk: up to June 2017
@@ -179,14 +182,74 @@ def month_key(value: str) -> str:
     return value
 
 
+def deletion_requests_table(destination: str) -> str:
+    """The table of deletion requests, qualified for the destination's SQL (D105).
+
+    `OLIST_DELETION_REQUESTS` = `schema.table` (default `pii_keys.deletion_requests`),
+    the same variable dbt's deletion macros read. On BigQuery the dataset sits in
+    GCP_PROJECT_ID. Checked, since it is pasted into SQL.
+    """
+    name = os.environ.get("OLIST_DELETION_REQUESTS", "pii_keys.deletion_requests")
+    if not re.fullmatch(r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+", name):
+        raise ValueError(f"OLIST_DELETION_REQUESTS must be schema.table, got {name!r}")
+    return f"`{GCP_PROJECT_ID}.{name}`" if destination == "bigquery" else name
+
+
+def read_deletion_requests(pipeline: dlt.Pipeline, destination: str) -> frozenset[str]:
+    """The `customer_unique_id`s of every deletion request; none without the table.
+
+    Only DuckDB (local, Airflow's DuckDB DAG, tests) and BigQuery (prod, Airflow's
+    BigQuery DAG, the BigQuery CI deletion job) have the table; a destination
+    without it loads everyone.
+    """
+    table = deletion_requests_table(destination)
+    try:
+        with pipeline.sql_client() as client:
+            rows = client.execute_sql(f"select distinct customer_unique_id from {table}")
+    except DatabaseUndefinedRelation:
+        return frozenset()
+    return frozenset(row[0] for row in rows or [])
+
+
+def suppress_people(customers: pa.Table, people: frozenset[str]) -> tuple[pa.Table, pa.Array]:
+    """Customers without the requested people, and the dropped rows' `customer_id`s.
+
+    `customer_id` is per order (D94: one person, many ids), so the orders of the
+    people follow from the ids, and the order tables from the orders.
+    """
+    if not people:
+        return customers, pa.array([], pa.string())
+    # is_in gives false, not null, for a null id: such rows stay
+    requested = pc.field("customer_unique_id").isin(pa.array(sorted(people), pa.string()))
+    return customers.filter(~requested), customers.filter(requested)["customer_id"].combine_chunks()
+
+
 @dlt.source(name="olist")
 def olist_source(
-    source_dir: Path, until: str | None = None, next_only: bool = False, partitioned: bool = False
+    source_dir: Path,
+    until: str | None = None,
+    next_only: bool = False,
+    partitioned: bool = False,
+    deleted_people: frozenset[str] = frozenset(),
 ):
+    """The dump as dlt resources, without the people of `deleted_people` (D105).
+
+    A deletion request removes a person from raw once (dbt's `apply_deletion_requests`);
+    every later load must leave them out too, or the next `replace` of customers and
+    the next order month would bring them back.
+    """
     loaded_at = datetime.now(UTC)
+    customers, deleted_customer_ids = suppress_people(
+        read_csv_as_strings(source_dir / REFERENCE_TABLES["customers"]), deleted_people
+    )
+    if deleted_people:
+        print(
+            f"Deletion requests: {len(deleted_people)} people, "
+            f"{len(deleted_customer_ids)} customer rows left out of this load"
+        )
 
     for table_name, file_name in REFERENCE_TABLES.items():
-        table = read_csv_as_strings(source_dir / file_name)
+        table = customers if table_name == "customers" else read_csv_as_strings(source_dir / file_name)
         # `replace`: an empty file would wipe the table, and the sellers snapshot would
         # close every seller's history (hard_deletes: new_record)
         if not table.num_rows:
@@ -224,6 +287,10 @@ def olist_source(
             f"Order chunk ({loaded_until or 'start'}, {chunk_until or 'end'}]: "
             f"{orders.num_rows} orders, state now {state.get(STATE_KEY)}"
         )
+        # After the cursor moved: a month whose orders are all of deleted people is
+        # still a loaded month
+        if len(deleted_customer_ids):
+            orders = orders.filter(~pc.field("customer_id").isin(deleted_customer_ids))
         return orders["order_id"]
 
     def order_rows(file_name: str, primary_key: list[str]):
@@ -458,6 +525,7 @@ def main() -> None:
             until=args.until,
             next_only=args.next,
             partitioned=args.destination == "bigquery",
+            deleted_people=read_deletion_requests(pipeline, args.destination),
         )
         if args.full_refresh:
             load_info = pipeline.run(source, refresh="drop_sources")

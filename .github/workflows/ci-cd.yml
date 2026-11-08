@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      deletion: ${{ steps.diff.outputs.deletion }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -56,6 +57,7 @@ jobs:
             printf '%s\n' "$files" | python3 .github/scripts/changed_paths.py >> "$GITHUB_OUTPUT"
           else
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "deletion=true" >> "$GITHUB_OUTPUT"
           fi
 
   sqlfluff-lint:
@@ -514,6 +516,120 @@ jobs:
         working-directory: transform
         run: uv run dbt run-operation drop_isolated_datasets --target ci
 
+  # A deletion request end to end on BigQuery (D105), in per-run datasets with their
+  # own raw (DBT_RAW_SCHEMA): never prod's raw, which apply_deletion_requests
+  # refuses on target ci. Load to 2018-06, run, request the dump's most frequent
+  # buyer (17 orders, 2017-05 to 2018-08), check fails, apply, load the rest (the
+  # loader leaves the person out), run, check passes. Only when the deletion code
+  # changes (`changes.deletion`): two full runs and a fresh load. `run`, not `build`:
+  # slim CI tests the models; the ~200 tests here would double the bytes (each bills
+  # BigQuery's 10 MiB minimum). Its bytes carry their own job label
+  # (CI_COST_SCOPE), out of the PR's cost comment.
+  gdpr-deletion-bigquery:
+    name: deletion request (BigQuery)
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && needs.changes.outputs.code == 'true' && needs.changes.outputs.deletion == 'true'
+    needs: [changes, sqlfluff-lint, python-tests]
+    permissions:
+      contents: read
+      actions: read  # download the prod manifest artifact
+      id-token: write  # OIDC token for Workload Identity Federation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      DBT_CI_SCHEMA: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del
+      DBT_RAW_SCHEMA: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del_raw
+      OLIST_DELETION_REQUESTS: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del_raw.deletion_requests
+      CI_COST_SCOPE: deletion
+      PERSON: 8d50f5eadf50201ccdcedfb9e2ac8455
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: olist-ci@olist-analytics-dbt-472315.iam.gserviceaccount.com
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      # The BigQuery ML models are not trained here (quota, D96): their children read
+      # prod's through --defer
+      - name: Download prod manifest (last prod deploy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
+          gh run download "$run_id" --name prod-manifest --dir prod-state
+
+      - name: Load raw up to 2018-06 (dlt → BigQuery)
+        run: uv run python ingestion/pipeline.py --destination bigquery --dataset "$DBT_RAW_SCHEMA" --until 2018-06
+
+      - name: dbt run (Elementary tables, target ci)
+        working-directory: transform
+        run: >-
+          uv run dbt run --target ci --select package:elementary
+          --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+
+          dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
+
+      - name: dbt run (before the request)
+        working-directory: transform
+        run: uv run dbt run --target ci --exclude package:elementary config.materialized:bqml_model --defer --state ../prod-state
+
+      - name: Request, check fails, apply
+        working-directory: transform
+        run: |
+          uv run dbt run-operation request_deletion --target ci --args "{customer_unique_id: $PERSON}"
+          if out=$(uv run dbt run-operation check_deletion_requests --target ci 2>&1); then
+            echo "$out"; echo "::error::check_deletion_requests passed before the deletion"; exit 1
+          fi
+          grep -q "still in" <<< "$out" || { echo "$out"; exit 1; }
+          # The tables holding the person before the deletion (BigQuery quotes with backticks)
+          grep -E ' rows$' <<< "$out"
+          uv run dbt run-operation apply_deletion_requests --target ci
+
+      - name: Load the rest (dlt → BigQuery)
+        run: uv run python ingestion/pipeline.py --destination bigquery --dataset "$DBT_RAW_SCHEMA"
+
+      - name: dbt run (after the deletion)
+        working-directory: transform
+        run: uv run dbt run --target ci --exclude package:elementary config.materialized:bqml_model --defer --state ../prod-state
+
+      - name: Check the deletion
+        working-directory: transform
+        run: uv run dbt run-operation check_deletion_requests --target ci
+
+      - name: BigQuery cost of this job
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          uv run python .github/scripts/ci_cost.py olist-analytics-dbt-472315 "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$CI_COST_SCOPE" deletion-cost.md \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          cat deletion-cost.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Drop CI datasets
+        if: always()
+        working-directory: transform
+        run: uv run dbt run-operation drop_isolated_datasets --target ci
+
   # The PR comments of the BigQuery build, each updated on every push: its cost
   # (D72), its data diff vs prod (D73) and its column impact (D101); none when the
   # build skipped (docs only, Dependabot). Each file's first line is its marker; a
@@ -920,7 +1036,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

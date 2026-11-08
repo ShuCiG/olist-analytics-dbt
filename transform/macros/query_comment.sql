@@ -11,12 +11,15 @@
     dbt-bigquery adds `dbt_invocation_id` to every job by itself.
     In GitHub Actions `github_run` (run id, attempt) ties the jobs of every dbt
     command in one workflow run together: the PR cost comment sums them (D72).
+    `CI_COST_SCOPE` appends a suffix, so a job with its own cost report (the
+    BigQuery deletion job, D105) stays out of that sum.
 #}
 {% macro query_comment(node) -%}
     {%- set labels = {'app': 'dbt', 'dbt_target': target.name, 'dbt_command': flags.WHICH} -%}
     {%- if env_var('GITHUB_RUN_ID', '') -%}
         {%- do labels.update({
-            'github_run': env_var('GITHUB_RUN_ID') ~ '-' ~ env_var('GITHUB_RUN_ATTEMPT', '1'),
+            'github_run': env_var('GITHUB_RUN_ID') ~ '-' ~ env_var('GITHUB_RUN_ATTEMPT', '1')
+                ~ ('-' ~ env_var('CI_COST_SCOPE') if env_var('CI_COST_SCOPE', '') else ''),
         }) -%}
     {%- endif -%}
     {%- if node is not none -%}

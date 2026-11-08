@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from fault_injection.runner import ROOT, prepare_baseline, run_scenario
+from fault_injection.runner import ROOT, run_scenario
 from fault_injection.scenarios import SCENARIOS, Scenario
 
 WORKERS = min(4, os.cpu_count() or 1)
@@ -18,7 +18,7 @@ WORKERS = min(4, os.cpu_count() or 1)
 
 @pytest.fixture(scope="session")
 def outcomes(
-    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, baseline: Path
 ) -> dict[str, tuple[list[str], object]]:
     """All selected scenarios at once, in parallel; `-k` runs a few."""
     selected = [
@@ -27,8 +27,6 @@ def outcomes(
         if "scenario" in getattr(getattr(item, "callspec", None), "params", {})
     ]
     root = tmp_path_factory.mktemp("faults")
-    baseline = root / "baseline"
-    prepare_baseline(baseline)
     with ThreadPoolExecutor(WORKERS) as pool:
         # Short work dirs: dbt's compiled paths are long, Windows limits them
         runs = pool.map(lambda s: run_scenario(baseline, root / str(SCENARIOS.index(s)), s), selected)
