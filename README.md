@@ -235,7 +235,6 @@ flowchart LR
     int_items --> fct_orders
     int_pay --> fct_orders
     int_delivery --> fct_orders
-    int_reviews --> fct_orders
     int_staged --> fct_orders
 
     stg_items --> fct_order_items
