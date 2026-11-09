@@ -2204,7 +2204,6 @@ dashboard = [
 ]
 dev = [
     { name = "datacontract-cli", extra = ["bigquery", "databricks", "duckdb"] },
-    { name = "dbt-metricflow" },
     { name = "mcp" },
     { name = "pre-commit" },
     { name = "pyarrow-stubs" },
@@ -2213,6 +2212,9 @@ dev = [
     { name = "sqlfluff" },
     { name = "sqlfluff-templater-dbt" },
     { name = "sqlglot" },
+]
+metricflow = [
+    { name = "dbt-metricflow" },
 ]
 
 [package.metadata]
@@ -2235,7 +2237,6 @@ dashboard = [
 ]
 dev = [
     { name = "datacontract-cli", extras = ["bigquery", "databricks", "duckdb"], specifier = ">=1.2.6" },
-    { name = "dbt-metricflow", specifier = ">=0.15.0" },
     { name = "mcp", specifier = ">=2.3.0" },
     { name = "pre-commit", specifier = ">=4.6.2" },
     { name = "pyarrow-stubs", specifier = ">=20.0.0.20260819" },
@@ -2245,6 +2246,7 @@ dev = [
     { name = "sqlfluff-templater-dbt", specifier = ">=4.4.0" },
     { name = "sqlglot", specifier = ">=30.18.0" },
 ]
+metricflow = [{ name = "dbt-metricflow", specifier = ">=0.15.0" }]
 
 [[package]]
 name = "open-data-contract-standard"

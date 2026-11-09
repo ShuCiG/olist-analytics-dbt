@@ -48,8 +48,9 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 32 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
-  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 29 of 30
-  evaluation questions right, 0 wrong numbers. → [Semantic layer](#semantic-layer)
+  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 32 of 35
+  evaluation questions right, 0 wrong numbers; alerts and the agent say which states and segments drove a metric's
+  change. → [Semantic layer](#semantic-layer)
 - **Data quality at every layer.** 162 data tests, 9 unit tests, enforced model contracts, 410 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
@@ -418,17 +419,25 @@ on DuckDB: an agent lists metrics and dimensions and asks for values, and Metric
 A filter is a dimension, an operator and values, because MetricFlow's own `where` passes SQL through as written. The
 connection is read-only.
 
-An [evaluation](metrics_mcp/eval/questions.yml) sends 30 business questions to Claude Haiku 5.5 limited to these tools,
+A fifth tool, `explain_change`, answers *why* a metric moved: for two periods it splits the change by the members
+of a dimension (customer state, order status, repeat customer) and ranks them. The members add up to the total
+change; for a ratio such as the late delivery rate each member's part is split into **mix** (it became a bigger or
+smaller share of the orders) and **rate** (its own rate moved). The same module drives the Airflow run email: when
+revenue, orders, average order value or the late delivery rate moves by 10 % or more against the month before, the
+email shows who drove it ([D110](docs/DECISIONS.md)). On November 2017 against October, revenue rose by 407,436 BRL
+(+53 %): São Paulo 37 %, Rio de Janeiro 16 %, Minas Gerais 15 %.
+
+An [evaluation](metrics_mcp/eval/questions.yml) sends 35 business questions to Claude Haiku 5.5 limited to these tools,
 each in a fresh session, and grades the final answers against `mf query`:
 
 | Questions | Result |
 |---|---|
-| 23 answerable (numbers, filters, periods, rankings, cohorts) | 22 right; 1 with the right numbers under keys of its own |
-| 7 to refuse (no such metric or dimension, a raw SQL request, a delete) | 7 refused |
+| 27 answerable (numbers, filters, periods, rankings, cohorts, why a metric changed) | 24 right; 2 with the right numbers under keys of their own, 1 with no parseable answer |
+| 8 to refuse (no such metric or dimension, a raw SQL request, a delete) | 8 refused |
 
 The questions come from someone who knows the catalog, on one model and one run, so this shows the server works
 for an agent, not how it does on any question. Details and the grader changes are in
-[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation).
+[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation) and D110.
 
 ## Orchestration and alerts
 
@@ -454,7 +463,9 @@ flowchart LR
 ```
 
 **Alerts:** at most one report per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
-orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). A new column in
+orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). An `OK` email
+also says why a business metric moved by 10 % or more against the month before: the top members per dimension, with
+mix and rate effects for ratios (`metric_drivers` task, [D110](docs/DECISIONS.md)). A new column in
 a source file lands in raw only (staging selects by name) and sends `SCHEMA: 1 new source column in orders`; a column
 missing from a source file sends `SCHEMA: 1 source column removed in orders` on every load until fixed, from
 Airflow and from the prod deploy ([D61](docs/DECISIONS.md)). Warn-test

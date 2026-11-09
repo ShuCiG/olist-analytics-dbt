@@ -156,7 +156,7 @@ cd transform && uv run dbt parse && cd ..
 claude mcp add olist-metrics --scope local -- uv run --directory "$(pwd)" python -m metrics_mcp.server
 ```
 
-Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values` and `query_metrics`. The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
+Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values`, `query_metrics` and `explain_change` (a metric's change between two periods split by dimension members, D110). The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
 
 ```bash
 uv run pytest metrics_mcp                                       # the server through a real client; needs built marts
@@ -165,6 +165,17 @@ uv run python -m metrics_mcp.eval.evaluate --model haiku --out /tmp/one.json --o
 ```
 
 The evaluation sends each question in [`metrics_mcp/eval/questions.yml`](../metrics_mcp/eval/questions.yml) to a fresh headless Claude Code limited to these tools. It uses the subscription limit, about 13,000 tokens and 30 s a question, so it runs by hand and not in CI.
+
+## Why a metric moved
+
+`explain_change` and the run email's driver block share `alerting/metric_drivers.py`. To run the email check by hand on a built warehouse (prints one JSON line; `--month` picks the later month, default the month of the newest order):
+
+```bash
+cd transform && uv run dbt parse && cd ..
+uv run python -m alerting.metric_drivers --target mcp --month 2017-11 2>/dev/null
+```
+
+Settings in the Airflow DAGs: Variables `olist_metric_drift_threshold` and `olist_metric_drift_min_orders` (airflow/README.md).
 
 ## Observability report (Elementary)
 

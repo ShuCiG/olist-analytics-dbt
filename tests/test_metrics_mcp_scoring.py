@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from metrics_mcp.eval.scoring import grade, normalize_key, parse_final_line, period_key
+from metrics_mcp.eval.scoring import difference, grade, normalize_key, parse_final_line, period_key
 
 SCALAR = {"shape": "scalar", "gold": {"metrics": ["revenue"]}}
 MAPPING = {"shape": "mapping", "gold": {"metrics": ["revenue"], "group_by": ["customer__state"]}}
@@ -90,3 +90,11 @@ def test_a_different_period_stays_different() -> None:
 
 def test_no_final_line_is_wrong() -> None:
     assert not grade(SCALAR, [{"revenue": "1"}], None, 1)[0]
+
+
+def test_gold_for_a_change_is_after_minus_before_per_member() -> None:
+    before = [{"customer__state": "SP", "revenue": "100"}, {"customer__state": "RJ", "revenue": "50"}]
+    after = [{"customer__state": "SP", "revenue": "160"}, {"customer__state": "AC", "revenue": "3"}]
+    rows = difference(before, after, "revenue", "customer__state")
+    assert {row["customer__state"]: float(row["revenue"]) for row in rows} == {"SP": 60, "RJ": -50, "AC": 3}
+    assert [float(row["revenue"]) for row in difference([{"revenue": "10"}], [{"revenue": ""}], "revenue", None)] == [-10]

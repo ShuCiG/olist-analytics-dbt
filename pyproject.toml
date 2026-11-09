@@ -19,9 +19,12 @@ dashboard = [
     "altair>=6.3.0",
     "streamlit>=1.66.1",  # allows pillow 13 (D59)
 ]
+# Also in the Airflow image's project venv: the metric_drivers task queries MetricFlow (D110)
+metricflow = [
+    "dbt-metricflow>=0.15.0",
+]
 dev = [
     "datacontract-cli[bigquery,databricks,duckdb]>=1.2.6",
-    "dbt-metricflow>=0.15.0",
     "mcp>=2.3.0",
     "pre-commit>=4.6.2",
     "pyarrow-stubs>=20.0.0.20260819",
@@ -34,7 +37,7 @@ dev = [
 
 # `uv sync` installs the dashboard too (CI type-checks and smoke-tests it)
 [tool.uv]
-default-groups = ["dev", "dashboard"]
+default-groups = ["dev", "dashboard", "metricflow"]
 
 # Python unit tests (tests/): `uv run pytest`. The dashboard smoke test needs built
 # marts and runs separately (`uv run pytest dashboard`)

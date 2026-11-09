@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir \
     sqlglot \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
 
-# Project side: dbt + dlt from the lock file (dev tools excluded)
+# Project side: dbt + dlt from the lock file (dev tools excluded), and MetricFlow for
+# the metric_drivers task (D110)
 ENV UV_PROJECT_ENVIRONMENT=/opt/project-venv \
     UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy
@@ -27,7 +28,7 @@ RUN mkdir -p /opt/project-venv /opt/edr-venv /opt/project /home/airflow/.cache/k
 USER airflow
 COPY --chown=airflow: pyproject.toml uv.lock /tmp/project/
 RUN cd /tmp/project \
-    && uv sync --frozen --no-dev --no-install-project --no-cache \
+    && uv sync --frozen --no-dev --group metricflow --no-install-project --no-cache \
     && rm -rf /tmp/project
 
 # Elementary's CLI (edr) for the report task: its own venv (it would downgrade
