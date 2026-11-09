@@ -10,6 +10,13 @@ and needs only CAN_USE (the service principal's grant). Starting, or "can't crea
 unavailable (output `available=false`, a warning, no failure email). Any other
 answer (auth, permissions, a wrong warehouse id) fails the step.
 
+Free Edition also blocks a workspace nobody has used for a few days (resource
+gatekeeper, `denyReason: INACTIVE`): the statement then fails with a bare 400 or
+"Cannot create the resource", and waiting does not help (it lasted ~15 h once). On
+the first such answer the script asks the warehouse `start` endpoint once, whose
+error carries the reason; INACTIVE fails the step at once with the fix (sign in to
+the workspace UI and run a query), so the failure email names it (#262).
+
 Env:  DATABRICKS_HOST, DATABRICKS_HTTP_PATH (/sql/1.0/warehouses/<id>), and either
       DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET (OAuth M2M, CI) or
       DATABRICKS_TOKEN (a personal token, local runs); GITHUB_OUTPUT if set
@@ -34,6 +41,7 @@ WAIT_TIMEOUT = "50s"
 UNAVAILABLE = "Cannot create the resource"
 # Gateway / throttling answers: Databricks' side, worth another attempt
 RETRY_HTTP = {429, 502, 503, 504}
+INACTIVE = "INACTIVE"
 
 
 def delays() -> list[int]:
@@ -58,6 +66,27 @@ def classify(http_status: int, body: dict[str, Any]) -> tuple[str, str]:
     if state in {"PENDING", "RUNNING", "CANCELED"}:
         return RETRY, f"statement {state} (warehouse starting)"
     return ERROR, f"statement {state}: {message}"
+
+
+def deny_reason(body: Any) -> str | None:
+    """`denyReason` of a resource gatekeeper error, wherever it sits in `details`."""
+    if isinstance(body, dict):
+        if isinstance(reason := body.get("denyReason"), str):
+            return reason
+        values: list[Any] = list(body.values())
+    elif isinstance(body, list):
+        values = body
+    else:
+        return None
+    for value in values:
+        if reason := deny_reason(value):
+            return reason
+    return None
+
+
+def needs_block_check(outcome: str, detail: str) -> bool:
+    """A probe answer the gatekeeper could be behind: a 400 or "can't create"."""
+    return outcome != READY and (UNAVAILABLE in detail or detail.startswith("HTTP 400"))
 
 
 def _host() -> str:
@@ -102,6 +131,19 @@ def probe(token: str, warehouse_id: str) -> tuple[str, str]:
     return classify(code, body)
 
 
+def block_reason(token: str, warehouse_id: str) -> str | None:
+    """Ask `start` once: a blocked workspace answers with its `denyReason`. Any other
+    answer (started, already running, no grant) gives None and changes nothing."""
+    try:
+        _, body = _request(
+            f"{_host()}/api/2.0/sql/warehouses/{warehouse_id}/start", b"{}",
+            {"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+    except OSError:  # network error: no reason known, the probe loop goes on
+        return None
+    return deny_reason(body)
+
+
 def _output(available: bool) -> None:
     if path := os.environ.get("GITHUB_OUTPUT"):
         with open(path, "a", encoding="utf-8") as f:
@@ -112,10 +154,23 @@ def main() -> None:
     warehouse_id = os.environ["DATABRICKS_HTTP_PATH"].rstrip("/").rsplit("/", 1)[-1]
     token = _token()
     started = time.monotonic()
+    checked = False
     for pause in [*delays(), None]:
         outcome, detail = probe(token, warehouse_id)
         elapsed = int(time.monotonic() - started)
         print(f"[{elapsed:>4}s] {outcome}: {detail}", flush=True)
+        if not checked and needs_block_check(outcome, detail):
+            checked = True
+            reason = block_reason(token, warehouse_id)
+            print(f"       warehouse start: denyReason {reason or 'none'}", flush=True)
+            if reason == INACTIVE:
+                _output(False)
+                sys.exit(
+                    f"::error::Databricks workspace blocked for inactivity (resource gatekeeper, "
+                    f"denyReason INACTIVE; SQL warehouse {warehouse_id}: {detail}). Waiting does "
+                    "not help: sign in to the workspace UI, run a query on the warehouse, then "
+                    "rerun this workflow."
+                )
         if outcome == READY:
             _output(True)
             return
