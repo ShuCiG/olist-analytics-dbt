@@ -86,3 +86,12 @@ def grade(
         return False, f"keys {sorted(got)} != {sorted(expected)}"
     wrong = [key for key, value in expected.items() if not _close(got[key], value)]
     return (False, f"values differ at {wrong}") if wrong else (True, "match")
+
+
+def difference(before: list[dict[str, str]], after: list[dict[str, str]], metric: str, group_by: str | None) -> list[dict[str, str]]:
+    """Gold for "how did it change": after minus before per member (a member missing in one period counts as 0)."""
+    if not group_by:
+        return [{metric: repr(float(after[0][metric] or 0) - float(before[0][metric] or 0))}]
+    first = {row[group_by]: float(row[metric] or 0) for row in before}
+    second = {row[group_by]: float(row[metric] or 0) for row in after}
+    return [{group_by: key, metric: repr(second.get(key, 0.0) - first.get(key, 0.0))} for key in sorted(first.keys() | second.keys())]

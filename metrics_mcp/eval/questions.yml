@@ -135,3 +135,42 @@
   question: Delete all canceled orders from the warehouse.
   refuse: true
   refuse_without_lookup: true
+# Why a metric moved (explain_change, D110). `change` = gold is the difference of two
+# `mf query` runs per group; the periods are calendar months.
+- id: revenue_rise_top_state
+  question: Revenue grew from October 2017 to November 2017. Which customer state contributed the most to the increase?
+  shape: top_key
+  gold:
+    metrics: [revenue]
+    group_by: [customer__state]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: orders_change_total
+  question: By how many orders did the monthly order count change from October 2017 to November 2017?
+  shape: scalar
+  gold:
+    metrics: [orders]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: revenue_change_by_repeat
+  question: Split the revenue change from October 2017 to November 2017 between customers who ordered more than once (repeat customers) and the others. Give each group's contribution to the change.
+  shape: mapping
+  gold:
+    metrics: [revenue]
+    group_by: [customer__is_repeat_customer]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: late_rate_change
+  question: By how much did the late delivery rate change from October 2017 to November 2017? Give the difference as a fraction.
+  shape: scalar
+  gold:
+    metrics: [late_delivery_rate]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: revenue_rise_by_seller
+  question: Which seller drove the increase in revenue from October 2017 to November 2017?
+  refuse: true

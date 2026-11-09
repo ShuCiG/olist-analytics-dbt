@@ -5,6 +5,10 @@ new source columns (D61).
   under Admin → Variables; no redeploy).
 - Stale threshold: Variable `olist_stale_after_hours` (default 24 = the olist
   source's `warn_after` in sources.yml).
+- Metric drivers (D110): the `metric_drivers` task checks revenue, orders, average order
+  value and late delivery rate, latest month vs the one before. Variables
+  `olist_metric_drift_threshold` (default 0.10, |relative change|) and
+  `olist_metric_drift_min_orders` (default 100, orders in the earlier month).
 - Last STALE email per DAG: Variable `olist_stale_reminded_at_<warehouse>` (set by
   the `report` task, UTC ISO time), so the reminder goes out about once a day
   whatever hours the machine runs.
@@ -77,6 +81,14 @@ def on_dag_failure(context) -> None:
     print(f"email: FAILED {email.subject} | {email.detail}")
 
 
+def _drivers(raw: str | None) -> dict | None:
+    """The metric_drivers task's JSON line; None when it was skipped, failed or printed junk."""
+    try:
+        return json.loads(raw) if raw else None
+    except ValueError:
+        return None
+
+
 def report(ti, dag_run, warehouse: str) -> dict[str, object]:
     """Email the run's outcome: fresh data, or a stale-data warning about once a day.
 
@@ -97,6 +109,7 @@ def report(ti, dag_run, warehouse: str) -> dict[str, object]:
         log_dir=_log_dir(),
         manifest=DBT_MANIFEST,
         reminded_at=datetime.fromisoformat(reminded_at) if reminded_at else None,
+        drivers=_drivers(ti.xcom_pull(task_ids="metric_drivers")),
     )
     if email:
         _send(email)

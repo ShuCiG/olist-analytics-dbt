@@ -16,8 +16,8 @@ a full parse per run, D50), when retries are not as expected (BigQuery: every
 task retries once, transient GCP errors, D53, with the producer retrying at once
 and every node task waiting for it; DuckDB: none, a retried node task runs dbt
 outside the pool), or
-when the DuckDB pool holds anything but the writers (dlt, Elementary's tables,
-producer, edr_report): a sensor in
+when the DuckDB pool holds anything but the file users (dlt, Elementary's tables,
+producer, edr_report, metric_drivers): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
 """
@@ -35,8 +35,9 @@ PRODUCER = "dbt.dbt_producer_watcher"
 GATE = "has_new_orders"
 ELEMENTARY = "elementary_tables"
 EDR_REPORT = "edr_report"
+METRIC_DRIVERS = "metric_drivers"  # opens the DuckDB file read-only; a writer holds the lock
 LINEAGE = "openlineage"
-DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT}
+DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT, METRIC_DRIVERS}
 RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 
 # Exposures sent as lineage jobs, per DAG (#197)

@@ -18,7 +18,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
-from . import dbt_summary, email_html, schema_changes
+from . import dbt_summary, email_html, metric_drivers, schema_changes
 
 UI_URL = "http://localhost:8080"
 # Elementary reports of the DAGs' edr_report task (`elementary-reports` service)
@@ -178,13 +178,15 @@ def report_email(
     log_dir: Path,
     manifest: str | Path,
     reminded_at: datetime | None = None,
+    drivers: dict | None = None,
 ) -> tuple[Email | None, float]:
     """(email or None, hours since new orders) for a run that did not fail.
 
     `status` is the feed status `pipeline.py` prints (orders_loaded, orders_total,
     last_order_at, last_loaded_at). OK when the run brought orders or rebuilt the
     marts; else STALE when a reminder is due (`reminded_at` = when the last STALE
-    email went out, see is_reminder_due); else no email.
+    email went out, see is_reminder_due); else no email. `drivers` = the result of the
+    metric_drivers task (D110): an OK email shows which members moved a metric past its threshold.
     """
     dag_id = f"olist_elt_{warehouse}"
     # dbt's totals + warnings from the producer's log of this run
@@ -218,12 +220,16 @@ def report_email(
         subject = f"{prefix} OK: +{loaded} orders, data up to {month}" + (
             f", {n_warn} dbt warning{'s' if n_warn > 1 else ''}" if n_warn else ""
         )
+        # Metrics past the threshold, with who drove the change (metric_drivers, D110)
+        if drivers and drivers.get("moved"):
+            subject += metric_drivers.subject_hint(drivers)
+            body = metric_drivers.drivers_html(drivers)
         intro = "Fresh data loaded and the marts rebuilt; the dashboard shows it within the hour."
         if stale:
             intro += f" Note: before this run there were no new orders for {age_h:.0f} h."
         if dbt_block:
             # Data-quality tests with severity warn: nothing fails, so this is where they show
-            body = dbt_summary.to_html(dbt_done, dbt_block, dbt_summary.test_docs(manifest))
+            body += dbt_summary.to_html(dbt_done, dbt_block, dbt_summary.test_docs(manifest))
     elif is_reminder_due(age_h, stale_after, reminded_at, now):
         kind = "STALE"
         title = f"No new orders for {age_h:.0f} h · data up to {month}"

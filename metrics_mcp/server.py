@@ -6,11 +6,14 @@ SQL, and the connection is read-only (dbt target `mcp`). Run over stdio:
     uv run python -m metrics_mcp.server
 
 Reads transform/target/semantic_manifest.json, so run `dbt parse` on target dev first.
+`explain_change` (D110) splits a metric's change between two periods by dimension members;
+its maths lives in alerting/metric_drivers.py, shared with the Airflow run email.
 """
 
 import contextlib
 import datetime
 import functools
+import json
 import os
 import sys
 from collections.abc import Iterator
@@ -22,6 +25,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from alerting import metric_drivers
 from metrics_mcp import query
 
 if TYPE_CHECKING:
@@ -171,6 +175,52 @@ def query_metrics(
     if include_sql:
         answer["sql"] = result.sql
     return answer
+
+
+@server.tool(annotations=_READ_ONLY)
+def explain_change(
+    metric: str,
+    before_start: Annotated[datetime.date, Field(description="First day of the earlier period, inclusive")],
+    before_end: Annotated[datetime.date, Field(description="Last day of the earlier period, inclusive")],
+    after_start: Annotated[datetime.date, Field(description="First day of the later period, inclusive")],
+    after_end: Annotated[datetime.date, Field(description="Last day of the later period, inclusive")],
+    dimensions: Annotated[
+        list[str] | None, Field(description="Categorical dimensions to split the change by; default: the usual ones the metric has")
+    ] = None,
+    top: Annotated[int, Field(description="Members to list per dimension; the rest are summed as 'other'")] = metric_drivers.TOP_MEMBERS,
+) -> dict[str, Any]:
+    """Why a metric changed between two periods: the change split by dimension members, largest first.
+
+    Per dimension the rows (top members plus 'other') add up to the total change. For a ratio
+    metric each member also has `mix` (it got bigger or smaller) and `rate` (its own ratio moved).
+    Only sums, counts and ratios of those can be split; distinct counts and averages are refused.
+    """
+    top_limit = 10
+    with _guarded():
+        query.check_metrics([metric], _known_metrics())
+        for first, last in ((before_start, before_end), (after_start, after_end)):
+            if first > last:
+                raise ValueError(f"Period {first} to {last} ends before it starts")
+        if not 1 <= top <= top_limit:
+            raise ValueError(f"top must be between 1 and {top_limit}")
+        manifest = json.loads((TRANSFORM / "target" / "semantic_manifest.json").read_text(encoding="utf-8"))
+        specs = metric_drivers.specs_from_manifest(manifest)
+        metric_drivers.spec_for(specs, metric)  # refuses what cannot be split, with the reason
+        categorical = {d.dunder_name for d in _dimensions([metric]) if d.type.value == "categorical"}
+        chosen = dimensions or [d for d in metric_drivers.EMAIL_DIMENSIONS if d in categorical]
+        unknown = [d for d in chosen if d not in categorical]
+        if unknown or not chosen:
+            raise ValueError(f"Unknown or non-categorical dimension(s) {unknown}. Available: {', '.join(sorted(categorical))}")
+        explanation = metric_drivers.explain(
+            metric_drivers.metricflow_runner(_engine()),
+            specs,
+            metric,
+            metric_drivers.Period(before_start, before_end),
+            metric_drivers.Period(after_start, after_end),
+            chosen,
+            top,
+        )
+        return metric_drivers.to_dict(explanation)
 
 
 if __name__ == "__main__":

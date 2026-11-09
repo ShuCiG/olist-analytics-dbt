@@ -163,6 +163,7 @@ imports and is unit-tested (`uv run pytest`, [tests/](../tests/)):
 | a task failed | `[olist_elt_duckdb] FAILED: dlt_ingest in run <run_id>` with the error and the task's last output lines; any dbt failure → `FAILED: dbt build (ERROR=1)` with dbt's end-of-run summary (each failed node + message, warnings); params, links to the log and the run | DAG `on_failure_callback` (once per run, not per task) |
 | new orders loaded (or a manual `until` / `full_refresh` rebuild) | `OK: +800 orders, data up to 2017-01, 3 dbt warnings` + summary table, dbt totals (`PASS=120 WARN=3 ...`) and each warn-level test with its row count | `report` task |
 | no new orders for `olist_stale_after_hours` (default 24, = source `warn_after`) | `STALE: no new orders for 25 h (data up to 2018-10)` | `report` task, then about once a day while stale |
+| an OK run where a watched metric moved by `olist_metric_drift_threshold` or more | the OK subject gains `, revenue +53%`, and the email a block per metric: the top 3 members of the 2 most telling dimensions, `mix` / `rate` for ratio metrics (D110) | `metric_drivers` task, read by `report` |
 | nothing new, not stale yet | no email | |
 | the load added columns to a raw table (D61) | `SCHEMA: 1 new source column in orders` with each `raw.<table>.<column>` and the next steps | `schema_report` task, right after `dlt_ingest` (also when dbt fails or is skipped) |
 
@@ -181,6 +182,9 @@ the defaults when missing and never overwrites them):
 
 - `olist_alert_emails` — comma-separated recipients (default `data-team@olist.local`)
 - `olist_stale_after_hours` — stale threshold in hours (default 24)
+- `olist_metric_drift_threshold` / `olist_metric_drift_min_orders` — when an OK email explains a
+  metric (D110): relative change of revenue, orders, average order value or late delivery
+  rate, latest month vs the one before (default 0.10), and orders in the earlier month (default 100).
 - `olist_stale_reminded_at_duckdb` / `_bigquery` — written by the `report` task: when the
   last STALE email went out (about one a day, whatever hours the machine runs; D74).
   Delete it to get a reminder on the next stale run

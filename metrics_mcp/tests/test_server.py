@@ -15,7 +15,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 
 REPO = Path(__file__).resolve().parents[2]
-TOOLS = {"list_metrics", "list_dimensions", "dimension_values", "query_metrics"}
+TOOLS = {"list_metrics", "list_dimensions", "dimension_values", "query_metrics", "explain_change"}
 
 
 def call_all(calls: list[tuple[str, dict[str, Any]]]) -> tuple[set[str], dict[str, Any], list[Any]]:
@@ -41,6 +41,8 @@ def payload(result: Any) -> Any:
     return result.structured_content or json.loads(result.content[0].text)
 
 
+CHANGE = {"before_start": "2017-10-01", "before_end": "2017-10-31", "after_start": "2017-11-01", "after_end": "2017-11-30"}
+
 CALLS: list[tuple[str, dict[str, Any]]] = [
     ("list_metrics", {}),
     ("list_dimensions", {"metrics": ["revenue"]}),
@@ -63,6 +65,10 @@ CALLS: list[tuple[str, dict[str, Any]]] = [
     ("query_metrics", {"metrics": ["revenue"], "group_by": ["seller__state"]}),
     ("query_metrics", {"metrics": ["revenue"], "filters": [{"dimension": "(select 1)", "operator": "=", "value": 1}]}),
     ("query_metrics", {"metrics": ["revenue"], "sql": "select 1"}),
+    ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["customer__state"], "top": 2}),
+    ("explain_change", {**CHANGE, "metric": "late_delivery_rate", "dimensions": ["customer__state"]}),
+    ("explain_change", {**CHANGE, "metric": "customers"}),
+    ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["seller__state"]}),
 ]
 
 
@@ -71,7 +77,7 @@ def session() -> tuple[set[str], dict[str, Any], list[Any]]:
     return call_all(CALLS)
 
 
-def test_only_the_four_tools_and_no_sql_argument(session: tuple[set[str], dict[str, Any], list[Any]]) -> None:
+def test_only_the_five_tools_and_no_sql_argument(session: tuple[set[str], dict[str, Any], list[Any]]) -> None:
     names, tools, _ = session
     assert names == TOOLS
     arguments = json.dumps([tool.input_schema.get("properties", {}) for tool in tools.values()])
@@ -120,3 +126,26 @@ def test_sql_argument_does_not_reach_the_warehouse(session: tuple[set[str], dict
     # Unknown arguments are ignored or refused, never used: the result is the plain metric
     result = session[2][9]
     assert result.is_error or "sql" not in payload(result)
+
+
+def test_explain_change_adds_up_to_the_total(session: tuple[set[str], dict[str, Any], list[Any]]) -> None:
+    revenue = payload(session[2][10])
+    assert revenue["delta"] == pytest.approx(revenue["after"] - revenue["before"])
+    (by_state,) = revenue["breakdowns"]
+    rows = [*by_state["drivers"], *([by_state["other"]] if by_state["other"] else [])]
+    assert len(by_state["drivers"]) == 2
+    assert sum(row["delta"] for row in rows) == pytest.approx(revenue["delta"])
+
+    rate = payload(session[2][11])
+    assert rate["kind"] == "ratio"
+    (by_state,) = rate["breakdowns"]
+    assert sum(row["mix"] + row["rate"] for row in by_state["drivers"]) + by_state["other"]["delta"] == pytest.approx(rate["delta"])
+
+
+@pytest.mark.parametrize(("index", "message"), [(12, "cannot be split"), (13, "seller__state")])
+def test_explain_change_refuses_what_it_cannot_split(
+    session: tuple[set[str], dict[str, Any], list[Any]], index: int, message: str
+) -> None:
+    result = session[2][index]
+    assert result.is_error
+    assert message in result.content[0].text

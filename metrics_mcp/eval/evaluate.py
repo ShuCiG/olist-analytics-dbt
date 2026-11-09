@@ -22,12 +22,12 @@ from typing import Any
 
 import yaml
 
-from metrics_mcp.eval.scoring import grade, parse_final_line
+from metrics_mcp.eval.scoring import difference, grade, parse_final_line
 
 REPO = Path(__file__).resolve().parents[2]
 QUESTIONS = Path(__file__).with_name("questions.yml")
 SERVER_NAME = "olist-metrics"
-TOOLS = ["list_metrics", "list_dimensions", "dimension_values", "query_metrics"]
+TOOLS = ["list_metrics", "list_dimensions", "dimension_values", "query_metrics", "explain_change"]
 TIMEOUT_SECONDS = 300
 
 SYSTEM_PROMPT = """You answer business questions about an e-commerce company. Your only source of data is
@@ -48,7 +48,14 @@ End with exactly one line of JSON and nothing after it:
 
 
 def gold_rows(gold: dict[str, Any], folder: Path) -> list[dict[str, str]]:
-    """The gold query through `mf query`, on the read-only target."""
+    """The gold query through `mf query`, on the read-only target.
+
+    `change: {before: {start, end}, after: {start, end}}` = the difference of two such queries per
+    group, for explain_change (D110): the members' differences add up to the total change.
+    """
+    if gold.get("change"):
+        before, after = ({**gold, **gold["change"][which], "change": None} for which in ("before", "after"))
+        return difference(gold_rows(before, folder), gold_rows(after, folder), gold["metrics"][0], (gold.get("group_by") or [None])[0])
     out = folder / "gold.csv"
     args = ["--metrics", ",".join(gold["metrics"]), "--csv", str(out)]
     if gold.get("group_by"):
@@ -79,7 +86,12 @@ def ask(question: str, model: str, folder: Path) -> dict[str, Any]:
                 "command": sys.executable,
                 "args": ["-m", "metrics_mcp.server"],
                 "cwd": str(REPO),
-                "env": {"PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(REPO)},
+                "env": {
+                    "PYTHONIOENCODING": "utf-8",
+                    "PYTHONPATH": str(REPO),
+                    # the warehouse file, when it is not the default one (the gold `mf` run reads it too)
+                    **{name: os.environ[name] for name in ("DBT_DUCKDB_PATH",) if name in os.environ},
+                },
             }
         }
     }
