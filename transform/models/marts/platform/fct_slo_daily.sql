@@ -4,6 +4,8 @@
 -- .github/scripts/slo_report.py (targets: data-product/slo.yaml, D111).
 -- The deploy availability SLO has no row here: a failed deploy leaves no trace in
 -- Elementary, the report counts the workflow runs on main instead.
+-- Plain `timestamp` (UTC) throughout: dbt's type_timestamp() is a DATETIME on BigQuery,
+-- which cannot be compared with a TIMESTAMP, and Elementary's strings carry `+00:00`.
 -- Timestamps come from `generated_at` (UTC, when dbt wrote the result), never from
 -- `dbt_invocations.run_started_at`: that column runs on the as-of clock (D38).
 -- Rebuilt in full on every deploy (the history is small); enabled on every target
@@ -14,7 +16,7 @@ with invocations as (
     select
         invocation_id,
         command,
-        cast(generated_at as {{ dbt.type_timestamp() }}) as finished_at
+        cast(generated_at as timestamp) as finished_at
     from {{ ref('elementary', 'dbt_invocations') }}
 ),
 
@@ -54,25 +56,23 @@ quality as (
 -- deterministic and testable).
 readings as (
     select
-        cast(snapshotted_at as {{ dbt.type_timestamp() }}) as read_at,
-        cast(max_loaded_at as {{ dbt.type_timestamp() }}) as loaded_at,
-        lag(cast(max_loaded_at as {{ dbt.type_timestamp() }})) over (
-            partition by unique_id order by cast(snapshotted_at as {{ dbt.type_timestamp() }})
+        cast(snapshotted_at as timestamp) as read_at,
+        cast(max_loaded_at as timestamp) as loaded_at,
+        lag(cast(max_loaded_at as timestamp)) over (
+            partition by unique_id order by cast(snapshotted_at as timestamp)
         ) as previous_loaded_at
     from {{ ref('elementary', 'dbt_source_freshness_results') }}
     where unique_id like 'source.%.orders'
 ),
 
 loads as (
-    select
-        read_at,
-        {{ dbt.dateadd('hour', 24, 'read_at') }} as due_at
+    select read_at
     from readings
     where loaded_at > previous_loaded_at
 ),
 
 builds as (
-    select cast(generated_at as {{ dbt.type_timestamp() }}) as built_at
+    select cast(generated_at as timestamp) as built_at
     from {{ ref('elementary', 'dbt_run_results') }}
     where
         unique_id like 'model.%.fct_orders'
@@ -83,29 +83,36 @@ history_end as (
     select max(built_at) as last_build_at from builds
 ),
 
+rebuilds as (
+    select
+        loads.read_at,
+        {{ dbt.datediff('loads.read_at', 'builds.built_at', 'minute') }}
+            as minutes_to_rebuild
+    from loads
+    inner join builds on loads.read_at <= builds.built_at
+),
+
 judged_loads as (
     select
         loads.read_at,
-        max(case when builds.built_at is not null then 1 else 0 end) as was_rebuilt,
-        min(loads.due_at) as due_at
+        max(case when rebuilds.minutes_to_rebuild <= 1440 then 1 else 0 end) as was_rebuilt,
+        {{ dbt.datediff('loads.read_at', 'history_end.last_build_at', 'minute') }}
+            as minutes_in_history
     from loads
-    left join builds
-        on
-            loads.read_at <= builds.built_at
-            and loads.due_at >= builds.built_at
-    group by loads.read_at
+    left join rebuilds on loads.read_at = rebuilds.read_at
+    cross join history_end
+    group by loads.read_at, history_end.last_build_at
 ),
 
 freshness as (
     select
-        cast(judged_loads.read_at as date) as slo_date,
+        cast(read_at as date) as slo_date,
         'freshness' as slo,
-        sum(judged_loads.was_rebuilt) as good_events,
+        sum(was_rebuilt) as good_events,
         count(*) as total_events
     from judged_loads
-    cross join history_end
-    where judged_loads.was_rebuilt = 1 or judged_loads.due_at <= history_end.last_build_at
-    group by cast(judged_loads.read_at as date)
+    where was_rebuilt = 1 or minutes_in_history >= 1440
+    group by cast(read_at as date)
 ),
 
 combined as (
