@@ -50,6 +50,19 @@ def contract_link(contract_id: str, contracts: dict[str, dict[str, Any]], files:
     return f'<a href="catalog/contracts/{files[contract_id]}">{e(contract_id)} v{e(c["version"])}</a>'
 
 
+def slo_line(port: dict[str, Any]) -> str:
+    """The port's service level targets (customProperties `slo*`, D111), linked to /slo/."""
+    props = {p["property"]: p["value"] for p in port.get("customProperties", []) if p["property"].startswith("slo")}
+    if not props:
+        return ""
+    targets = ", ".join(
+        f"{name} {props[key] * 100:g}%"
+        for name, key in (("freshness", "sloFreshness"), ("quality", "sloQuality"), ("deploy availability", "sloDeployAvailability"))
+        if key in props
+    )
+    return f'<p>SLOs ({props.get("sloWindowDays", 28)} days): {e(targets)} · <a href="../slo/">status</a></p>'
+
+
 def card(title: str, body: str, kind: str) -> str:
     return f'<div class="card {kind}"><div class="kind">{e(kind)}</div><h3>{title}</h3>{body}</div>'
 
@@ -69,7 +82,7 @@ def render(product: dict[str, Any], contracts: dict[str, dict[str, Any]], files:
         card(e(p["name"]),
              (f"<p>contract {contract_link(p['contractId'], contracts, files)}</p>" if "contractId" in p
               else f"<p><a href=\"{e(p['authoritativeDefinitions'][0]['url'])}\">definitions</a></p>")
-             + f"<p class=\"muted\">{text(p['description'])}</p>", "output port")
+             + f"<p class=\"muted\">{text(p['description'])}</p>" + slo_line(p), "output port")
         for p in product["outputPorts"]
     )
     consumers = "".join(

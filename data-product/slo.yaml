@@ -1,0 +1,32 @@
+# Service level objectives of the data product's output ports (D111): the one place
+# the targets live. Read by .github/scripts/slo_report.py (page /slo/, burn-rate email)
+# and checked against the ODPS descriptor's output ports (tests/test_slo.py).
+# Events per SLO: transform/models/marts/platform/fct_slo_daily.sql (freshness,
+# quality, from Elementary's run history) and the GitHub Actions runs on main
+# (deploy availability).
+window_days: 28        # error budget window
+burn_window_days: 7    # the short window the burn rate is measured over
+burn_alert: 2.0        # email when the burn rate over that window reaches this
+                       # (or when the budget of the window is spent)
+slos:
+  freshness:
+    title: Freshness
+    target: 0.95
+    event: load of new orders
+    definition: >-
+      Share of loads that brought new orders and were followed by a rebuild of the
+      marts (fct_orders) within 24 hours.
+  quality:
+    title: Quality
+    target: 0.99
+    event: dbt run that tested
+    definition: >-
+      Share of dbt runs (build, test) in which every error-severity test passed.
+      Warn-severity tests never count against it.
+  deploy_availability:
+    title: Deploy availability
+    target: 0.99
+    event: production deploy
+    definition: >-
+      Share of CI/CD runs on main that finished successfully (cancelled and
+      still-running ones are not counted).

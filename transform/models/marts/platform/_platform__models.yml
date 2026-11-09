@@ -91,6 +91,117 @@ models:
         description: Slot milliseconds used.
         data_type: int64
 
+  - name: fct_slo_daily
+    description: >
+      Service level events per day from Elementary's run history (D111): `quality`
+      counts dbt runs that tested (build, test) and the ones with no failed or
+      errored error-severity test; `freshness` counts loads that brought new orders
+      (judged once 24 h have passed or `fct_orders` was rebuilt) and the ones
+      followed by a rebuild of `fct_orders` within 24 h. The deploy availability SLO
+      comes from the GitHub Actions run history, not from dbt. Targets, error budget
+      and burn rate: `data-product/slo.yaml` and `.github/scripts/slo_report.py`.
+      Rebuilt in full on every prod deploy.
+    config:
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [slo_date, slo]
+    columns:
+      - name: slo_date
+        description: Day (UTC) of the run, or of the load for freshness.
+        data_type: date
+        data_tests: [not_null]
+      - name: slo
+        description: Service level the events count for.
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [quality, freshness]
+      - name: good_events
+        description: Events that met the objective.
+        data_type: bigint
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: total_events
+        description: Events judged that day (good plus bad).
+        data_type: bigint
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+
+unit_tests:
+  - name: test_fct_slo_daily_quality
+    model: fct_slo_daily
+    description: >
+      A run that tested is bad when an error-severity test failed or errored; warn
+      severity never makes a run bad; runs without test results (run) are no events.
+    given:
+      - input: ref('elementary', 'dbt_invocations')
+        rows:
+          - {invocation_id: i1, command: build, generated_at: '2026-01-05 10:00:00'}
+          - {invocation_id: i2, command: build, generated_at: '2026-01-05 11:00:00'}
+          - {invocation_id: i3, command: run, generated_at: '2026-01-05 12:00:00'}
+          - {invocation_id: i4, command: test, generated_at: '2026-01-06 09:00:00'}
+          - {invocation_id: i5, command: build, generated_at: '2026-01-06 10:00:00'}
+      - input: ref('elementary', 'elementary_test_results')
+        rows:
+          - {invocation_id: i1, severity: ERROR, status: pass}
+          - {invocation_id: i2, severity: ERROR, status: fail}
+          - {invocation_id: i2, severity: ERROR, status: pass}
+          - {invocation_id: i4, severity: warn, status: fail}
+          - {invocation_id: i5, severity: error, status: error}
+      - input: ref('elementary', 'dbt_source_freshness_results')
+        rows: []
+      - input: ref('elementary', 'dbt_run_results')
+        rows: []
+    expect:
+      rows:
+        - {slo_date: 2026-01-05, slo: quality, good_events: 1, total_events: 2}
+        - {slo_date: 2026-01-06, slo: quality, good_events: 1, total_events: 2}
+
+  - name: test_fct_slo_daily_freshness
+    model: fct_slo_daily
+    description: >
+      A load is a rise of the newest `_loaded_at` of the orders source between two
+      readings; good when `fct_orders` was rebuilt successfully within 24 h. A rise
+      with no rebuild after the history's last rebuild and less than 24 h old is not
+      judged yet; other sources are ignored.
+    given:
+      - input: ref('elementary', 'dbt_invocations')
+        rows: []
+      - input: ref('elementary', 'elementary_test_results')
+        rows: []
+      - input: ref('elementary', 'dbt_source_freshness_results')
+        rows:
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-01T10:00:00+00:00', max_loaded_at: '2025-12-01T00:00:00+00:00'}
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-02T10:00:00+00:00', max_loaded_at: '2025-12-01T00:00:00+00:00'}
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-03T10:00:00+00:00', max_loaded_at: '2026-01-03T09:00:00+00:00'}
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-04T10:00:00+00:00', max_loaded_at: '2026-01-04T09:00:00+00:00'}
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-10T10:00:00+00:00', max_loaded_at: '2026-01-10T09:00:00+00:00'}
+          - {unique_id: source.olist.olist.orders, snapshotted_at: '2026-01-10T13:00:00+00:00', max_loaded_at: '2026-01-10T12:30:00+00:00'}
+          - {unique_id: source.olist.olist.customers, snapshotted_at: '2026-01-05T10:00:00+00:00', max_loaded_at: '2025-12-01T00:00:00+00:00'}
+          - {unique_id: source.olist.olist.customers, snapshotted_at: '2026-01-06T10:00:00+00:00', max_loaded_at: '2026-01-06T09:00:00+00:00'}
+      - input: ref('elementary', 'dbt_run_results')
+        rows:
+          - {unique_id: model.olist.fct_orders, status: success, generated_at: '2026-01-03 10:30:00'}
+          - {unique_id: model.olist.fct_orders, status: error, generated_at: '2026-01-04 10:30:00'}
+          - {unique_id: model.olist.dim_customers, status: success, generated_at: '2026-01-04 10:30:00'}
+          - {unique_id: model.olist.fct_orders, status: success, generated_at: '2026-01-10 12:00:00'}
+    expect:
+      rows:
+        - {slo_date: 2026-01-03, slo: freshness, good_events: 1, total_events: 1}
+        - {slo_date: 2026-01-04, slo: freshness, good_events: 0, total_events: 1}
+        - {slo_date: 2026-01-10, slo: freshness, good_events: 1, total_events: 1}
+
 exposures:
   - name: olist_dashboard_costs
     label: Dashboard page "dbt cost on BigQuery"

@@ -707,6 +707,8 @@ jobs:
     outputs:
       new_columns: ${{ steps.ingest.outputs.new_columns }}
       removed_columns: ${{ steps.ingest.outputs.removed_columns }}
+      # SLOs burning too fast, for notify-slo (D111)
+      slo_alerts: ${{ steps.slo.outputs.alerts }}
     defaults:
       run:
         shell: bash
@@ -821,14 +823,14 @@ jobs:
       # Unselected parents are prod's own tables, so a slim build needs no --defer.
       # Nothing selected: the step is skipped (an empty build would still run the
       # on-run-end hooks). The manifest uploaded below covers the whole project either way.
-      # The cost mart has a step of its own, after this one.
+      # The cost mart and the SLO model have a step of their own, after this one.
       - name: dbt build (target prod)
         working-directory: transform
         env:
           SCOPE: ${{ steps.scope.outputs.scope }}
           FULL_REFRESH: ${{ inputs.full_refresh && '--full-refresh' || '' }}
         run: |
-          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary +fct_dbt_job_costs)
+          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary +fct_dbt_job_costs fct_slo_daily)
           if [ "$SCOPE" = slim ]; then
             args+=(--select state:modified+ --state ../prod-state)
             selected=$(uv run dbt ls "${args[@]}" --output name -q)
@@ -846,10 +848,12 @@ jobs:
       # Elementary's uploads are off here: the build above already uploaded this
       # deploy's artifacts and results (~170 MiB a time, D56).
       # The model ignores --full-refresh (its rows outlive the 180 days of history).
+      # The SLO model (D111) rides along: it reads Elementary's run history, which the
+      # build above just completed, and must be rebuilt on every deploy, slim or not.
       - name: dbt build (job costs, target prod)
         working-directory: transform
         run: |
-          uv run dbt build --target prod --select +fct_dbt_job_costs --exclude-resource-type unit_test \
+          uv run dbt build --target prod --select +fct_dbt_job_costs fct_slo_daily --exclude-resource-type unit_test \
             --vars '{disable_dbt_artifacts_autoupload: true, disable_run_results: true, disable_tests_results: true, disable_dbt_invocation_autoupload: true}'
 
       # The catalog checks every schema of the project's relations; the job-history
@@ -911,6 +915,24 @@ jobs:
           uv run python data-product/build_site.py _site/data-product
           # Static dashboard at /dashboard/, built by this run's DuckDB job (D102)
           gh run download "$GITHUB_RUN_ID" --name static-dashboard --dir _site/dashboard
+
+      # SLO page at /slo/ (D111): freshness and quality from the `fct_slo_daily` model
+      # just built, deploy availability from this workflow's runs on main. Optional like
+      # the report below: a broken page must not hold back the docs; flagged SLOs go to
+      # notify-slo, which holds the SMTP secret.
+      - name: SLO report
+        id: slo
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python .github/scripts/slo_report.py --out _site/slo | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: SLO report stub
+        if: steps.slo.outcome == 'failure'
+        run: |
+          mkdir -p _site/slo
+          echo '<!doctype html><meta charset="utf-8"><title>Data SLOs</title><p>The SLO page failed to build in the last deploy; see the GitHub Actions log.</p>'             > _site/slo/index.html
+          echo "::warning::SLO report failed: published a stub at /slo/"
 
       # Observability report at /elementary/ (D38): test and run history, anomaly
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
@@ -1044,6 +1066,27 @@ jobs:
           ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
         run: python3 .github/scripts/notify_schema.py
 
+  # An SLO's error budget burns too fast (D111): an SLO email, the deploy stays green.
+  # Own job like notify-schema, so the SMTP secret stays out of the prod writer's job.
+  notify-slo:
+    name: Email on SLO burn
+    needs: deploy-prod
+    if: always() && needs.deploy-prod.outputs.slo_alerts != '' && needs.deploy-prod.outputs.slo_alerts != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Send email
+        env:
+          SLO_ALERTS: ${{ needs.deploy-prod.outputs.slo_alerts }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+        run: python3 .github/scripts/notify_slo.py
+
   # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
   # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
   # GitHub's own notification only reaches the person who triggered the run.
@@ -1052,7 +1095,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
