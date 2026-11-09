@@ -22,6 +22,7 @@ it month by month as a live feed, and a **Streamlit** dashboard reads the result
 | 📖 **dbt docs** (lineage, columns, tests) | https://shucig.github.io/olist-analytics-dbt/ |
 | 📦 **Data product page** (ports, contracts, consumers) | https://shucig.github.io/olist-analytics-dbt/data-product/ |
 | 🔭 **Observability report** (test history, anomalies) | https://shucig.github.io/olist-analytics-dbt/elementary/ |
+| 🎯 **Data SLOs** (error budget, burn rate, last 28 days) | https://shucig.github.io/olist-analytics-dbt/slo/ |
 
 Built with AI pair programming (Claude Code); the architecture, design decisions and code review are mine.
 The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
@@ -342,6 +343,14 @@ would. Replaying up to November 2017 flags Black Friday (1,176 orders against ~2
 after it. The [report](https://shucig.github.io/olist-analytics-dbt/elementary/) (Elementary's `edr` CLI, built from
 prod on every deploy) shows the test history and the metric charts behind each anomaly; the Airflow replay renders
 the same report for its own warehouses after every build, embedded in the Airflow UI ([D82](docs/DECISIONS.md)).
+
+**Service levels.** The data product states three objectives per output port (`data-product/slo.yaml`, mirrored in the
+ODPS descriptor): freshness 95% (a load of new orders is followed by a rebuild of the marts within 24 h), quality 99%
+(dbt runs with every error-severity test passing) and deploy availability 99% (CI/CD runs on `main`). The dbt model
+`fct_slo_daily` counts the first two from Elementary's history, the GitHub Actions runs give the third; the
+[SLO page](https://shucig.github.io/olist-analytics-dbt/slo/) shows the last 28 days with the error budget left and the
+burn rate, and an email goes out when the burn rate over 7 days reaches 2x or the budget is spent
+([D111](docs/DECISIONS.md)).
 
 ## Governance
 
