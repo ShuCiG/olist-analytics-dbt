@@ -81,6 +81,8 @@ def test_hooks_call_the_script() -> None:
     hooks = {h["id"]: h for repo in config["repos"] for h in repo["hooks"]}
     assert "pre-push" in config["default_install_hook_types"]
     assert config["default_stages"] == ["pre-commit"], "other hooks must not rerun on push"
+    for hook_id in ("trailing-whitespace", "end-of-file-fixer", "check-added-large-files"):
+        assert hooks[hook_id]["stages"] == ["pre-commit"], f"{hook_id}: its manifest stages include pre-push"
 
     push = hooks["ci-local"]
     assert push["stages"] == ["pre-push"] and push["always_run"] and not push["pass_filenames"]

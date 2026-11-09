@@ -1,16 +1,21 @@
 # Install once: uv run pre-commit install (sets up the pre-commit and pre-push hooks)
 default_install_hook_types: [pre-commit, pre-push]
-# Hooks run at commit only, unless they name their stage (ci-local: pre-push)
+# Hooks without their own stages run at commit only (ci-local: pre-push)
 default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
+    # These three name their own stages (pre-push too), which default_stages doesn't
+    # override: a fixer must not edit files halfway through a push
     hooks:
       - id: trailing-whitespace
+        stages: [pre-commit]
       - id: end-of-file-fixer
+        stages: [pre-commit]
       - id: check-yaml
       - id: check-added-large-files
         args: [--maxkb=1024]
+        stages: [pre-commit]
       - id: check-merge-conflict
       - id: detect-private-key
       - id: no-commit-to-branch
