@@ -1,4 +1,7 @@
-# Install once: uv run pre-commit install
+# Install once: uv run pre-commit install (sets up the pre-commit and pre-push hooks)
+default_install_hook_types: [pre-commit, pre-push]
+# Hooks run at commit only, unless they name their stage (ci-local: pre-push)
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -48,3 +51,24 @@ repos:
         language: system
         files: ^(ingestion|alerting|tests|airflow/dags|\.claude/skills/audit)/.*\.py$
         pass_filenames: false
+
+      # dbt_project_evaluator (CI job `dbt project evaluator`) when the dbt graph
+      # changes: same command on a throwaway DuckDB file, ~1 min, no network (D108)
+      - id: dbt-project-evaluator
+        name: dbt project evaluator
+        entry: uv run python .github/scripts/ci_local.py --only evaluator
+        language: system
+        files: ^transform/(models/|tests/|seeds/dbt_project_evaluator_exceptions\.csv$|dbt_project\.yml$|packages\.yml$)
+        pass_filenames: false
+        require_serial: true
+
+      # Every CI check that needs no cloud, before a push reaches a PR (D108).
+      # Skip on purpose only: git push --no-verify
+      - id: ci-local
+        name: ci-local (CI checks without cloud)
+        entry: uv run python .github/scripts/ci_local.py
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+        require_serial: true
