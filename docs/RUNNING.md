@@ -419,11 +419,21 @@ Or run a published image instead of building: `OLIST_AIRFLOW_IMAGE=ghcr.io/shuci
 ## Development hooks
 
 ```bash
-uv run pre-commit install   # whitespace / YAML / secrets checks, no commits to main,
-                            # sqlfluff on changed SQL, pyright + pytest on Python changes
-uv run sqlfluff lint transform/models transform/tests
-uv run pyright
+uv run pre-commit install   # pre-commit: whitespace / YAML / secrets checks, no commits to main,
+                            # sqlfluff on changed SQL, pyright + pytest on Python changes,
+                            # project evaluator when the dbt graph changes (~1-2 min)
+                            # pre-push: ci-local, every CI check that needs no cloud (~4 min)
+uv run python .github/scripts/ci_local.py --list         # the checks and the CI steps they mirror
+uv run python .github/scripts/ci_local.py                # all of them, as the pre-push hook does
+uv run python .github/scripts/ci_local.py --only evaluator sqlfluff
 ```
+
+`ci_local.py` runs the CI commands as `ci-cd.yml` writes them (a test fails when one changes in the
+workflow only): sqlfluff, pyright, pytest, the audit-report and contract-versioning checks, the data
+product tests, the project evaluator and `terraform fmt`. Four lanes run in parallel, and the first
+failure prints its output with the CI job it stands for. Builds on a warehouse, fault injection,
+the Airflow image and `terraform validate` / `test` stay CI-only. Skip a hook on purpose only:
+`git commit --no-verify`, `git push --no-verify`.
 
 How a change goes: an issue (Task or Bug form) → a branch per issue → a PR whose description has `Closes #N`.
 New issues and PRs land on the [roadmap board](https://github.com/users/ShuCiG/projects/2) by themselves; merging
