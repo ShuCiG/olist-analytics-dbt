@@ -5,6 +5,7 @@ import re
 import shlex
 from pathlib import Path
 
+import duckdb
 import pytest
 import yaml
 
@@ -70,7 +71,7 @@ def test_ci_only_args_exist_and_are_dropped() -> None:
         args = ci_local.local_args(check)
         if check.ci_only_args:
             assert len(args) == len(shlex.split(check.run)) - len(check.ci_only_args), check.key
-        else:
+        elif not check.subset:
             assert args == shlex.split(check.run)
     sqlfluff = next(c for c in ci_local.CHECKS if c.key == "sqlfluff")
     assert ci_local.local_args(sqlfluff) == ["uv", "run", "sqlfluff", "lint", "transform/models", "transform/tests"]
@@ -102,3 +103,36 @@ def test_hooks_call_the_script() -> None:
         assert re.search(pattern, path), path
     for path in ("transform/macros/x.sql", "transform/seeds/other.csv", "ingestion/pipeline.py", "README.md"):
         assert not re.search(pattern, path), path
+
+
+def test_subset_lies_inside_the_ci_path() -> None:
+    # A narrowed check runs files the CI step also runs, nothing else
+    for check in (c for c in ci_local.CHECKS if c.subset or c.subset_of):
+        ci_args = shlex.split(check.run)
+        assert check.subset and check.subset_of in ci_args, check.key
+        for path in check.subset:
+            assert path.startswith(check.subset_of.rstrip("/") + "/"), path
+            assert (ROOT / path).is_file(), path
+        i = ci_args.index(check.subset_of)
+        assert ci_local.local_args(check) == [*ci_args[:i], *check.subset, *ci_args[i + 1 :]]
+    consumer = next(c for c in ci_local.CHECKS if c.key == "dashboard-consumer")
+    assert ci_local.local_args(consumer) == ["uv", "run", "pytest", "dashboard/tests/test_consumer.py", "-q"]
+
+
+def test_dashboard_check_skips_without_built_marts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    consumer = next(c for c in ci_local.CHECKS if c.key == "dashboard-consumer")
+    db = tmp_path / "olist.duckdb"
+    monkeypatch.setenv("DBT_DUCKDB_PATH", str(db))
+    monkeypatch.delenv("MARTS_DATASET", raising=False)
+    assert "no DuckDB file" in (ci_local.skip_reason(consumer) or "")
+
+    tables = sorted(yaml.safe_load(ci_local.AGREEMENT.read_text(encoding="utf-8"))["uses"])
+    with duckdb.connect(str(db)) as con:
+        con.execute("create schema marts")
+        for name in tables[:-1]:
+            con.execute(f"create table marts.{name} (x int)")
+    assert f"has no marts.{tables[-1]}" in (ci_local.skip_reason(consumer) or "")
+
+    with duckdb.connect(str(db)) as con:
+        con.execute(f"create table marts.{tables[-1]} (x int)")
+    assert ci_local.skip_reason(consumer) is None

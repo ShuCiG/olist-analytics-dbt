@@ -472,9 +472,13 @@ uv run python .github/scripts/ci_local.py --only evaluator sqlfluff
 
 `ci_local.py` runs the CI commands as `ci-cd.yml` writes them (a test fails when one changes in the
 workflow only): sqlfluff, pyright, pytest, the audit-report and contract-versioning checks, the data
-product tests, the project evaluator and `terraform fmt`. Four lanes run in parallel, and the first
-failure prints its output with the CI job it stands for. Builds on a warehouse, fault injection,
-the Airflow image and `terraform validate` / `test` stay CI-only. Skip a hook on purpose only:
+product tests, the project evaluator, `terraform fmt` and the dashboard's consumer-agreement test
+(`dashboard/tests/test_consumer.py`). Five lanes run in parallel, and the first failure prints its
+output with the CI job it stands for. The dashboard test reads the marts in `data/olist.duckdb`
+(or `DBT_DUCKDB_PATH`) and is skipped with a message when they are not built; after a model change,
+rebuild them (`cd transform && uv run dbt build -s marts`) before pushing. Builds on a warehouse,
+the rest of the dashboard suite, the MCP server tests, fault injection, the Airflow image and
+`terraform validate` / `test` stay CI-only. Skip a hook on purpose only:
 `git commit --no-verify`, `git push --no-verify`.
 
 How a change goes: an issue (Task or Bug form) → a branch per issue → a PR whose description has `Closes #N`.
