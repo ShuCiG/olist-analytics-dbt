@@ -232,6 +232,10 @@ Labels (sentiment, topic, English translation) are CSV batches in `ingestion/rev
 following [guidelines.md](../ingestion/review_labels/guidelines.md) (D92). The pipeline loads them into
 `raw.review_labels` whenever the files change; `dbt build` makes `fct_review_topics`.
 
+Before that load, every ingest labels reviews that have none: a repeated text gets its label copied (free), a new
+text goes to the Claude API only if `ANTHROPIC_API_KEY` is set (at most `OLIST_LABEL_MAX_TEXTS`, default 500, per
+run). Without the key it prints how many texts are open and carries on. Commit the new batch file to keep it.
+
 ```bash
 python ingestion/review_labels/labels.py validate          # every batch: header, allowed values, one label per review id
 # Claude API for texts without a label (Claude Haiku 5.5, Message Batches; reads raw.order_reviews from DuckDB)
@@ -240,7 +244,7 @@ ANTHROPIC_API_KEY=... uv run python ingestion/review_labels/classify_api.py --ma
 uv run python ingestion/pipeline.py                         # loads the new batch (labels_loaded in the status line)
 ```
 
-The backfill runs as a scheduled Claude Code cloud routine on branch `data/review-labels` (unlabelled texts in
+The backfill ran as a scheduled Claude Code cloud routine on branch `data/review-labels` (unlabelled texts in
 `ingestion/review_labels/queue/`, instructions in [ROUTINE.md](../ingestion/review_labels/ROUTINE.md)); by hand in
 a session:
 

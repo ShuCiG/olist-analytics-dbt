@@ -37,8 +37,10 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   → [Data product](#data-product)
 - **What customers write, labelled by an LLM.** 42k Portuguese review texts get a sentiment, a topic and an English
   translation from Claude, following written guidelines and checked against a hand-labelled gold set. The labels
-  are versioned files in the repo with their own input contract, so every engine builds the same mart. Reviews
-  labelled "delivery" are on late orders 30 % of the time, other topics 0–3 %. → [Review topics](#review-topics)
+  are versioned files in the repo with their own input contract, so every engine builds the same mart; new reviews
+  get labelled by the ingest through the Claude API ($0 on the static dump). The labels check out against delivery
+  dates they never saw: negative reviews about delivery are on late orders 60 % of the time, positive ones 1 %.
+  → [Review topics](#review-topics)
 - **One codebase, four warehouses.** The same dbt models run on DuckDB, BigQuery, Databricks and Snowflake with identical
   mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
   Databricks serverless and DuckDB. On Snowflake the project also runs inside the warehouse (dbt Projects on
@@ -55,7 +57,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 32 of 35
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states and segments drove a metric's
   change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 196 data tests, 13 unit tests, enforced model contracts, 452 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 218 data tests, 13 unit tests, enforced model contracts, 474 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -135,12 +137,12 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
 | Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 8 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
-| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 44 columns and 13 metrics it relies on |
+| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 53 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 170 + 28 + 285 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 170 + 28 + 342 checks on the data;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -272,37 +274,95 @@ flowchart LR
 
 ## Review topics
 
-The marts knew each review's score but not what the text says. Every review with a title or message (42,389, in
-Portuguese) gets three labels: a sentiment, the one topic it is mainly about (delivery, product quality, wrong or
-missing item, seller service, general, other) and a faithful English translation
-([guidelines](ingestion/review_labels/guidelines.md), [D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)).
+The marts knew each review's 1–5 score, not what the customer wrote. Every review with a title or message (42,389,
+in Portuguese) now carries three labels: a **sentiment** (the text's attitude, not the score), the one **topic** it
+is mainly about, and a faithful **English translation**. All of them come from Claude, following one set of written
+[guidelines](ingestion/review_labels/guidelines.md)
+([D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)).
 
-- **Who labels:** Claude. A Claude Code session labelled a gold set of 300 reviews (60 per score) by hand; a
-  scheduled Claude Code cloud routine labels the rest in nightly runs with the same guidelines, writing checked CSV
-  batches to a data branch. Identical texts ("bom", "recomendo") are labelled once.
+[![Dashboard: what customers write](docs/images/dashboard-reviews.png)](https://olist-analytics-dbt.streamlit.app/)
+
+### What customers write about
+
+```mermaid
+pie showData
+    "Delivery" : 13994
+    "Product quality" : 11168
+    "General satisfaction" : 8579
+    "Wrong or missing item" : 3948
+    "Seller service" : 3680
+    "Other (price, packaging, ...)" : 1127
+```
+
+| Topic | Reviews | Avg score | Negative reviews: order late / never delivered | In their words (translated) |
+|---|---:|---:|---|---|
+| Delivery | 32.9 % | 3.66 | **60 %** / 18 % | *"Upset — Is the product still going to arrive?"* |
+| Product quality | 26.3 % | 3.88 | 3 % / 1 % | *"I have already requested the return — The product sent is counterfeit"* |
+| General satisfaction | 20.2 % | 4.59 | (few negatives) | *"I loved the purchase. I will make more purchases in the future."* |
+| Wrong or missing item | 9.3 % | 1.87 | 4 % / 2 % | *"I bought 3 units and only 1 unit was delivered to me."* |
+| Seller service | 8.7 % | 3.11 | 44 % / **40 %** | *"It took far too long to tell me the product was out of stock."* |
+| Other | 2.7 % | 4.18 | 5 % / 5 % | *"The watch is very beautiful. However, I found the shipping expensive."* |
+
+### The labels check out against facts they never saw
+
+The labeller reads only the text and the score; lateness comes from the order's delivery dates in `fct_orders`.
+
+- **Delivery complaints are real late orders.** Negative reviews about delivery are on orders that arrived late
+  60 % of the time (18 % never arrived); positive reviews about delivery, 1.2 %. Across all reviewed orders: 9.4 %.
+- **Seller service complaints are mostly orders that never came** (40 %): out of stock, cancelled, no answer.
+- **Product complaints are not about logistics:** wrong items and quality problems are on late orders 3–4 % of the
+  time, like happy reviews.
+- **Sentiment follows the score, but not blindly:** score 1 → 96 % negative, score 5 → 94 % positive, score 3 splits
+  into 53 % negative, 22 % mixed, 20 % positive. 1,106 reviews give 4–5 stars to a negative text.
+- **Where products disappoint:** product or wrong-item complaints run from 31 % of reviews in office furniture and
+  19–20 % in furniture, telephony and bed & bath to 9–11 % in stationery, perfumery and health & beauty (categories
+  with 500+ labelled reviews).
+
+### How the labels are made
+
+```mermaid
+flowchart LR
+    reviews[(raw.order_reviews<br/>37,559 distinct texts)] --> gold[Gold set: 300 reviews<br/>Claude Code session, Opus 5.5,<br/>read one by one]
+    reviews --> routine[Backfill: nightly Claude Code<br/>cloud routine, Haiku / Sonnet 5.5,<br/>100 texts per chunk]
+    gold --> files[CSV batches in the repo<br/>checked by labels.py]
+    routine --> files
+    new[New reviews,<br/>every ingest] --> copy{Text seen<br/>before?}
+    copy -- yes --> files
+    copy -- no --> api[Claude API, Haiku 5.5<br/>Message Batches,<br/>only with a key] --> files
+    files --> raw[(raw.review_labels)] --> mart[fct_review_topics] --> dash[Dashboard page]
+```
+
+- **Who labels:** a Claude Code session labelled a gold set of 300 reviews (60 per score) by reading each one; a
+  scheduled Claude Code cloud routine labelled the rest overnight, in chunks of 100 texts, writing checked CSV
+  batches to a data branch. On 100 held-out gold reviews the routine's model matched the gold sentiment 95 % and
+  the topic 85 % of the time. Identical texts ("bom", "recomendo") are labelled once and written for every review.
+- **Cost:** the backfill ran inside the Claude Code subscription, no per-token spend. The API estimate for all open
+  texts was about $4 at batch prices.
 - **Where labels live:** CSV batches in the repo ([`ingestion/review_labels/labels/`](ingestion/review_labels/labels/)),
-  so dbt stays deterministic and every engine gets the same labels. The pipeline loads them into `raw.review_labels`
-  only when the files change (their sha is stored with the rows); new labels trigger the Airflow build and a full
-  prod deploy like new orders do.
-- **New reviews:** [`classify_api.py`](ingestion/review_labels/classify_api.py) sends only texts without a label to
-  Claude Haiku 5.5 through the Message Batches API, with the guidelines as the system prompt and a JSON schema for the
-  answer; with nothing open it makes no call. All open texts at once would cost about $4 at batch prices.
-- **Checked:** the labels have their own input contract; `fct_review_topics` is in the output contract and has 11
-  data tests; the labels agree with facts they never saw: reviews about delivery are on orders that arrived late 30 %
-  of the time, every other topic 0–3 % (seller service: 27 % never delivered).
+  not a model call inside dbt, so every build is deterministic and all four engines get the same labels. The
+  pipeline loads them into `raw.review_labels` only when the files change (their sha is stored with the rows); new
+  labels trigger the Airflow build and a full prod deploy, like new orders do.
+- **New reviews:** every ingest runs [`classify_api.py`](ingestion/review_labels/classify_api.py) before the labels
+  load. A review that repeats a labelled text gets that label copied; only texts never seen go to Claude Haiku 5.5
+  through the Message Batches API (guidelines as the system prompt, a JSON schema for the answer, 500 texts per run
+  at most), and only when `ANTHROPIC_API_KEY` is set. The Olist dump is static, so nothing is open: one query, no
+  call, $0.
+- **Checked:** the labels have their own input contract (key, allowed values, not null); `fct_review_topics` is in
+  the output contract with 11 data tests; on the gold set it built row for row the same on DuckDB, BigQuery,
+  Snowflake and Databricks.
 
 ## Data quality
 
 | Check | What | Where |
 |---|---|---|
-| **196 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
+| **218 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 455 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 540 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **452 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **474 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:

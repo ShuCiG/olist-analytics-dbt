@@ -1255,10 +1255,10 @@ models:
   - name: fct_review_topics
     description: >
       What customers write about: one row per order whose review has a label (D92). Sentiment and topic
-      come from the review text, labelled by a Claude Code session following
-      `ingestion/review_labels/guidelines.md`, with an English translation; the order's delivery outcome
-      sits next to them, so complaints can be compared with actual late deliveries. Reviews without text
-      have no row; while labelling runs, only labelled reviews are in.
+      come from the review text, labelled by Claude following `ingestion/review_labels/guidelines.md`,
+      with an English translation; the order's delivery outcome sits next to them, so complaints can be
+      compared with actual late deliveries. Reviews without text have no row, nor do texts the ingest
+      could not label yet.
     config:
       group: orders
       contract:
@@ -1332,5 +1332,5 @@ models:
         description: Estimated date − delivery date, days; negative = late.
         data_type: bigint
       - name: labeled_by
-        description: Who labelled the review, e.g. `claude-code-session` (hand-checked gold set) or `claude-code-routine-<model>`.
+        description: Who labelled the review, e.g. `claude-code-session` (hand-checked gold set), `claude-code-routine-<model>` (backfill) or `claude-api-haiku-5-5` (new reviews).
         data_type: string
