@@ -36,7 +36,8 @@ def db_path(work: Path) -> Path:
 
 
 def env_for(work: Path, as_of: str) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    # No API key: the loader would send unlabelled review texts to the Claude API (D92)
+    env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "ANTHROPIC_API_KEY")}
     return env | {
         "DLT_DATA_DIR": str(work / "dlt"),
         "DBT_DUCKDB_PATH": str(db_path(work)),

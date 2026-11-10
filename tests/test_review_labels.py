@@ -122,3 +122,47 @@ def test_nothing_open_sends_nothing(monkeypatch: pytest.MonkeyPatch, capsys: pyt
 
 def test_estimate_is_small_for_a_few_texts() -> None:
     assert 0 < classify_api.estimate_usd(GROUPS, [BOM, ATRASO]) < 0.01
+
+
+REVIEWS = [r for rows in GROUPS.values() for r in rows]
+
+
+def test_repeated_text_gets_the_label_copied_without_the_api(
+    labels_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Only r1 of "bom" labelled, as the hand-checked gold set did: r2 is a new review with a known text
+    labels.write_labels([label(BOM)], {BOM: GROUPS[BOM][:1]}, "gold")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setitem(sys.modules, "anthropic", None)  # importing it would fail the test
+    paths = classify_api.label_new_reviews(REVIEWS, labels_dir)
+    assert [(r["review_id"], r["labeled_by"]) for r in written(paths[0])] == [("r2", "gold")]
+    out = capsys.readouterr().out
+    assert "1 texts without a label" in out and "ANTHROPIC_API_KEY not set" in out
+    assert set(labels.read_labels(labels_dir)) == {"r1", "r2"}
+
+
+def test_new_texts_go_to_one_batch_and_land_as_a_file(labels_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    labels.write_labels([label(BOM)], GROUPS, "gold")
+    monkeypatch.setattr(classify_api.time, "sleep", lambda _: None)
+    batches = FakeBatches([result(ATRASO)])
+    client = SimpleNamespace(messages=SimpleNamespace(batches=batches))
+    paths = classify_api.label_new_reviews(REVIEWS, labels_dir, client=client)
+    assert [r["custom_id"] for r in batches.created] == [ATRASO]
+    assert [(r["review_id"], r["topic"], r["labeled_by"]) for r in written(paths[0])] == [
+        ("r3", "delivery", "claude-api-haiku-5-5")
+    ]
+
+
+def test_max_texts_caps_the_batch(labels_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(classify_api.time, "sleep", lambda _: None)
+    batches = FakeBatches([])
+    client = SimpleNamespace(messages=SimpleNamespace(batches=batches))
+    assert classify_api.label_new_reviews(REVIEWS, labels_dir, max_texts=1, client=client) == []
+    assert len(batches.created) == 1
+
+
+def test_dry_run_writes_nothing(labels_dir: Path) -> None:
+    labels.write_labels([label(BOM)], {BOM: GROUPS[BOM][:1]}, "gold")
+    before = sorted(labels_dir.glob("*.csv"))
+    assert classify_api.label_new_reviews(REVIEWS, labels_dir, dry_run=True) == []
+    assert sorted(labels_dir.glob("*.csv")) == before

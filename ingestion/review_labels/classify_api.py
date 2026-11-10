@@ -1,10 +1,11 @@
 """Label review texts that have no label yet with the Claude API (Message Batches, Claude Haiku 5.5).
 
-The backfill was labelled by Claude Code sessions (labels/*.csv, D92). This script is for reviews that arrive
-later: it reads every review with text from the raw table, keeps the texts with no label in the repo, and sends
-only those. Nothing open means no API call and no key needed, so on the static Olist dump it costs nothing.
-The labels land as a new batch file like any other (labeled_by `claude-api-haiku-5-5`); commit it and the
-pipeline loads it into raw.review_labels.
+The backfill was labelled by Claude Code sessions (labels/*.csv, D92). This is the path for reviews that arrive
+later, run by the ingest (`ingestion/pipeline.py`, every Airflow run and deploy) before it loads the labels:
+a new review that repeats a labelled text gets that label copied, free; only texts never seen go to the API,
+and only with ANTHROPIC_API_KEY set. Nothing open means no API call and no key needed, so on the static
+Olist dump it costs nothing. The labels land as a new batch file like any other (labeled_by
+`claude-api-haiku-5-5`), which the ingest then loads into raw.review_labels; commit it to keep it.
 
     uv run python ingestion/review_labels/classify_api.py --dry-run         # what it would send, and the cost
     uv run python ingestion/review_labels/classify_api.py --max-texts 500   # needs ANTHROPIC_API_KEY
@@ -15,11 +16,12 @@ values. Batches cost half the standard price and usually finish within an hour.
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
 
-from labels import HERE, SENTIMENTS, TOPICS, by_text, read_labels, validate, write_labels
+from labels import HERE, SENTIMENTS, TOPICS, by_text, known_text_labels, read_labels, validate, write_labels
 
 MODEL = "claude-haiku-5-5"
 LABELED_BY = "claude-api-haiku-5-5"
@@ -111,32 +113,56 @@ def label_with_batch(client: Any, requests: list[dict[str, Any]], poll_seconds: 
     return items, failed
 
 
+def label_new_reviews(
+    reviews: list[dict[str, str]],
+    labels_dir: Path | None = None,
+    max_texts: int = 500,
+    dry_run: bool = False,
+    client: Any = None,
+) -> list[Path]:
+    """Label the reviews that have none; returns the batch files written.
+
+    Repeated texts first (copied, no API), then at most `max_texts` new texts through one Message Batch.
+    Without a client and without ANTHROPIC_API_KEY it only reports what is open.
+    """
+    groups = by_text(reviews)
+    labelled = read_labels(labels_dir)
+    written: list[Path] = []
+    if copies := known_text_labels(groups, labelled):
+        print(f"{len(copies)} labelled texts under new review ids: label copied")
+        if not dry_run and (path := write_labels(copies, groups, LABELED_BY, labels_dir)):
+            written.append(path)
+    keys = open_texts(groups, set(labelled))
+    if not keys:
+        print("Every review text has a label: nothing to send")
+        return written
+    picked = keys[:max_texts]
+    print(f"{len(keys)} texts without a label; this run: {len(picked)}, ~${estimate_usd(groups, picked):.2f}")
+    if dry_run:
+        return written
+    if client is None:
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            print("ANTHROPIC_API_KEY not set: texts left unlabelled")
+            return written
+        import anthropic  # only when there is something to send
+
+        client = anthropic.Anthropic()
+    guidelines = (HERE / "guidelines.md").read_text(encoding="utf-8")
+    items, failed = label_with_batch(client, [request(k, groups[k][0], guidelines) for k in picked])
+    for line in failed:
+        print(f"  not labelled: {line}")
+    if path := write_labels(items, groups, LABELED_BY, labels_dir):
+        written.append(path)
+    return written
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--duckdb", default="data/olist.duckdb", help="DuckDB file with raw.order_reviews")
     parser.add_argument("--max-texts", type=int, default=500, help="cost guard: texts per run (default %(default)s)")
     parser.add_argument("--dry-run", action="store_true", help="count and estimate only, no API call")
     args = parser.parse_args()
-
-    groups = by_text(reviews_from_duckdb(args.duckdb))
-    keys = open_texts(groups, set(read_labels()))
-    if not keys:
-        print("Every review text has a label: nothing to send")
-        return
-    picked = keys[: args.max_texts]
-    print(f"{len(keys)} texts without a label; this run: {len(picked)}, ~${estimate_usd(groups, picked):.2f}")
-    if args.dry_run:
-        return
-
-    import anthropic  # only when there is something to send: no key needed otherwise
-
-    guidelines = (HERE / "guidelines.md").read_text(encoding="utf-8")
-    requests = [request(k, groups[k][0], guidelines) for k in picked]
-    items, failed = label_with_batch(anthropic.Anthropic(), requests)
-    for line in failed:
-        print(f"  not labelled: {line}")
-    path = write_labels(items, groups, LABELED_BY)
-    if path is not None:
+    if label_new_reviews(reviews_from_duckdb(args.duckdb), max_texts=args.max_texts, dry_run=args.dry_run):
         validate()
 
 

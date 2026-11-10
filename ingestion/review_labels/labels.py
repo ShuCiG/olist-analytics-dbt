@@ -46,9 +46,9 @@ def read_queue() -> list[dict[str, str]]:
     return rows
 
 
-def read_labels() -> dict[str, dict[str, str]]:
+def read_labels(labels_dir: Path | None = None) -> dict[str, dict[str, str]]:
     labels: dict[str, dict[str, str]] = {}
-    for path in sorted(LABELS_DIR.glob("*.csv")):
+    for path in sorted((labels_dir or LABELS_DIR).glob("*.csv")):
         with path.open(encoding="utf-8", newline="") as f:
             for row in csv.DictReader(f):
                 labels[row["review_id"]] = row
@@ -93,6 +93,8 @@ def status() -> None:
     labelled_ids = sum(1 for rows in groups.values() for r in rows if r["review_id"] in labels)
     print(f"reviews: {sum(map(len, groups.values()))}, labelled: {labelled_ids}")
     print(f"distinct texts: {len(groups)}, still open: {len(open_texts)}")
+    if copies := known_text_labels(groups, labels):
+        print(f"labelled texts with unlabelled review ids: {len(copies)} (no labeller needed, see known_text_labels)")
 
 
 def next_batch(limit: int, out: Path) -> None:
@@ -115,13 +117,18 @@ def next_batch(limit: int, out: Path) -> None:
 
 
 def write_labels(
-    items: list[dict[str, str]], groups: dict[str, list[dict[str, str]]], labeled_by: str
+    items: list[dict[str, str]],
+    groups: dict[str, list[dict[str, str]]],
+    labeled_by: str,
+    labels_dir: Path | None = None,
 ) -> Path | None:
     """One new batch file: each label (by text `key`) for every review id with that text and no label yet.
 
+    An item's own `labeled_by` wins over the argument (labels copied from another review keep their labeller).
     Raises ValueError listing every bad item; returns None when nothing is new.
     """
-    existing = read_labels()
+    labels_dir = labels_dir or LABELS_DIR
+    existing = read_labels(labels_dir)
     rows: list[list[str | int]] = []
     errors: list[str] = []
     for n, item in enumerate(items, 1):
@@ -133,18 +140,39 @@ def write_labels(
         for review in groups[key]:
             if review["review_id"] not in existing:
                 rows.append([review["review_id"], item["sentiment"], item["topic"], item["translation_en"].strip(),
-                             labeled_by, GUIDELINES_VERSION])
+                             item.get("labeled_by") or labeled_by, GUIDELINES_VERSION])
     if errors:
         raise ValueError("\n".join(errors))
     if not rows:
         return None
-    path = LABELS_DIR / f"batch_{datetime.now(UTC):%Y%m%dT%H%M%SZ}.csv"
+    stamp = f"batch_{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
+    path = labels_dir / f"{stamp}.csv"
+    n = 1
+    while path.exists():  # two batches in one second (copies, then the API's)
+        n += 1
+        path = labels_dir / f"{stamp}_{n}.csv"
     with path.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f, lineterminator="\n")
         w.writerow(LABEL_COLUMNS)
         w.writerows(sorted(rows))
     print(f"{len(rows)} reviews -> {path}")
     return path
+
+
+def known_text_labels(groups: dict[str, list[dict[str, str]]], labels: dict[str, dict[str, str]]) -> list[dict[str, str]]:
+    """Labels for texts already labelled under another review id, as items for `write_labels`.
+
+    A new review that repeats a labelled text ("bom") gets that label for free, with no labeller
+    run; the label of the smallest labelled review id is taken, so reruns pick the same one.
+    """
+    items = []
+    for key, rows in sorted(groups.items()):
+        ids = sorted(r["review_id"] for r in rows)
+        done = [i for i in ids if i in labels]
+        if done and len(done) < len(ids):
+            src = labels[done[0]]
+            items.append({"key": key, **{c: src[c] for c in ("sentiment", "topic", "translation_en", "labeled_by")}})
+    return items
 
 
 def write_batch(labels_jsonl: Path, labeled_by: str) -> None:

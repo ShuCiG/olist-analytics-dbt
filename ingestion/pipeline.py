@@ -88,6 +88,8 @@ DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
 # Review labels (sentiment, topic, English translation): CSV batches kept in the repo,
 # not part of the dump (ingestion/review_labels/, D92)
 LABELS_DIR = ROOT / "ingestion" / "review_labels" / "labels"
+# Labels for reviews that arrive later (classify_api.py): at most this many new texts per run
+LABEL_MAX_TEXTS = int(os.environ.get("OLIST_LABEL_MAX_TEXTS", "500"))
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -331,6 +333,8 @@ def read_review_labels(labels_dir: Path) -> tuple[pa.Table, str]:
             convert_options=pacsv.ConvertOptions(
                 column_types={name: pa.string() for name in csv_header(path)},
                 strings_can_be_null=True,
+                # only an empty field is null: "N/A" is a real translation (of "N/D")
+                null_values=[""],
             ),
         )
         for path in paths
@@ -346,6 +350,38 @@ def loaded_labels_sha(pipeline: dlt.Pipeline) -> str | None:
     except DatabaseUndefinedRelation:
         return None
     return rows[0][0] if rows else None
+
+
+def label_new_reviews(pipeline: dlt.Pipeline, labels_dir: Path) -> None:
+    """Label review texts that have no label yet, as a new batch file next to the others.
+
+    A repeated text gets its label copied; a text never seen goes to the Claude API, only
+    with ANTHROPIC_API_KEY set (D92). On the static dump nothing is open: one query, no call.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT / "ingestion" / "review_labels"))
+    import classify_api
+
+    loaded = pipeline.default_schema.tables.get("order_reviews", {}).get("columns", {})
+    if not {"review_comment_title", "review_comment_message"} <= loaded.keys():
+        return  # nothing loaded yet, or a feed without review texts
+    try:
+        with pipeline.sql_client() as client:
+            reviews = client.make_qualified_table_name("order_reviews")
+            rows = client.execute_sql(
+                f"""
+                select distinct review_id, review_score,
+                    coalesce(review_comment_title, ''), coalesce(review_comment_message, '')
+                from {reviews}
+                where coalesce(review_comment_title, '') <> '' or coalesce(review_comment_message, '') <> ''
+                """
+            )
+    except DatabaseUndefinedRelation:
+        return
+    keys = ["review_id", "review_score", "review_comment_title", "review_comment_message"]
+    texts = [dict(zip(keys, map(str, row), strict=True)) for row in rows or []]
+    classify_api.label_new_reviews(texts, labels_dir, max_texts=LABEL_MAX_TEXTS)
 
 
 def load_review_labels(pipeline: dlt.Pipeline, labels_dir: Path) -> int:
@@ -603,6 +639,7 @@ def main() -> None:
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
         status = orders_status(pipeline)
+    label_new_reviews(pipeline, LABELS_DIR)
     labels_loaded = load_review_labels(pipeline, LABELS_DIR)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
     print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded)))
