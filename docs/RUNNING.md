@@ -370,7 +370,10 @@ uv run dbt build --target databricks --exclude package:elementary
 ```
 
 The scheduled CI (`.github/workflows/databricks.yml`, target `databricks_ci`) runs as a service principal with
-`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58. It also tests both data
+`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` instead of a token; setup in D58. Free Edition blocks the workspace about four days after the last sign-in to its UI
+(`denyReason: INACTIVE`); runs and queries by the service principal or a token don't count (D109). To keep the Monday
+run green, sign in to the workspace in the three days before it; after a failure email naming the block, sign in and
+rerun the workflow. It also tests both data
 contracts against server `databricks-ci` (D64). To run that check on your own load, point the server's variables at it
 (datacontract-cli takes the warehouse and credentials from its own `DATACONTRACT_DATABRICKS_*` variables):
 
