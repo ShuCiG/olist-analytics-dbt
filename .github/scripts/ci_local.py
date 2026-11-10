@@ -9,10 +9,14 @@ anything new, and its output is printed with the CI job it stands for.
     uv run python .github/scripts/ci_local.py --only evaluator
     uv run python .github/scripts/ci_local.py --list
 
+The dashboard's consumer-agreement test runs on the marts already built in the
+local DuckDB file (skipped, loudly, when there are none); the rest of the dashboard
+suite (MetricFlow KPI checks, ~5 min) stays CI-only.
+
 Not mirrored (CI only): the dbt builds on DuckDB, BigQuery and Databricks (fresh
-ingest, cloud credentials), fault injection (~14-20 min), the Airflow image, and
-`terraform validate` / `terraform test` (init would rewrite infra/.terraform, which
-holds the owner's GCS backend).
+ingest, cloud credentials), fault injection (~14-20 min), the Airflow image, the
+MCP server tests, and `terraform validate` / `terraform test` (init would rewrite
+infra/.terraform, which holds the owner's GCS backend).
 """
 
 import argparse
@@ -44,6 +48,11 @@ class Check:
     tool: str = ""  # binary that may be missing locally: the check is then skipped, loudly
     needs_dbt_packages: bool = False
     env: dict[str, str] = field(default_factory=dict)  # the job's env, as in ci-cd.yml
+    # Run locally instead of the step's test path (`subset_of`): files inside it
+    subset_of: str = ""
+    subset: tuple[str, ...] = ()
+    needs_marts: bool = False  # reads the marts built in the local DuckDB file
+    hint: str = ""  # printed under a failure
 
 
 CHECKS: tuple[Check, ...] = (
@@ -99,17 +108,66 @@ CHECKS: tuple[Check, ...] = (
         needs_dbt_packages=True,
         env={"DBT_PROJECT_EVALUATOR": "true"},
     ),
+    Check(
+        "dashboard-consumer",
+        "dbt-build",
+        "Dashboard tests",
+        "uv run pytest dashboard -q",
+        lane="dashboard",  # read-only on the DuckDB file, nothing else here writes it
+        subset_of="dashboard",
+        subset=("dashboard/tests/test_consumer.py",),
+        needs_marts=True,
+        hint=(
+            "It runs on the marts in your local DuckDB file. If a model changed on this branch,\n"
+            "rebuild them first (`cd transform && uv run dbt build -s marts`), then push again."
+        ),
+    ),
 )
+
+AGREEMENT = ROOT / "data-product" / "consumers" / "olist-dashboard.yaml"
 
 
 def local_args(check: Check) -> list[str]:
-    """The CI command without its CI-only arguments."""
+    """The CI command without its CI-only arguments, narrowed to `subset` if set."""
     args = shlex.split(check.run)
+    if check.subset_of:
+        i = args.index(check.subset_of)
+        args = [*args[:i], *check.subset, *args[i + 1 :]]
     drop = list(check.ci_only_args)
     for i in range(len(args) - len(drop) + 1):
         if drop and args[i : i + len(drop)] == drop:
             return args[:i] + args[i + len(drop) :]
     return args
+
+
+def missing_marts() -> str | None:
+    """Why the local marts can't serve the dashboard tests, or None when they can."""
+    import duckdb
+    import yaml
+
+    path = Path(os.environ.get("DBT_DUCKDB_PATH", ROOT / "data" / "olist.duckdb"))
+    schema = os.environ.get("MARTS_DATASET", "marts")
+    if not path.is_file():
+        return f"no DuckDB file at {path}"
+    tables = set(yaml.safe_load(AGREEMENT.read_text(encoding="utf-8"))["uses"])
+    try:
+        with duckdb.connect(str(path), read_only=True) as con:
+            rows = con.execute(
+                "select table_name from information_schema.tables where table_schema = ?", [schema]
+            ).fetchall()
+    except duckdb.Error as e:  # locked by a writer, or not a DuckDB file
+        return f"{path} can't be opened read-only ({type(e).__name__})"
+    if missing := sorted(tables - {r[0] for r in rows}):
+        return f"{path} has no {schema}.{', '.join(missing)}"
+    return None
+
+
+def skip_reason(check: Check) -> str | None:
+    if check.tool and not shutil.which(check.tool):
+        return f"`{check.tool}` not on PATH"
+    if check.needs_marts and (why := missing_marts()):
+        return f"{why}; build them with `cd transform && uv run dbt build`"
+    return None
 
 
 def _run(args: list[str], cwd: Path, env: dict[str, str], out: list[str]) -> int:
@@ -129,8 +187,9 @@ def _run(args: list[str], cwd: Path, env: dict[str, str], out: list[str]) -> int
 
 
 def run_check(check: Check, scratch: Path, out: list[str]) -> int | None:
-    """Exit code, or None when skipped. Output goes to `out`."""
-    if check.tool and not shutil.which(check.tool):
+    """Exit code, or None when skipped (the reason in `out`). Output goes to `out`."""
+    if why := skip_reason(check):
+        out.append(why)
         return None
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", **check.env}
     if check.key == "evaluator":
@@ -181,7 +240,7 @@ def main(argv: list[str]) -> int:
                 code = run_check(c, Path(tmp), out)
                 with lock:
                     if code is None:
-                        print(f"SKIPPED {c.key}: `{c.tool}` not on PATH (CI still runs it)", flush=True)
+                        print(f"SKIPPED {c.key}: {''.join(out)} (CI still runs it)", flush=True)
                     elif code:
                         failed.append((c, code, "".join(out)))
                         stop.set()
@@ -199,7 +258,8 @@ def main(argv: list[str]) -> int:
         print(f"\n{'=' * 70}\n{c.key}: output\n{'=' * 70}\n{output.rstrip()}")
         print(
             f"\nFAILED: {c.key}, which CI runs as job {c.job!r}, step {c.step!r} (exit {code}).\n"
-            "Fix it, or skip on purpose with `git push --no-verify`."
+            + (f"{c.hint}\n" if c.hint else "")
+            + "Fix it, or skip on purpose with `git push --no-verify`."
         )
     if failed:
         return failed[0][1]
