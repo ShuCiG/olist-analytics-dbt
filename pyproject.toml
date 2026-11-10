@@ -3,6 +3,7 @@ name = "olist-analytics-dbt"
 version = "0.1.0"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "anthropic>=2.3.0",
     "dbt-bigquery>=1.12.1",
     "dbt-core>=1.12.6",
     "dbt-databricks>=1.13.0",
@@ -62,8 +63,15 @@ reportMissingImports = "none"
 # `task_a >> task_b` sets a dependency; untyped here, it looks like a no-op
 reportUnusedExpression = "none"
 
+# pipeline.py imports the label scripts the way they run (sys.path)
 [[tool.pyright.executionEnvironments]]
 root = "ingestion"
+extraPaths = ["ingestion/review_labels"]
+
+# tests/test_review_labels.py imports the label scripts the way they run (sys.path)
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = [".", "ingestion/review_labels"]
 
 # Streamlit puts the entrypoint's folder on sys.path (`import warehouse`)
 [[tool.pyright.executionEnvironments]]

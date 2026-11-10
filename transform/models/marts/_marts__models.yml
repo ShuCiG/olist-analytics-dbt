@@ -1251,3 +1251,86 @@ models:
       - name: is_delivered_late
         description: Delivered after the estimated date (date comparison); false if not delivered.
         data_type: boolean
+
+  - name: fct_review_topics
+    description: >
+      What customers write about: one row per order whose review has a label (D92). Sentiment and topic
+      come from the review text, labelled by Claude following `ingestion/review_labels/guidelines.md`,
+      with an English translation; the order's delivery outcome sits next to them, so complaints can be
+      compared with actual late deliveries. Reviews without text have no row, nor do texts the ingest
+      could not label yet.
+    config:
+      group: orders
+      contract:
+        enforced: true
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }} Primary key."
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: review_id
+        description: The order's latest review (as `fct_orders.review_score`).
+        data_type: string
+        data_tests: [not_null]
+      - name: purchase_date
+        description: Order purchase date.
+        data_type: date
+      - name: customer_state
+        description: Two-letter state code of the customer's address on the order.
+        data_type: string
+      - name: category_name
+        description: English category of the order's most expensive item ('unknown' if the product has none); null if the order has no items.
+        data_type: string
+      - name: review_score
+        description: Customer rating, 1–5.
+        data_type: integer
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
+      - name: sentiment
+        description: The customer's attitude in the text, not the score - positive, negative, mixed or neutral.
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [positive, negative, mixed, neutral]
+      - name: topic
+        description: >
+          The one aspect the review is mainly about - delivery, product_quality, wrong_or_missing_item,
+          seller_service, general (overall satisfaction, no aspect) or other (price, packaging, payment, ...).
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [delivery, product_quality, wrong_or_missing_item, seller_service, general, other]
+      - name: translation_en
+        description: English translation of the review title and message.
+        data_type: string
+        data_tests: [not_null]
+      - name: is_delivered
+        description: True if a delivery timestamp exists.
+        data_type: boolean
+      - name: is_delivered_late
+        description: Delivered after the estimated date (date comparison); false if not delivered.
+        data_type: boolean
+      - name: days_delivered_before_estimate
+        description: Estimated date − delivery date, days; negative = late.
+        data_type: bigint
+      - name: labeled_by
+        description: Who labelled the review, e.g. `claude-code-session` (hand-checked gold set), `claude-code-routine-<model>` (backfill) or `claude-api-haiku-5-5` (new reviews).
+        data_type: string

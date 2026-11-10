@@ -1,0 +1,656 @@
+review_id,sentiment,topic,translation_en,labeled_by,guidelines_version
+00ba453b300ca746613ea9e8f313086e,positive,general,I recommend it,claude-code-session,1
+00f5932eae7cb506a3b431fe3a52c6ea,positive,general,I recommend it,claude-code-session,1
+01718c967d01c51655c9782c5dfbfbf5,positive,general,good,claude-code-session,1
+018c080d4d1dbae175b2240f88bfd116,positive,general,ok,claude-code-session,1
+01ae1805893db91ca7f3beea44c93527,positive,general,I recommend it,claude-code-session,1
+0217086a1d035de0928c7e7fe9874db8,positive,general,Great,claude-code-session,1
+0251a86023655c0e08f2eb8447f274aa,positive,general,All good,claude-code-session,1
+026725a76a65e38ebb117a2a4138dc09,positive,general,good,claude-code-session,1
+030aff7a50557f1994580ee873c11834,negative,delivery,I still haven't received the product,claude-code-session,1
+035ed6ddc1959b530d55a5f88a5f28e0,positive,general,highly recommend,claude-code-session,1
+03a2e9679955d4028fa5a854a6c8684d,positive,general,Excellent,claude-code-session,1
+03b4819c717a923ee26b39aec3273cf5,positive,general,highly recommend,claude-code-session,1
+03e6644b0dbc179f5cd992dc1ba61179,positive,general,I recommend it,claude-code-session,1
+041c9f8217a77fb34855682ff70a55bd,positive,product_quality,Excellent product,claude-code-session,1
+0435be20ac550ab003076456797abb65,positive,general,good,claude-code-session,1
+044509e7a03da1828b84a6bfea494708,positive,general,Excellent,claude-code-session,1
+04506dcd52be542ba215ae2f80ca14a5,positive,general,highly recommend,claude-code-session,1
+05b62e464250eea0cf338d0a23dc2fb2,positive,general,good,claude-code-session,1
+05b6cf47e5746812f2b66c6859ba380c,positive,general,highly recommend,claude-code-session,1
+06b0e5703d6d052d201e23cfdab72fa5,positive,general,Very good,claude-code-session,1
+06c8841b8a429719dc478a4e75daee28,negative,delivery,I still haven't received the product,claude-code-session,1
+0872e0dd8677dd7489a035ec4b828084,negative,delivery,I still haven't received the product,claude-code-session,1
+0949265c21e6a831fc7297e2c9b5abd3,positive,general,Excellent,claude-code-session,1
+09742a57e181ef2474fa66b67306ee80,positive,general,Excellent,claude-code-session,1
+09cdb7ce933f4c1eeefd3e19fa5ddb9c,positive,general,good,claude-code-session,1
+0a3a13b395177ed90066a9354bd71eeb,positive,general,Great — Very good,claude-code-session,1
+0a451903f2fd4f369e6f037a343e3c1c,positive,general,I recommend it,claude-code-session,1
+0a5a91b1151bd3f9b96cf36023f91f9c,positive,general,I recommend it,claude-code-session,1
+0aa18b1729f5c907b93a54440b5ee668,positive,general,good,claude-code-session,1
+0b299a053a5778f3caea72bfc3560561,positive,general,Excellent,claude-code-session,1
+0b4ad482b38e329d9786acee394bb0f9,positive,general,I recommend it,claude-code-session,1
+0b5dd4f5a773713882ffc3a774d39a58,positive,general,I recommend it,claude-code-session,1
+0c1f51eb973f646eb9622e0d786c62e2,positive,general,Thank you,claude-code-session,1
+0c88f35cb73f52bf89a50b9a5627a234,positive,general,ok,claude-code-session,1
+0ce12440cb2069b3fc81544b8488590d,positive,general,Great — Very good,claude-code-session,1
+0cf8fe1cb6787e89a11e87d69dd1b4de,positive,general,good,claude-code-session,1
+0cfd808e96e8fa75d6670b59c95c3eb3,positive,general,All good,claude-code-session,1
+0d9b1581a9408ba09722c9a85126fa86,positive,general,I recommend it — Very good,claude-code-session,1
+0dfb33dd6b591393445f20f7f413b99e,positive,general,Excellent,claude-code-session,1
+0e14328c3b11b13f12f258be554fa682,negative,delivery,I didn't receive the product,claude-code-session,1
+0e46abe506538288077968d950248f79,positive,general,Great,claude-code-session,1
+0e6e6565b982a5c155abf7d733c02f69,positive,general,good,claude-code-session,1
+0ea235f1b16cb4125b7ac4e407fccc70,positive,general,I recommend it,claude-code-session,1
+0eb3e11de54a164d2bf18cd2a9960f2e,positive,general,I recommend it!!!,claude-code-session,1
+0ec47b2e146653bcc5e3b5d06f75acbc,positive,general,Excellent,claude-code-session,1
+0f4a68027cad35f875debb4fa1e5d1ca,positive,general,I recommend it,claude-code-session,1
+0f7fb8922bbddb9e5612e7240cc8d44e,positive,general,Thank you,claude-code-session,1
+1119dc8c1f57d7274b549e524bcb951e,positive,general,ok,claude-code-session,1
+11aedb2ecab8dc27913fc1c61ea6920c,positive,general,good,claude-code-session,1
+12384529d6976f9ed115d07c5e856dda,positive,general,Excellent,claude-code-session,1
+1378891a85c1339e795825e578d9aafb,positive,general,Excellent,claude-code-session,1
+13e8bfb81e9e05ef0c3d74a8cbaeae51,positive,general,good,claude-code-session,1
+13faa5e3f8cc9f04193d8e50ca0343ba,positive,general,Very good,claude-code-session,1
+141b902029c08788d29af899d83778fb,positive,general,All good,claude-code-session,1
+1492ab70b0b9553e4402bb1887f0ac2a,positive,general,ok,claude-code-session,1
+14b296ce3cde75a35d7760af755fb445,positive,general,Excellent,claude-code-session,1
+150c4f6386d68a6630b6ccbc1c8ba718,positive,general,highly recommend,claude-code-session,1
+151a250753b83b135c450c81b9743436,positive,general,I recommend it,claude-code-session,1
+15e1260c9f443938b294226653847691,positive,general,I recommend it,claude-code-session,1
+16b57f9b35fd6dbc158a88d6da34f3dd,positive,general,I recommend it,claude-code-session,1
+16f50abce3549a867f8274496cc7043d,positive,general,Great,claude-code-session,1
+171b956ea6445b79f1805e5e961627ed,positive,general,I recommend it,claude-code-session,1
+17ef881371cbe7db88605b239dc394a8,positive,general,All good,claude-code-session,1
+17fc4d49e104e69d7198ae00cc314ba4,positive,general,I recommend it,claude-code-session,1
+182d1e01b0829336adc4d933956896b6,negative,delivery,I still haven't received the product,claude-code-session,1
+18631868c9900d3da084941f52d2efef,positive,general,ok,claude-code-session,1
+1874d1f1ad2955722d508c334551e85c,positive,general,I recommend it,claude-code-session,1
+189089fd0b77adae63b5f9def3573c9b,positive,general,Excellent,claude-code-session,1
+19306e4eba39772265c9a80565ee3df6,positive,general,Great,claude-code-session,1
+19dda1272adad6a265505e7870593363,positive,general,good,claude-code-session,1
+1a6c16d20cddef0c4cd7a99625081c08,positive,general,I recommend it,claude-code-session,1
+1aa17f1b2c11a3d309cbf243c3bb07c3,positive,general,Very good,claude-code-session,1
+1ae035ac38a8ba864d9ec2b6fa353f30,positive,general,Very good,claude-code-session,1
+1b03617a6e6f2f0372bae14b6663cd08,positive,general,I recommend it,claude-code-session,1
+1b1642baf869c75f61ec693e5abadbcd,positive,general,Excellent,claude-code-session,1
+1b578ab0eb622c9f916a47bd9ab1a020,positive,general,Excellent,claude-code-session,1
+1bb2b1f537e25bcaaaceb4153a4b5062,positive,general,Excellent,claude-code-session,1
+1bc559e43feec4bf8106f8fc022a4d77,positive,general,good,claude-code-session,1
+1c1660c772e6294aaec0c2a0ffeeef04,positive,general,Great,claude-code-session,1
+1c21c9735f69104d832bcc31fa1bf35d,positive,general,Very good,claude-code-session,1
+1c45bc1ad64daf1b70cfdfa74e5892ea,positive,general,good,claude-code-session,1
+1d2accebf50f92584820047b910fee75,positive,general,highly recommend,claude-code-session,1
+1d8bf29de96e8867d89e4a2c680e8f3d,positive,general,highly recommend,claude-code-session,1
+1e364417d579f43eb3ea4f4eafe289db,positive,general,ok,claude-code-session,1
+1e6a9e53bac1c04a3c75b66d5e2fb477,positive,general,highly recommend,claude-code-session,1
+1edd1a85161468a77e5fcb165be9b294,positive,general,Great,claude-code-session,1
+1f60d0abc016a65b9602f9991cb41146,positive,general,I recommend it,claude-code-session,1
+1f6a6268f6363aa76d80c78f93d781fb,positive,general,I recommend it,claude-code-session,1
+1fe7c09e19f2f816f3a21611f02f02fa,positive,general,highly recommend,claude-code-session,1
+20f7983323645b4fbb35dd293cd9e536,positive,general,I recommend it,claude-code-session,1
+22974319c65ed3355f33c466d89308fb,positive,general,Excellent,claude-code-session,1
+22b25d1dc589a91876a6052e73043462,positive,general,ok,claude-code-session,1
+23561c6a3b95b6113ef1ab94319976bb,negative,delivery,I still haven't received the product,claude-code-session,1
+23959a2d5d6d910e426a59c592acb811,positive,general,Excellent,claude-code-session,1
+23b1bdd524a96924648f1b9b46bc071e,positive,general,Excellent,claude-code-session,1
+23f4438b06e55173e6b02c50b6989256,positive,general,I recommend it!!!,claude-code-session,1
+24e88b5f641a6a3219ce7a730509d570,positive,general,Excellent,claude-code-session,1
+2507e117ecb0f03a11e0fe8173fb4224,positive,general,Excellent,claude-code-session,1
+2531155fe0e81200a7b171571c101369,positive,general,ok,claude-code-session,1
+25c3eb27cb0a09bc177cd4f62f343b44,positive,general,Excellent,claude-code-session,1
+25d12a3440addc3b36e4394aea67d85b,positive,general,Excellent,claude-code-session,1
+25e3e2137c14c28ed53275209a25dcba,positive,general,I recommend it,claude-code-session,1
+260c151f8627fb5a8d83ad596f42d7b3,positive,general,good,claude-code-session,1
+26547ccd7c1644c72c221d3237c9c478,positive,general,I recommend it,claude-code-session,1
+267023a12c1e9452d36b275871af4c9b,positive,general,All good,claude-code-session,1
+2713c509bf4e739430f674a3cb4302ad,positive,general,Good — Good,claude-code-session,1
+27445763b6648d6f9a8d295e1d184e9f,positive,general,I recommend it,claude-code-session,1
+2793bf001338ce040ec070f464402339,positive,general,I recommend it,claude-code-session,1
+2888bde044ad292a3351b4cee17bab0c,negative,delivery,I still haven't received the product,claude-code-session,1
+288f60479ed49ab37746747dd1184cca,positive,general,highly recommend,claude-code-session,1
+28c0a54cfc44851695283c70af8d0733,positive,general,good,claude-code-session,1
+28d7dcac8a8a538305a09bc816d0fbef,positive,general,I recommend it,claude-code-session,1
+291f034706003359547ec7dcd1df3756,positive,general,Great,claude-code-session,1
+297fe4fe19a9098f8b914ee4cfdf50da,positive,general,Great,claude-code-session,1
+299fb37efee1d5cd4d31813bedd55928,positive,general,All good,claude-code-session,1
+29c155f3312c62d6e23ef990bdf35aa8,positive,general,Excellent,claude-code-session,1
+2a71a4febe9ace0548ac8a72693d5d81,positive,general,Excellent,claude-code-session,1
+2af839ae66a65959d6ae07775d0e7a35,positive,general,good,claude-code-session,1
+2b230520810f78b0af7c9353067195b4,positive,general,I recommend it!!!,claude-code-session,1
+2c17650d0f3556109c02605426761e65,positive,general,Excellent,claude-code-session,1
+2c690e4b93b39a59c17fd91f4806fd64,positive,general,I recommend it,claude-code-session,1
+2c8bd3417de3e2576ea072455b36b55e,positive,general,All good,claude-code-session,1
+2cba4bc6bc5853fbffd54f4164d9e1a6,positive,general,Great,claude-code-session,1
+2dafe9e7377a140de1bb73e7e738715d,positive,general,good,claude-code-session,1
+2dd90fe4d4ca857c7469a13979069d6b,positive,general,Very good,claude-code-session,1
+2e075c46b3b9abee63dd10ece9f6f9e5,positive,general,Excellent,claude-code-session,1
+2f078185b6d35977d92b042d455081f6,positive,general,Super,claude-code-session,1
+2f08df715720e2b27de8c16d9d870f77,positive,general,Good — Good,claude-code-session,1
+2f8c81e5463440f3e38017dc374e6ac1,positive,general,Excellent,claude-code-session,1
+2f9aeb19f47d00c832ecd86ac5ee99ef,positive,general,Excellent,claude-code-session,1
+30ab325aad34feec8b8ea201c06b8454,positive,product_quality,Excellent product,claude-code-session,1
+319310ea9763b189597ccbc1fa941306,positive,general,Very good,claude-code-session,1
+31d00a182eb00e442e11713954bf89cb,positive,general,Very good,claude-code-session,1
+31f38d9a7bb8bc90ca8d405d74ebb9d9,positive,general,ok,claude-code-session,1
+320e4b1dfb00fcc176d25fb80dde24d6,positive,general,good,claude-code-session,1
+329b7614fc66760765a917f61af3ecfc,positive,general,good,claude-code-session,1
+32b023519b2ae83c062ca52f2c6d66af,positive,general,highly recommend,claude-code-session,1
+331bff50c0e9b6d14ad8be80bc1f98c2,positive,general,I recommend it — Very good,claude-code-session,1
+33c15e6501445b2f025cf5fccb870867,positive,general,Excellent,claude-code-session,1
+33c3327c076ab86a1976e60d897061c1,positive,general,I recommend it,claude-code-session,1
+33c504a45fd06cb24132a1e29c0823eb,positive,general,I recommend it,claude-code-session,1
+343041791fe004d40d916c489687ba34,positive,general,Excellent,claude-code-session,1
+3485faf5521b0ca28dc2816d7e926fb6,positive,general,Excellent,claude-code-session,1
+34b6f1ea7fc79ca56cc50a306be71c80,positive,general,good,claude-code-session,1
+34da1fbee2cbe2c497124ae4df0a2139,positive,general,highly recommend,claude-code-session,1
+34ea8bfee9a6dbfc721a72b94399a9a7,positive,general,ok,claude-code-session,1
+35011efa4666fb75269eb2c6551e4309,positive,general,ok,claude-code-session,1
+35e4bd86769cd119c939a97bb87693f4,positive,general,highly recommend,claude-code-session,1
+36d299082c128f3237be2d772b9b572c,positive,general,Excellent,claude-code-session,1
+36d2e7a4043440887eb9bd52cc0b09d2,positive,general,Excellent,claude-code-session,1
+388fbf51a2737e85746be6da22543926,positive,general,I recommend it,claude-code-session,1
+390f823a5d10bc9938280e848c1e1241,positive,general,ok,claude-code-session,1
+3922f47d7bde0caf546f90477c54b983,positive,general,Thank you,claude-code-session,1
+39e526459ab44005cace872b7138141d,positive,general,I recommend it,claude-code-session,1
+3a36f699ff17d318607904fc7ac9099d,positive,general,good,claude-code-session,1
+3a8d2e3c38c1fcfd3a8b8959c389fac9,positive,general,ok,claude-code-session,1
+3ab396e0b51770805209fae9394b9fc8,positive,general,good,claude-code-session,1
+3ba20e6dc6ec2705095626f28065a78a,positive,general,good,claude-code-session,1
+3ba25965c82da2648b34ee859d197c47,positive,general,All good,claude-code-session,1
+3c4f318ced3ffebde5b579e389bef14c,negative,delivery,I still haven't received the product,claude-code-session,1
+3cbc05dbf9849d6c317d93fe4a1d8e65,positive,general,ok,claude-code-session,1
+3ce385c1754d511a9ec689ff5bc2ddaa,positive,general,Very good,claude-code-session,1
+3d087d89b686e6152a28b9453f447735,positive,general,I recommend it,claude-code-session,1
+3d2f21e12ea5a9d2d32ade55ddac8d48,positive,general,Excellent,claude-code-session,1
+3d6536d7cfb020bb1b211d051af050ce,positive,general,Excellent,claude-code-session,1
+3d6afaf967445c85613989819bab7d58,positive,general,good,claude-code-session,1
+3d8824d2be3defd49e7280574605c91f,positive,general,Excellent,claude-code-session,1
+3de10ef6b66da854498c755356afea0b,positive,general,Great,claude-code-session,1
+3ee3a4da9a7cd58f28802e6de324929d,positive,general,I recommend it,claude-code-session,1
+3f89732c603cea71b0ac8925734810a0,positive,general,ok,claude-code-session,1
+40506badbb397b0c0d8ea9605f52a459,positive,general,I recommend it,claude-code-session,1
+4063948268ad37aa55af6a48c6e01ad9,positive,general,I recommend it,claude-code-session,1
+413e34a4f0372858fb8c9cae377a4985,positive,general,Excellent,claude-code-session,1
+4349ce940e84a7415b77b91e11105d0b,positive,general,Great,claude-code-session,1
+43f72c0d996e8f1333c0830254c01364,negative,delivery,I still haven't received the product,claude-code-session,1
+440d54ffe551b216351db47dc1994545,positive,general,ok,claude-code-session,1
+443176fba50e86a2ad4838960587bbfc,positive,general,Excellent,claude-code-session,1
+44e1ef4675c1eba1f0cf43a36be612ef,positive,general,All good,claude-code-session,1
+452338edd7c3c3ec5b1c2462d77ff90b,positive,general,Excellent,claude-code-session,1
+453a6df7a7408ae1fb456614d0654af1,positive,general,Good — Good,claude-code-session,1
+46eb7aeb025c80f0949fcb5a24850c3b,positive,general,highly recommend,claude-code-session,1
+474f65e0eead868eb8a3a44690f51034,positive,general,ok,claude-code-session,1
+47caf2427a65a430c392f6d906b0b9a2,positive,general,I recommend it,claude-code-session,1
+47d7c64126bcd47b49115e86b7c3e561,positive,general,All good,claude-code-session,1
+47f37f9313bad169076696c1424acc18,positive,general,Excellent,claude-code-session,1
+484adfe21caf4f1ebfb06075f9c6d7bc,positive,general,ok,claude-code-session,1
+492c2da6a25cc1ae0d5e9edc950d7fb0,positive,general,Excellent,claude-code-session,1
+495ae8bd4466628acb46e75535a98cd7,positive,general,All good,claude-code-session,1
+4a58847e0bc1838c7967a8d57bd408a9,positive,general,Great,claude-code-session,1
+4a72bdf3e363be129c889bdd8753a7a3,positive,general,good,claude-code-session,1
+4a9210c48ce90e869db6fcb5248a2952,positive,general,highly recommend,claude-code-session,1
+4a9c3a457a9fb6eb268e6868541b0105,positive,general,I recommend it,claude-code-session,1
+4b1aaea0a7bbbba11ffab8095f237aab,positive,general,I recommend it,claude-code-session,1
+4b54fe8239220c1996dde30333075b0b,positive,general,I recommend it,claude-code-session,1
+4bea7a817d3b2f7c756c6bbbe5ae12d6,positive,general,Excellent,claude-code-session,1
+4d807c10e7c3c3ab91974c835996aa5f,positive,general,Excellent,claude-code-session,1
+4e148213dbb2e131b9af7508f2088720,positive,general,Excellent,claude-code-session,1
+4e82ccd09decff27f86f595b52406acb,positive,general,I recommend it,claude-code-session,1
+4e945ced89908823a68516ba5993ef82,positive,general,Great,claude-code-session,1
+4e9f78b1d9ff5c2c9bea1b1a1eb1df02,positive,general,I recommend it,claude-code-session,1
+4efaeb5bf49a4d269f06980dcc45ad06,positive,general,ok,claude-code-session,1
+4f982182bcee7ff1ab8af7ab4385fecd,positive,general,All good,claude-code-session,1
+4fa08b5b43c00ca2532c3195bac30dde,positive,general,I recommend it!!!,claude-code-session,1
+4fce614bb7148214fa79ff369f1effae,positive,general,highly recommend,claude-code-session,1
+505bdddb010fa846e3217c0155e05a50,positive,general,Excellent,claude-code-session,1
+509a1ee873adfe55a3f29aa8151bdc6d,positive,general,Great — Very good,claude-code-session,1
+50cc215e676ac83bf74ee820dadffee8,positive,general,highly recommend,claude-code-session,1
+50cf8dd998e5b0a47e1ca57f27a3c763,positive,general,Excellent,claude-code-session,1
+50da9f30d55fea7ba6f250d48a336f59,positive,general,Excellent,claude-code-session,1
+5143520394063d2f5a81f9a9acfd8ce6,positive,general,I recommend it,claude-code-session,1
+523bac8feac53164d5bf1fdd8a0b6ea8,positive,general,Excellent,claude-code-session,1
+53008ae325b9c3cf7317bd30f3162cfc,positive,general,Very good,claude-code-session,1
+5351042eaa92837894baaf5517adbc7f,positive,general,Excellent,claude-code-session,1
+535a08230928364b7d75182ad0fbec10,positive,general,Excellent,claude-code-session,1
+53686c229de824925abfb43717d325c7,positive,general,All good,claude-code-session,1
+537f04cd5da884171ccab2680eb6c960,positive,general,good,claude-code-session,1
+53eba292a2697e783c594c6d9a09f043,positive,general,Excellent,claude-code-session,1
+54d8218b9d71a9090ffad8d33b0ba5c3,positive,general,I recommend it,claude-code-session,1
+54f1a13e9a6001b74abcce903615ff10,positive,general,Excellent,claude-code-session,1
+55ad6e94d1ccfe9ce66293d0e7ad64b8,positive,general,I recommend it,claude-code-session,1
+55ea998ab363be50a7aaba78a7866f44,positive,general,highly recommend,claude-code-session,1
+564f9b3310ae80e03f28084a498590a0,positive,general,good,claude-code-session,1
+56ec24a188e43c2a25b8ab78d7cee8e4,positive,general,Excellent,claude-code-session,1
+570e97d7a448680f0fe8b0485194a76b,positive,general,all ok,claude-code-session,1
+573be11118bdee01c38c31d27784f5e9,positive,general,Very good,claude-code-session,1
+5764981dfe73a75c96262c24300b885c,positive,general,highly recommend,claude-code-session,1
+5786986cf92ce0cd03207cc13c76368c,positive,general,Very good,claude-code-session,1
+593f9b33c3a4c74e37b7b7c49f0cedc4,positive,general,All good,claude-code-session,1
+5a0f22ec7c5a9088632cc094a3c07596,positive,general,highly recommend,claude-code-session,1
+5a3359064928c0f9e700b9f2973e4b8d,positive,general,good,claude-code-session,1
+5a3a591cd5a166ace22d10962e77917e,positive,general,Excellent,claude-code-session,1
+5a743fa8ce4174a190fcc2a57faa2188,positive,general,Great,claude-code-session,1
+5ad2dbf5ab0a928cdd7795a9130088f4,positive,general,I recommend it,claude-code-session,1
+5af0b7f9d21896492e1e1c9b9b8bb282,positive,general,Excellent,claude-code-session,1
+5b6a8e5dd9b7391030171b81a283b437,positive,general,good,claude-code-session,1
+5b94961d9765588bc98c917e20a898ef,positive,general,All good,claude-code-session,1
+5b99a34113ce3759d89d23148616b5e1,positive,general,Great,claude-code-session,1
+5b9f4d86abfd6db33644c63807ec4604,positive,general,good,claude-code-session,1
+5d6b898da48ebf08c8daf5c81b4365dc,negative,delivery,I still haven't received the product,claude-code-session,1
+5d82eff7a3df7d5aaaed3f3344bb3bfe,positive,general,Excellent,claude-code-session,1
+5da968a8d9679f8dcb359717a72652c1,positive,general,Excellent,claude-code-session,1
+5df66126ca4c887cbc3ee3bc594b35c7,positive,product_quality,Excellent product,claude-code-session,1
+5e30273e36a2b99e019c40305c7604ac,positive,general,ok,claude-code-session,1
+5ef6e357ab1f5f9085dc0223caf9aff5,positive,general,Excellent,claude-code-session,1
+5f174804a3c52a684154772b4c78ca3b,positive,general,All good,claude-code-session,1
+5f4e2b26723cd2ca6db2281993d99a9b,positive,product_quality,Excellent product,claude-code-session,1
+5fd0bdb0d39b974ca6696eec8abfd862,positive,general,highly recommend,claude-code-session,1
+5fe417aedfd64ea3196917c18c849856,positive,general,Excellent,claude-code-session,1
+6073e9dd45068cae69c8f48a741ba883,positive,general,Very good,claude-code-session,1
+6149e927f7312eb9c31b5d4546bacd77,positive,general,Very good,claude-code-session,1
+6155df780cacb659f2677bb4fc843ad0,positive,general,I recommend it,claude-code-session,1
+61f2e54d282a1b9cbb317baf7395f2f2,positive,general,I recommend it,claude-code-session,1
+62d7dde38ee43bfd3255eb0be054f4a1,positive,general,Excellent,claude-code-session,1
+62f868210b8b687cd9404a19dfd51fc0,positive,general,highly recommend,claude-code-session,1
+635af790e7af63184efdae1b7cc7d594,positive,general,I recommend it,claude-code-session,1
+6365c7d08856da86719b21d414691ee5,positive,general,I recommend it,claude-code-session,1
+63c4af84620010be93d772a75a168f6d,positive,general,I recommend it,claude-code-session,1
+642410e0fd1d49415cca6f7c6b118e7d,negative,delivery,I still haven't received the product,claude-code-session,1
+6428d69966d051a312b22b99f4e59b6e,positive,general,good,claude-code-session,1
+6452ac3c8fe852889223443309f965fd,positive,general,Very good,claude-code-session,1
+6484efb9bf588b96f60ad0866d844ca7,positive,general,good,claude-code-session,1
+65427c6f16460ec95ce585302d8a1e99,positive,general,Very good,claude-code-session,1
+66224b5ecf49d5b7e54367988c2ee2ab,positive,general,I recommend it,claude-code-session,1
+66ad82a86ed6da08517b4482b0237444,positive,general,I recommend it,claude-code-session,1
+66b705815e9970a73351e2c240c6f69a,positive,general,I recommend it,claude-code-session,1
+66e9e502acb116a9246dacd86d293e93,positive,general,good,claude-code-session,1
+67609f7082dfd754f8ed1808c80d6c48,positive,general,Very good,claude-code-session,1
+68052ecc57d73ef23404325ec7b7c087,positive,general,Very good,claude-code-session,1
+6831c52a8625e94f8b8fc553dbac12df,positive,general,Great,claude-code-session,1
+6845d684207ec325b4f3d5962bbd8d59,positive,general,Excellent,claude-code-session,1
+68597d7993fa1b907787a4fa20cdad25,positive,general,I recommend it,claude-code-session,1
+68b074daf6a4c57fed30fb4fdfc5d6a4,positive,general,Reliable,claude-code-session,1
+69be158b0b817dfc85d07ada7b7b48c9,positive,general,Excellent,claude-code-session,1
+69e0c623fe9e89feb09a0c0c7d42d016,positive,general,Excellent,claude-code-session,1
+6a3fba82de14232496691b56554a7cc9,positive,general,Great,claude-code-session,1
+6b24a36969f511c352d92c93f0098c23,positive,general,Excellent,claude-code-session,1
+6b6951c7d142bf5444017f6808bcff9e,positive,general,Excellent,claude-code-session,1
+6c0835c304416bae68efb406b07a28d3,positive,general,Very good,claude-code-session,1
+6cad638384b4899d38420aa91d522119,positive,general,Great,claude-code-session,1
+6d15e750e42590fadb06a193c27da33b,positive,general,Good — Good,claude-code-session,1
+6dd99847696bd453cb369e08a8579de7,positive,general,Excellent,claude-code-session,1
+6e5fd0826bd7e43f3a32ae82b72f2f70,positive,general,I recommend it,claude-code-session,1
+6f4f5126dab7c1122bb3902c04299e13,negative,delivery,I didn't receive the product,claude-code-session,1
+70024e90b931ebffa07dccaebe9482ff,positive,general,Excellent,claude-code-session,1
+71176ea90619ff48ff2c0747532b9c1a,positive,general,good,claude-code-session,1
+7150acdbbed2586e02ba3dead9271fd8,negative,delivery,I still haven't received the product,claude-code-session,1
+719e0716e2effb0309f26c9a57906358,positive,general,Great,claude-code-session,1
+71a53f552b4a4d976a3a5143892ecb0e,positive,general,ok,claude-code-session,1
+71b3d30584763a24bc52690b83c93a14,positive,general,good,claude-code-session,1
+723280632c468e6d2023317cda65438f,positive,general,I recommend it,claude-code-session,1
+729cd3fc494e99426ea54aa181c4b011,positive,general,ok,claude-code-session,1
+72b1753af75b18b3e8016374e1b0220c,positive,general,highly recommend,claude-code-session,1
+72cc01a0b7dd76e5137b59c4afca97ae,positive,delivery,Arrived fast and well packed.,claude-code-session,1
+73280185e8c02d5f3d0f3866661aac4f,positive,general,highly recommend,claude-code-session,1
+7351f1afcd5f6985e33b03e598b22393,positive,general,Excellent,claude-code-session,1
+736b1ee880907bcf66929dd4dd6ca51d,positive,general,I recommend it,claude-code-session,1
+737decbba63f9c61ea44c9bb47d8d8fd,positive,general,Excellent,claude-code-session,1
+742a9d756e32c3fa2973d78c4e82ddaa,positive,general,I recommend it,claude-code-session,1
+7513db5bd7cc20f036f9de5dc172ee22,positive,general,Excellent,claude-code-session,1
+7548eb73f33de2608a1985e65302320f,positive,general,I recommend it,claude-code-session,1
+75b30e7bc833c7b42d31ec8c364d107b,positive,general,good,claude-code-session,1
+75dcc8635930dd09103505944e12451a,positive,product_quality,I liked the product,claude-code-session,1
+765ba5b03658dfacc616a53e41d9cf82,positive,general,highly recommend,claude-code-session,1
+76b807bf684ce187fe07524813da742a,negative,delivery,product not delivered,claude-code-session,1
+771a2df0ba672c544ffc2d870c63606d,positive,general,I recommend it,claude-code-session,1
+7720c07f45d22f6fe50adcc216466250,positive,general,Excellent,claude-code-session,1
+774cb62814e1d7533ab70071e879d276,positive,general,highly recommend,claude-code-session,1
+7799aaed88bb1f6ab1d35c438eb18f6f,positive,general,Excellent,claude-code-session,1
+77e528454194be0821e7d49fb0eb42f1,positive,general,Excellent,claude-code-session,1
+78d16306de0ead301e459eb45ea55101,positive,general,ok,claude-code-session,1
+7930a67c1c282a84294e361034b02649,positive,general,Excellent,claude-code-session,1
+7945ed0663a7b1a091d3e517d3c4abe5,positive,general,good,claude-code-session,1
+799536a537f2cf19046078a345940104,positive,general,Great,claude-code-session,1
+7a268c7dc74ba6032d96c9c34f29924c,positive,general,Excellent,claude-code-session,1
+7a61381de2e49c6ad740d07279afe7c7,positive,general,good,claude-code-session,1
+7a7238307e6620d73497ecdc2fb741ca,positive,general,All good,claude-code-session,1
+7a7f4815533e7ee0ba05f5bdaf0b84b5,positive,general,I recommend it,claude-code-session,1
+7af75686909a3b2294d9a8c139a6a798,positive,general,good,claude-code-session,1
+7b31310941950c126841ab850fd9e9df,positive,general,Excellent,claude-code-session,1
+7cd58112588284414f0da9e739b08ba1,positive,general,Very good,claude-code-session,1
+7d2cdefbfea80ad808dbd67f8ba966cb,positive,general,highly recommend,claude-code-session,1
+7d3a6f2f13a3ef4893cdd09a92991f51,positive,product_quality,I liked the product,claude-code-session,1
+7ea2f3375d8288b002992920596e02fb,positive,general,highly recommend,claude-code-session,1
+7eb72e6da37271bd2a023ccb44fddfae,positive,general,highly recommend,claude-code-session,1
+806347730f5897d67192f63b420365b8,negative,delivery,I didn't receive the product,claude-code-session,1
+808fbc12259d37f1c5ce50926daaa85f,positive,general,good,claude-code-session,1
+80efb32ebbe7c60ad3e8d4a13f573712,positive,general,I recommend it,claude-code-session,1
+81c2a7442abe9821bf503bf61fc0308a,positive,general,Great,claude-code-session,1
+81d3ccad03864f17918f714b1f5fa3ca,positive,general,Excellent,claude-code-session,1
+81fc60dcc93fccd7c1bc96736c7b3ede,positive,general,I recommend it,claude-code-session,1
+827330fe9b5f5e009fd360780614ac05,positive,general,good,claude-code-session,1
+82fda0e20ccdfd6a32185c1b44af3fbb,positive,general,I recommend it,claude-code-session,1
+83425bf65844afdbe0f5191af76eebac,positive,general,Great,claude-code-session,1
+840ad9b9e2f76e5a3b486dcfc695fd00,positive,general,ok,claude-code-session,1
+845e0160259717312fc76b1d1abe7149,positive,general,Excellent,claude-code-session,1
+84614c842c2b0d8fa026eabcf483fc95,positive,general,ok,claude-code-session,1
+84d02481e9fd52e1bd9a3185149bc9d1,positive,general,I recommend it,claude-code-session,1
+84fe7978e6915d70e5ec35a7182eed7b,positive,general,I recommend it,claude-code-session,1
+852de82ca409b4a96eb6da9f7ee0a8c6,positive,product_quality,Excellent product,claude-code-session,1
+857a92ed91cea7afc2e85ee9bd10d69d,positive,general,good,claude-code-session,1
+86bdfd49a3dc7c0b788a2ee74c8da5e7,positive,general,I recommend it,claude-code-session,1
+8703985cb537ec4eed6d593fe1306fa3,positive,general,I recommend it,claude-code-session,1
+871f22b451b059f1248f0ad231cd46a0,positive,general,Excellent,claude-code-session,1
+884221421e4cf6604e23ac5994437ac3,positive,general,I recommend it,claude-code-session,1
+890741036be1b5864f14acc61eabaf69,positive,general,I recommend it,claude-code-session,1
+8944a074bce81688fe43eed3b0a4ff1b,positive,general,I recommend it,claude-code-session,1
+89aadb379f62b27ea618e7aac5f8bf05,positive,general,highly recommend,claude-code-session,1
+8a08891a718560ac69ae751df5f4e231,positive,product_quality,Excellent product,claude-code-session,1
+8a82511298d02b233295c17efec706c8,positive,general,Great,claude-code-session,1
+8a8f7d4b4040a2efaea6b0b82ce5fdd9,positive,general,Very good,claude-code-session,1
+8a93dbd1fa144865b279458cadd89937,positive,general,Excellent,claude-code-session,1
+8a9e6f4c8e36f5ddd272932ef6eb991b,positive,general,highly recommend,claude-code-session,1
+8b421bee1ae64511a74a0a92ecd7b8f3,positive,general,Excellent,claude-code-session,1
+8b46f9e835a1644a414a9753b1d9539d,positive,general,Excellent,claude-code-session,1
+8bb9d2e0c0bb8411780bbd85e3f90dc3,positive,general,Excellent,claude-code-session,1
+8bcf38bd4eb9c8968b5d235cf80f1fb8,positive,general,I recommend it,claude-code-session,1
+8bcf3b85c045ab0c569b86d80025c4b0,positive,general,good,claude-code-session,1
+8c92a5a9d5afb6cd3c159ff0e206de5f,positive,general,I recommend it,claude-code-session,1
+8ca20343768523e9ca3d863c7ac5a5bc,negative,delivery,I still haven't received the product,claude-code-session,1
+8d5136f879a9943dfff9cd26f0cb72c8,positive,general,good,claude-code-session,1
+8d60963b7afaf40d1ffc567acdd25788,positive,general,Excellent,claude-code-session,1
+8d79c90be907cfc8edd847132afb65f6,positive,general,Very good,claude-code-session,1
+8df49503e04a7c36e867c6f3ad4c7cd4,positive,general,I recommend it,claude-code-session,1
+8dfae1fe2a9c3f72aea5307330890838,positive,general,Very good,claude-code-session,1
+8e013361d151da50186977b66b94f7e2,positive,general,All good,claude-code-session,1
+8e6b26686f61b9a79169ac8e4da94f07,positive,general,I recommend it,claude-code-session,1
+8e9898499676308977b16c0c81459f2b,positive,general,good,claude-code-session,1
+8ead7241120bae53583e173de1b9841c,positive,general,I recommend it,claude-code-session,1
+8ee90ac383cf825bb7f4756130d4e74a,positive,general,I recommend it,claude-code-session,1
+8f036fc586e78d021d9261d335ea58b6,positive,general,Very good,claude-code-session,1
+8f059797646a41896a2e95faeed29855,positive,general,good,claude-code-session,1
+8f39f09c22b1ceb6e3eb178d8e50bb8a,positive,product_quality,I liked the product,claude-code-session,1
+8f5ff8e8ddbe26a6e10793fc7ada5f90,positive,general,good,claude-code-session,1
+8f807f7ea9b39f9de753ef283b5994a4,positive,general,Great,claude-code-session,1
+8fbd9b5bf6e46b1d1c725b71304ac6e3,positive,general,I recommend it,claude-code-session,1
+90123a2dfaa2c74f5d934a3b321c3388,positive,general,Excellent,claude-code-session,1
+909f547709f0490d934ac9427976e19d,positive,general,good,claude-code-session,1
+90cbdb2070d4c56fcef74121c3a99f73,positive,general,Thank you,claude-code-session,1
+90d076b745b3cbd6751be29af3dab7c9,positive,general,highly recommend,claude-code-session,1
+90f889c99110a31053af67e8ef06296c,positive,general,good,claude-code-session,1
+9110bbd14e46009baaac803def704f63,positive,general,Excellent,claude-code-session,1
+91232d3c6a19b14b1cff411c64e4bc88,positive,general,Great,claude-code-session,1
+91ee1b65e8c82862745c5a24b89c389f,positive,general,Great,claude-code-session,1
+9270946cbe24cf24ea0623abf8643cae,positive,general,good,claude-code-session,1
+92b9774992814a228660d86ad3555d79,positive,general,highly recommend,claude-code-session,1
+92f42f3770ad2d6d438a8e7cb7176cdc,positive,general,Excellent,claude-code-session,1
+93ef0537d1c0ffcef6f01c63b70ef3e1,positive,general,Excellent,claude-code-session,1
+9424c40b874811e23520ec92256cacd7,positive,general,Great,claude-code-session,1
+948c216751953fe2e36bd97c46b9189d,positive,general,good,claude-code-session,1
+94c3a8b54240c9cd574b74a2c2cd59a7,positive,general,Excellent,claude-code-session,1
+94ef9d80abee9a707311250ec867283f,negative,delivery,I didn't receive the product,claude-code-session,1
+959344772f4b07fe58eeed979c5a8fda,positive,general,I recommend it,claude-code-session,1
+9593fa3119c900684c60112fb44fa77a,positive,general,ok,claude-code-session,1
+95c44204c0b490257d1c34cfdc6e1cd9,positive,general,Very good,claude-code-session,1
+960f5f5e8c385403b3e5bff2a13a0b4c,positive,general,Excellent,claude-code-session,1
+965860af5215c0cfadbefffa508af386,positive,general,I recommend it,claude-code-session,1
+967105bbfebcd9101ec6c5442dc5866d,positive,general,I recommend it,claude-code-session,1
+968dc5dce4d6038b9f00f3987169237e,positive,general,I recommend it,claude-code-session,1
+96c1893afcd35ab70a4ab03216ca25df,positive,general,Excellent,claude-code-session,1
+96d1a70ba90d4f912c52d9faa8d608b2,positive,general,highly recommend,claude-code-session,1
+97ef51cad26b72e560847cf66c2b45c4,positive,general,Excellent,claude-code-session,1
+983cd7401e67bce678ffa8b6856a0ae8,positive,general,Great,claude-code-session,1
+989d142eb0b67da1e7942fdfa9a92cc6,positive,general,Very good,claude-code-session,1
+9a34700b85ee3408487fa555dfad57d4,positive,general,Very good,claude-code-session,1
+9afd160ca68dac6dc38317da96e3a283,positive,general,Great,claude-code-session,1
+9b2f3fd8ba6aef76b880db3a193115e7,positive,general,good,claude-code-session,1
+9b403c384717779464e1122abcbe662a,positive,general,Excellent,claude-code-session,1
+9b96c3b8111dfaf0ffc68f00e46f6edf,positive,general,Great,claude-code-session,1
+9c04fb7fa87a3769c9e85e09ec8e9225,positive,general,highly recommend,claude-code-session,1
+9c07619194c444eb9121cc8bb6d3c809,positive,general,Excellent,claude-code-session,1
+9c3bc1e2da0f463f1f627628984e3c6b,positive,product_quality,Excellent product,claude-code-session,1
+9c4ce888a4317d4dab21e9e5cf172764,positive,general,I recommend it,claude-code-session,1
+9d072345683f81d70fd3cee21aa87b0e,positive,general,Very good,claude-code-session,1
+9e399648150ab8ced0c1f005dc30c22c,positive,general,highly recommend,claude-code-session,1
+9e51d3dcb9189e57ff2025c80d830a91,positive,product_quality,Excellent product,claude-code-session,1
+9e84dd7f70cbd080cea84111105c9277,positive,general,Excellent,claude-code-session,1
+9e9804e5cdb4ba2e2631f862630e71c8,positive,general,Excellent,claude-code-session,1
+9e9cd47057bc1f3a2aaf5343c3895358,negative,delivery,I didn't receive the product,claude-code-session,1
+9fb40911b4fd46e3892da8fdc7dbe5c0,positive,general,I recommend it,claude-code-session,1
+a014c8fc539f3c0a656140f2ccc808dc,positive,general,Very good,claude-code-session,1
+a03176b88ecc17df44de72adaad2d02b,positive,general,I recommend it,claude-code-session,1
+a09d236fe6739f2940a58603f77bcbe9,positive,general,Excellent,claude-code-session,1
+a0fd8c3a55a132f0fe064951cb814199,positive,general,Good — Good,claude-code-session,1
+a11e466b9b7df7438377db429f53a093,positive,general,I recommend it,claude-code-session,1
+a17490c0a8ee2205c77f4d6425992b82,positive,general,I recommend it,claude-code-session,1
+a1a7e298cf848d21ba01b661092700b5,positive,general,Great,claude-code-session,1
+a23485921d63d86ae2661ece8c46ade2,positive,general,Excellent,claude-code-session,1
+a28aeebb1f244b33152c51ec14701067,positive,general,Excellent,claude-code-session,1
+a35901ae6fa34515bce25959b6219d6e,positive,general,good,claude-code-session,1
+a35cca2abb31df8bd9c12fab7b28b386,positive,general,ok,claude-code-session,1
+a3f62b179aae4a5073cbdf9f0043730d,positive,general,Great,claude-code-session,1
+a4a39dfd5eb2ae841c19322ea4707a5c,positive,general,highly recommend,claude-code-session,1
+a4c7eb6a315cb6b19fa707acd551b4f8,positive,product_quality,I liked the product,claude-code-session,1
+a5a5abfdd989074bf4f611ece18391c7,positive,general,I recommend it,claude-code-session,1
+a653bacfeca91ba1b038b77a5d8781ab,positive,general,Very good,claude-code-session,1
+a68456b8a4a3503a437925c4c09dd8f8,negative,delivery,I still haven't received the product,claude-code-session,1
+a6aa345063f03676c3bec224faa02025,positive,general,Very good,claude-code-session,1
+a6ff8437390fe3f3c9f82b6458220bd8,positive,general,Excellent,claude-code-session,1
+a774e4578f59c7903dc319b0fbdf1dec,positive,general,highly recommend,claude-code-session,1
+a7f429b36c9c6b489a4ea60ac6055f6e,positive,general,Very good,claude-code-session,1
+a92e95d024dfea1bb634408fbebda56f,positive,general,ok,claude-code-session,1
+a9628a8ae3b1da725ec12fa3242074ac,positive,general,good,claude-code-session,1
+a9ff8e172b2035fbcd87a5a2fc23bd2d,positive,general,highly recommend,claude-code-session,1
+aa33316085baa2193e64fa96bdeb820c,positive,general,Very good,claude-code-session,1
+aa76ac21c2942336ee0f8d03ff7417d9,positive,general,ok,claude-code-session,1
+aa8f41f6f9838dc3614508a26bb72a5c,positive,general,good,claude-code-session,1
+ab2c6410f12ea387b1f17844cccb0dc3,positive,general,Excellent,claude-code-session,1
+ab686c82979cd8732f416cb75945057d,positive,general,Excellent,claude-code-session,1
+ab72a42e8fcc2ca059eaeca87486a8e2,positive,general,Great,claude-code-session,1
+ab9ec8ef7268c796bad267708799ada0,positive,general,good,claude-code-session,1
+abad27856efa9e0a834fdb925331c55f,positive,general,Very good,claude-code-session,1
+ac65a37e48cfe74d3cb66030969646ef,positive,general,Reliable,claude-code-session,1
+ac984e63e3c481c2cf2ea0281086727f,positive,general,good,claude-code-session,1
+ad02852bc65ab9c7ddec9303e434cf66,positive,general,Excellent,claude-code-session,1
+b00b82bd0c997c5715c57bbc06215faf,positive,general,good,claude-code-session,1
+b012e7400b27db2e401c6e1a965f4d5c,positive,general,Very good,claude-code-session,1
+b02e0af84acd151dcf47c210495552ee,positive,general,Very good,claude-code-session,1
+b0307ed079839fa07012532189101bdf,positive,general,I recommend it,claude-code-session,1
+b03c2cf5a30d239f327f41e45592e2c2,positive,general,All good,claude-code-session,1
+b085317db08b64d8f36cbcc729b1aa20,negative,delivery,I still haven't received the product,claude-code-session,1
+b0928461a70a3a0645db54477e4c5918,positive,general,Great,claude-code-session,1
+b1c18045cdea093ef77d2846e9b3c752,positive,general,All good,claude-code-session,1
+b1f664b9e9a27efa86edb451203f275b,positive,general,Excellent,claude-code-session,1
+b2038db1de793712d98dc3ce5a48bf8e,positive,general,Excellent,claude-code-session,1
+b2164d232f9aadcaa9d520540d520143,positive,general,I recommend it,claude-code-session,1
+b34d71e4fc7ecd3e60ee3e23a545b493,positive,general,I recommend it,claude-code-session,1
+b37bf5dd5be243dae83bcd68657d2637,positive,general,Excellent,claude-code-session,1
+b400500807826ffe73a3475f6c1ee085,positive,general,Very good,claude-code-session,1
+b4256a94b81ab1a53b679555e3d22155,positive,general,good,claude-code-session,1
+b482cd2d64d4772b210e0b50717bbafd,positive,general,Very good,claude-code-session,1
+b502cc2bc4379e01f67cb83e2837f64e,positive,general,Excellent,claude-code-session,1
+b5853ce4c9132640083c8d95fd78d6d1,positive,general,Excellent,claude-code-session,1
+b592add1059eba9cf1f1d855e6501378,positive,general,Great,claude-code-session,1
+b5a25f6c2dcfc5b3239fd61c5f78e724,positive,general,Excellent,claude-code-session,1
+b5c6d730fb01cc66c77127a4bd35ba71,positive,general,Great,claude-code-session,1
+b673ee6fabf829465e77c3f21515a045,positive,general,I recommend it,claude-code-session,1
+b6cf2e8e7ce483d86ec9b949109e90c9,positive,general,Great,claude-code-session,1
+b878b0ee12fa820dff36ae9560e8e744,positive,product_quality,I liked the product,claude-code-session,1
+b8b1ee3a608d0873b8322974cb13ba82,positive,general,All good,claude-code-session,1
+b8bc1289212376da34e2ef18096ad0a4,positive,general,ok,claude-code-session,1
+b977b767d10b380552343a815b19a490,positive,general,Excellent,claude-code-session,1
+b97deb3eddbb0cdb6d923e1bc49e5a6c,positive,general,highly recommend,claude-code-session,1
+b998ffae0b0f52cc8fc0dab10ba27867,positive,general,All good,claude-code-session,1
+badf5737082b8167958fa3a98937bb74,positive,general,Great,claude-code-session,1
+bae403edc27e1338ac3613cee9887387,positive,general,Excellent,claude-code-session,1
+bbbbf9d34a844ae6b6ce9a007152e878,positive,general,Excellent,claude-code-session,1
+bc0a4a43a1142914892a0d8bb09afef1,positive,general,Excellent,claude-code-session,1
+bc358d1e006292207d4c442bdef51ca7,negative,delivery,I still haven't received the product,claude-code-session,1
+bc9b6f65b91d4ee528fb6f832f8844b4,positive,product_quality,I liked the product,claude-code-session,1
+bcf299f827ce948bc714d70bf959fb54,positive,general,Excellent,claude-code-session,1
+bd36bdf8eae917c01df98849d09d17e0,positive,general,ok,claude-code-session,1
+bd8fd9d593911a1e9148e17e4e1ea850,positive,general,highly recommend,claude-code-session,1
+be09c3eba0a43ebabc989aec8cc7c745,positive,general,Great,claude-code-session,1
+be09dbe20f12f06d1405334b2b83f3db,positive,general,highly recommend,claude-code-session,1
+be457bd45f5bb9637ad8b46cee6c190c,positive,general,I recommend it,claude-code-session,1
+be68d8554abdc79cf83489d3b5237314,positive,general,Great,claude-code-session,1
+bf0fe26e2223437091de18be93197322,positive,general,Thank you,claude-code-session,1
+bfa3457fbf1a9ec968ffaf00896d785d,positive,general,highly recommend,claude-code-session,1
+bfbf86a0b08c57692665b1db237a4d74,positive,general,Very good,claude-code-session,1
+c0076777c50213c42808096fc13646d4,positive,general,Thank you,claude-code-session,1
+c0493135532d60097e51d31b4590d69c,positive,general,highly recommend,claude-code-session,1
+c0d59da25835eb355eefd01f1900dd3d,positive,general,Excellent,claude-code-session,1
+c1369a4227b44deebea235c9f7d16681,positive,general,good,claude-code-session,1
+c19e99d7f3ad187f5b6546323db3e05b,positive,general,highly recommend,claude-code-session,1
+c1a45d4892b236eefe0bfd8eef8ed9b7,negative,delivery,I still haven't received the product,claude-code-session,1
+c1bb88345a3dd83005d4a98fb79c3c21,positive,general,I recommend it,claude-code-session,1
+c1dd7c6a2154caaf1a6accd68842286f,negative,delivery,I didn't receive the product,claude-code-session,1
+c2d3df6d830da3fa12eaf7afcf679ac2,positive,general,I recommend it,claude-code-session,1
+c2d4c743f59da4387c683f290290395f,positive,general,good,claude-code-session,1
+c389d8d71b19df91ffac9f8e07bd7177,positive,general,Excellent,claude-code-session,1
+c405acae17f1a8c3b62268169acf1fc0,positive,product_quality,I liked the product,claude-code-session,1
+c4d1ab7bee774784d8c5bdb8d3cdea7c,positive,general,ok,claude-code-session,1
+c4d963cbe0e28ca5b056ee360a8cfede,positive,general,Excellent,claude-code-session,1
+c5a65c97b8ae6b86c640066e37a93269,positive,general,highly recommend,claude-code-session,1
+c608100b7cd5d0116f98c82f54f1c734,positive,general,highly recommend,claude-code-session,1
+c66baeb7bc70f386f5c1af213b424c03,positive,general,Very good,claude-code-session,1
+c676e266b6c4ce909594f2f144f2a236,positive,general,I recommend it,claude-code-session,1
+c68fa5a1ea35d299926e827398988358,positive,general,Excellent,claude-code-session,1
+c6e4d91f3571d3ab396325f11391d019,positive,general,I recommend it,claude-code-session,1
+c75e1a52f511c783a9555f53ba021603,positive,general,I recommend it,claude-code-session,1
+c79abf25358bfa951ed1bd0fb69c48a0,positive,general,Very good,claude-code-session,1
+c86e8179a793c440919fc814e1c7c719,positive,general,Very good,claude-code-session,1
+c924187e79f18d9cb9288f568c5130a1,positive,general,Excellent,claude-code-session,1
+c95ecec5fcf5cd3f105db6e7c189ef03,positive,general,Excellent,claude-code-session,1
+ca028d3fececc1734938b253a7b5c83a,positive,general,I recommend it,claude-code-session,1
+ca42222c6a1f0e9f8dcce635f3d09cc5,positive,general,I recommend it,claude-code-session,1
+caf10f6e0393abadc1365834503fcdc7,positive,general,Very good,claude-code-session,1
+cb327e42a9846e9044a502ae43848fcb,positive,general,All good,claude-code-session,1
+cb6097b53f2d6ceba3c58379e39c2cf7,positive,general,Very good,claude-code-session,1
+cba3d807ed74f27b91a5bb2f5bf87288,positive,general,ok,claude-code-session,1
+cbc839b05f409e7e780a450b0bd64feb,positive,general,good,claude-code-session,1
+cbe80edd1398bdb1741a50093abc6819,positive,general,I recommend it,claude-code-session,1
+cd3a06bc65317c6680f5f2ee72cb1651,positive,general,Very good,claude-code-session,1
+ce7424acb7f3b8b6cbef225c90598cf1,positive,general,highly recommend,claude-code-session,1
+ce9692056afafc0df02dfee8b218b6e5,positive,general,highly recommend,claude-code-session,1
+cf0688ba808483ed4e44522bec5e85ff,positive,general,Excellent,claude-code-session,1
+cf89cf129edd8c5fa00dcbc2bc2ea22b,positive,general,Excellent,claude-code-session,1
+cfa68469f3a1a93aaa6a84933913fbef,positive,product_quality,I liked the product,claude-code-session,1
+cfd88d3bd2dd6a8daa5f0f6dc8f1c8cb,positive,general,highly recommend,claude-code-session,1
+cff30f0240868bc8be0128bdd3a34ff0,positive,general,ok,claude-code-session,1
+d105ad7a6e2fcc1cd61044d367dca9e3,positive,general,Excellent,claude-code-session,1
+d14547b40093d513bb98951fc4fb29c4,positive,general,Excellent,claude-code-session,1
+d2548a1a1f014d2c08d7989334b8b067,positive,general,good,claude-code-session,1
+d28f5a8276418e2c329b2909b7d66254,positive,general,Excellent,claude-code-session,1
+d2ed4af6b1bc14935f4dc69740fa2f91,positive,general,Great,claude-code-session,1
+d3da51f8af3df9e05a6270b4d1082d8b,positive,general,Very good,claude-code-session,1
+d3e3b5b310764a168041ee9b6c5ce024,positive,general,I recommend it,claude-code-session,1
+d3f3a46f8e0c3bc10a18bea68e1c9dee,positive,product_quality,I liked the product,claude-code-session,1
+d47aa070748c52a219d77f7f33087c8a,positive,general,Excellent,claude-code-session,1
+d488e99d217422de7a7d861bc1baad6d,positive,general,good,claude-code-session,1
+d5a11d6fc67560e0d0b3d45fd40cedf9,positive,general,I recommend it,claude-code-session,1
+d5ae8c6ca641b63af4abe1caee78e7e4,positive,general,ok,claude-code-session,1
+d5d01007883616401b65674911160c82,negative,delivery,I didn't receive the product,claude-code-session,1
+d5e33e8aeb879775abff41e1d98c73ca,positive,general,I recommend it,claude-code-session,1
+d6d5c4f6a64c5fccf2c3b7bbbe6143b2,positive,general,good,claude-code-session,1
+d71d9f67138ec03bfc0a7e6ccfd6046c,positive,general,Very good,claude-code-session,1
+d74af6796c0b4e9a1c01e06887d6ef04,positive,general,All good,claude-code-session,1
+d7b4e9d9c4c46dd60c9a371262215ad6,positive,general,Excellent,claude-code-session,1
+d7d0ab7e1c13c9437418aa3865cff50e,positive,general,good,claude-code-session,1
+d826ec40de27669548f70a58d33828ea,positive,general,I recommend it,claude-code-session,1
+d850105f64ea5476c43bacbbd85e8492,positive,general,Very good,claude-code-session,1
+d885e62048b8fb6c6d2745aa92dfefff,positive,general,All good,claude-code-session,1
+d8ab64a06366d369a9cdbed694e7ee93,positive,general,highly recommend,claude-code-session,1
+d8bc2f26a348e105a5149df147639606,positive,general,Excellent,claude-code-session,1
+d904f35b3c1a0ff67030badb4d580159,positive,general,Excellent,claude-code-session,1
+d91c3b7b625b28b8c31f524325d608e9,positive,general,good,claude-code-session,1
+d9a31dd7a3468c854ce7b85ce09fb2d9,positive,general,Excellent,claude-code-session,1
+da22cc8c90330e809ab7d410fdef7472,positive,general,Very good,claude-code-session,1
+da317947e7c9cbb0d2fed0b7df01518d,positive,general,I recommend it,claude-code-session,1
+db00b2e73144b04f2a1fc5945d673d12,positive,general,good,claude-code-session,1
+db04587526e06bd671019232adfc6c5e,positive,general,I recommend it,claude-code-session,1
+db063abaea1a4d01e4b3587b9ce61b4e,positive,general,"very good, I recommend it.",claude-code-session,1
+db86657e81b2320f1ba3809db698f7f0,positive,general,good,claude-code-session,1
+dc5cb1127f1c003986e3a5d29dc9e542,positive,general,I recommend it,claude-code-session,1
+dc8d180bb1ae7ddda2e90ed68dd99b00,positive,general,Excellent,claude-code-session,1
+dd1a679171d8305f52a1732f4eaa23a1,positive,general,Great,claude-code-session,1
+dd2b29b991a7bab84297ce2b1f1c040c,positive,general,good,claude-code-session,1
+dd692a79b9fa87f4984a41ec1b5198c5,positive,general,Very good,claude-code-session,1
+de269973ceb3226a4d4e76ac49b31fec,positive,general,ok,claude-code-session,1
+df41908a9d2a09315f4dab665b3b81c6,positive,general,good,claude-code-session,1
+df930a1619165132f8833ca42fd93c52,positive,general,good,claude-code-session,1
+dfb5e52018aa9f1927a51d2039d25d38,negative,delivery,I still haven't received the product,claude-code-session,1
+e005dfce4c6e17daad4b40daa124acb3,positive,general,Excellent,claude-code-session,1
+e0c0b8342e4353b9dd2307ad4f3aafc5,positive,general,highly recommend,claude-code-session,1
+e1138f8b6ac36e61a4737cfb17c4e171,positive,general,Excellent,claude-code-session,1
+e19b66cb13d13c0c28ea904f0211a155,positive,general,Very good,claude-code-session,1
+e28899ec3ac1f433eea8d31d2d43499b,positive,general,highly recommend,claude-code-session,1
+e336841d44687fd3f390d056f9cecf4b,positive,general,I recommend it,claude-code-session,1
+e3a9d3f42d8e988b2f42f4ebc7bf3a70,negative,delivery,I still haven't received the product,claude-code-session,1
+e3f6e66766a090900c55da5adf122cd0,positive,product_quality,Excellent product,claude-code-session,1
+e508fca0957abb00732b753744709263,positive,general,Very good,claude-code-session,1
+e527d7584a756cd8c9f09079a3239657,positive,general,good,claude-code-session,1
+e61a8dcd8e87cea39fc1282901d9977d,positive,general,Great,claude-code-session,1
+e61e8d30ea0b71cafbcf224a1e5fc165,positive,general,I recommend it,claude-code-session,1
+e6b3e88787d4daeb1771b51313c12442,positive,general,All good,claude-code-session,1
+e6c2985710ac7b90b27c6b024f28d546,positive,general,Thank you,claude-code-session,1
+e7c00b1c357fdd0634f24e247aabf9ab,positive,general,I recommend it,claude-code-session,1
+e809f12fc29a508675a59aeb6dd62a2f,positive,general,good,claude-code-session,1
+e8aa60342cb8617fae0681f1eb7f3e1b,positive,general,ok,claude-code-session,1
+e91b2931bc420bfee19c94fc5c23558a,positive,general,Thank you,claude-code-session,1
+e9c95c90b86e47378dd097b23d9c4745,positive,general,good,claude-code-session,1
+e9d10aa6e571d8e8fb65f482f36c33f2,positive,general,Thank you,claude-code-session,1
+ea07a5a893db80cb71d7108b1427a1e3,positive,general,good,claude-code-session,1
+eae4d3acf96a4bd21f4b2330af4c27de,positive,general,Excellent,claude-code-session,1
+eb1803112d768b184b73e030a4a9fdaf,positive,general,Excellent,claude-code-session,1
+eb18102b268e9dbb8bf57fe19c9b270f,positive,general,good,claude-code-session,1
+ec1daab134d82e1219c513e90c9b0a44,positive,product_quality,Excellent product,claude-code-session,1
+ec52db7c6aaf00d0b9ab76477c3c161f,positive,general,good,claude-code-session,1
+ee1ffee0838a25c55d67b49bf6aa3a08,positive,general,All good,claude-code-session,1
+eec5196aa1c31f158a23cce8ec674a1c,positive,general,highly recommend,claude-code-session,1
+ef753d7d44c4a4052a3489dc8bc2a1b6,positive,general,Excellent,claude-code-session,1
+ef7f3216de3ac3554754e1b242f8da47,positive,general,Excellent,claude-code-session,1
+f047e6db79ab35bc053b614fcb557467,positive,seller_service,Good — Good service,claude-code-session,1
+f04a4a665bb80d73cbf41988a16607e8,negative,delivery,I still haven't received the product,claude-code-session,1
+f06f0fc6d467ff153efda1f657333f42,positive,general,Excellent,claude-code-session,1
+f08a60aa9a4cf3a1ba2fdc5d99b6d640,positive,general,I recommend it,claude-code-session,1
+f0a68621a571cbbd0277e944f0fd3ff2,positive,general,good,claude-code-session,1
+f0b329c38f9a842f40b22fe379c5e621,positive,general,I recommend it,claude-code-session,1
+f0b6ede24d7073851a57c4af0aa6a588,positive,general,Excellent,claude-code-session,1
+f1573faf0d44fe13db3b7198bbf4941a,positive,general,Excellent,claude-code-session,1
+f18cb3fafa998605fd318f4774511367,positive,general,Excellent,claude-code-session,1
+f207c376fad3e099bf6aedb8535fc387,positive,general,good,claude-code-session,1
+f24549bbf539584168bcd7616f978072,positive,general,All good,claude-code-session,1
+f30d1e161a1be3cc5aeed7eccbac45f1,positive,general,Great,claude-code-session,1
+f374fe11ad7189b6a30e5268f28aa88e,positive,general,I recommend it,claude-code-session,1
+f4b7853beb907657dd5abf351fb5c4c4,positive,general,Great,claude-code-session,1
+f542d0ff698f5272fbd13deca2349582,positive,general,Excellent,claude-code-session,1
+f59631a937359687e45e7ec56fd6cfed,positive,general,Excellent,claude-code-session,1
+f59ac1b064c9e63d44ff12fef1462aa8,positive,general,good,claude-code-session,1
+f5a553f2fef08603b401a73b4d20492d,positive,general,I recommend it,claude-code-session,1
+f5c73ef8083393b7e4d81f229a0f70b2,positive,general,I recommend it,claude-code-session,1
+f5eb643a65f9bbfaa614a8a03444d70d,positive,general,Excellent,claude-code-session,1
+f64fed293ce75dd6d750a1c92f731885,positive,general,Great,claude-code-session,1
+f66cb83b029c4201b3dd53aee62b43a7,positive,general,ok,claude-code-session,1
+f8773f92d36ed70f8c19b45ec3f6f7d6,positive,general,highly recommend,claude-code-session,1
+f902aa90a9454cd53768df236dbaa199,positive,general,I recommend it,claude-code-session,1
+f9827d75abd72e9977171c96bd99cc8c,positive,general,good,claude-code-session,1
+f9cb949ee07303dd0f8d8ee6fa225950,positive,general,good,claude-code-session,1
+f9e19d6b58c242f8ef635c90366b3cd7,negative,delivery,I didn't receive the product,claude-code-session,1
+fa93ccb6be83a4fe024c7bb36558fd95,positive,general,Excellent,claude-code-session,1
+faaae70dcaf2e1aaf1999954712ef1eb,positive,general,ok,claude-code-session,1
+fb313f1f7f4fed494e189ad5f55ef705,positive,general,Very good,claude-code-session,1
+fb4ab98a489df62251c3b60ca1224193,positive,general,It met my expectations,claude-code-session,1
+fb62618eb91a3f70700b977b8440bbdd,positive,general,Excellent,claude-code-session,1
+fb6a8298e4b24181a98bede4b727d090,positive,general,ok,claude-code-session,1
+fb7ca9f45b31c3abc8a872c659c851d7,positive,general,good,claude-code-session,1
+fbe0f722b43c2d1fb86251a84b224363,positive,general,Excellent,claude-code-session,1
+fd28001993786b93c7fe5fcaf5485ed9,positive,general,Excellent,claude-code-session,1
+fd624a1c6a9c8701e8efcab3244cd069,positive,general,All good,claude-code-session,1
+fe0fc248b83f8c834bb072a579d3129d,positive,product_quality,I liked the product,claude-code-session,1
+fe19f7b9541d67c84b9de203ba740c3d,positive,general,highly recommend,claude-code-session,1
+fe655e924c70b836434e6f42cf7e5e1e,positive,general,Very good,claude-code-session,1
+fe876f98cc5a7495fbbc17aee29fbc81,positive,general,I recommend it,claude-code-session,1
+ffd061a16dbfd7885b6d1764e1972b5b,positive,general,Excellent,claude-code-session,1
+fff879e16f5afcc79d31222c02801549,positive,general,I recommend it,claude-code-session,1

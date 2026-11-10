@@ -1,0 +1,114 @@
+# Input contract of the Olist commerce data product (../olist-commerce.odps.yaml): the
+# review labels, the product's second input. Not from Olist: CSV batches kept in the repo
+# (ingestion/review_labels/), labelled by a Claude Code session following the guidelines
+# there, loaded by ingestion/pipeline.py whenever the files change (D92). Checked with
+# `datacontract test` after every CI ingest, like the raw Olist tables.
+apiVersion: v3.1.0
+kind: DataContract
+id: review-labels
+name: Review labels
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    Sentiment, topic and English translation of each Olist review text, so the product can
+    say what customers write about, not only how they score.
+  limitations: >-
+    Labelled by an LLM (Claude Code), not by people: a hand-checked gold set of 300 reviews,
+    the rest by scheduled sessions following the same guidelines. One label per review text;
+    identical texts share it. Reviews without a title or message have no label.
+  usage: >-
+    Read by dbt staging only (transform/models/staging/labels). Consumers use
+    `fct_review_topics` on the marts port.
+tags: [olist, raw, labels, llm]
+
+team:
+  name: olist-analytics
+  members:
+    - username: aliaksandr.letsko
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: raw
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: Loaded by CD on every merge to main that changes the label files.
+    project: olist-analytics-dbt-472315
+    dataset: raw
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Loaded by the local Airflow's ingest when the label files changed.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_raw
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: Loaded by the weekly Databricks run into a per-run schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_RAW_SCHEMA}
+
+schema:
+  - name: review_labels
+    physicalName: review_labels
+    physicalType: table
+    description: One row per review id with a title or message.
+    properties:
+      - name: review_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: sentiment
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [positive, negative, mixed, neutral]
+            mustBe: 0
+      - name: topic
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [delivery, product_quality, wrong_or_missing_item, seller_service, general, other]
+            mustBe: 0
+      - name: translation_en
+        logicalType: string
+        required: true
+      - name: labeled_by
+        logicalType: string
+        required: true
+      - name: guidelines_version
+        logicalType: string
+        required: true
+      - name: labels_sha
+        logicalType: string
+        required: true
+        description: Short sha of the label files this load came from; the loader skips a load when it is unchanged.
+      - name: _loaded_at
+        logicalType: timestamp
+        required: true
+        description: UTC time of the dlt run that wrote the rows.
+    quality:
+      - type: library
+        metric: rowCount
+        mustBeGreaterThan: 0

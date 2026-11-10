@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
-PAGES = ["views/overview.py", "views/delivery.py", "views/customers.py", "views/cohorts.py"]
+PAGES = ["views/overview.py", "views/delivery.py", "views/customers.py", "views/cohorts.py", "views/reviews.py"]
 
 
 @pytest.mark.parametrize("page", PAGES)

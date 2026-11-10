@@ -182,7 +182,8 @@ def has_new_orders(ti, params) -> bool:
     if previous is not None and previous.state == "failed":
         print(f"Previous run {previous.run_id} failed: building again")
         return True
-    return status["orders_loaded"] > 0
+    # New review labels (D92) change raw without new orders
+    return status["orders_loaded"] > 0 or status.get("labels_loaded", 0) > 0
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"

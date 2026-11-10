@@ -1,0 +1,120 @@
+review_id,sentiment,topic,translation_en,labeled_by,guidelines_version
+04fcdc70fc4ef992e85666d65c19e853,negative,wrong_or_missing_item,"The four bracelets are missing..
+only 3 bracelets came in the package..
+I made two purchases.. one of a kit of 3 bracelets and another with a kit of 4 bracelets..
+only the kit of 3 bracelets arrived..",claude-code-routine-haiku-5-5,1
+0a787db36134f23df956e82a4a160172,positive,delivery,The product was delivered within the deadline; products working perfectly... nothing to complain about.,claude-code-routine-haiku-5-5,1
+0aa5165ae32b99f58cffdba2f9b5cfec,positive,product_quality,I recommend. Products of excellent quality.,claude-code-routine-haiku-5-5,1
+0f7968cb9e1991c40b4f092cd966bf68,positive,general,Everything as advertised! I recommend!,claude-code-routine-haiku-5-5,1
+0f7dda01ef285792786f337afc122956,negative,delivery,Good morning. I bought 2 products: 01 ceiling fan that I still have not received. and a squime filter that I went to pick up at the post office even though I paid for shipping.,claude-code-routine-haiku-5-5,1
+1132c09339698963ce816678bc71fbb9,positive,seller_service,"Very agile service, easy to navigate the site and delivery before the indicated deadline.",claude-code-routine-haiku-5-5,1
+12dfedb3f8951d7d2fcdd67154760839,positive,delivery,"My order was delivered in record time, I recommend that everyone interested in the product buy it without the slightest fear.",claude-code-routine-haiku-5-5,1
+14cbabf3490837a3af22eb045eed5f40,negative,wrong_or_missing_item,"I did not receive a product — I bought a thermos bottle and a mattress cover and did not receive the cover, I already tried to contact but got no reply.",claude-code-routine-haiku-5-5,1
+1d05fc92b63e46f67761f2a33053fb64,mixed,other,"They opened it, made the invoice disappear, but it was not drugs! It came in a Maggi box.",claude-code-routine-haiku-5-5,1
+1e17b847146d8ec8751ff2959a0043cc,positive,general,Everything as expected. Normal negotiation.,claude-code-routine-haiku-5-5,1
+1eb7a0040532e7ec9971202a986b82c6,negative,product_quality,"I received the skateboard with two damages.
+The safety kit is of poor quality and completely faded, besides the skateboard having a character for boys and the safety kit being pink.....
+I am very unhappy.",claude-code-routine-haiku-5-5,1
+1f8b94e577cfcd96218273a824fc594f,negative,wrong_or_missing_item,"Wrong product — I did not receive the product I bought, another smaller and different model arrived, and I cannot get in touch with the customer service of the lannister.com stores to make the exchange. Awaiting a reply.",claude-code-routine-haiku-5-5,1
+26ef50b9e07c623a64a744d2141607d7,positive,delivery,"Received on time, very good product.",claude-code-routine-haiku-5-5,1
+2857f758858ba75d551a9944f0ec01c9,positive,product_quality,Good quality product and it arrived before the expected deadline.,claude-code-routine-haiku-5-5,1
+2a87b7df4f64481f0db340b1196ab9fc,negative,delivery,"I would like to know what happened, the deadline they gave me was until the 19th and still nothing.",claude-code-routine-haiku-5-5,1
+2c5577f3f7b2a4ad5107476506a17ffe,positive,delivery,Congratulations!!!! It arrived even before the mentioned deadline. I was very happy. Thank you!,claude-code-routine-haiku-5-5,1
+2cea41cfbf4bd5cf5dbf24c517018cea,negative,wrong_or_missing_item,"I want to exchange my product, it came in different sizes.",claude-code-routine-haiku-5-5,1
+2f12be2149ce7262554400a7c248c741,positive,delivery,"Product delivered before the deadline
+No problems
+I recommend",claude-code-routine-haiku-5-5,1
+2f1e42b6258830fc66f2114476e96c82,positive,delivery,"I recommend, very fast delivery",claude-code-routine-haiku-5-5,1
+31e60ea253684567293ba02673d47914,negative,wrong_or_missing_item,The product was not delivered as advertised. A different product of lower quality was delivered. Awaiting contact from the store to clarify what happened and instructions for the exchange.,claude-code-routine-haiku-5-5,1
+33832559f86d20ed00eb46e48c6c111e,positive,general,Great...satisfied,claude-code-routine-haiku-5-5,1
+352bbd4287a2842d324d4f82d573c546,positive,delivery,super recomendo — arrived on time and was what I really expected,claude-code-routine-haiku-5-5,1
+35ae251380ed456cad351fdf80beeb88,negative,other,"I just think I could have bought more cartridges, but I did not, because each cartridge came in a different shipment, which could have been put in a single package, which would have made the shipping cheaper.",claude-code-routine-haiku-5-5,1
+364aacc8e25e103b242a31097b2421d1,negative,wrong_or_missing_item,"confusing, wrong delivery, I am waiting for the correct products.",claude-code-routine-haiku-5-5,1
+392a31bd42bb17cd0f0dd2e881533e40,mixed,delivery,"The product was delivered within the deadline, but a bit outside the standard that baratheon delivers.",claude-code-routine-haiku-5-5,1
+395eb0e825826b3a7d4bb24950dcf482,negative,product_quality,"I am trying to exchange this product, the quality is terrible..the safety kit is for 14 years old..and it indicates it is children's..my children are 6 years old..the print came different from what the image shows.",claude-code-routine-haiku-5-5,1
+3b1dec2919e5f82151051acacd51233b,positive,delivery,"The delivery was fast and it arrived very well packed. The product is multipurpose. It serves to tone, massage and even sand.",claude-code-routine-haiku-5-5,1
+40672bd44d0ba3a9b28bd217be5113cc,negative,seller_service,"I no longer want this purchase, a refund is needed because I cancelled",claude-code-routine-haiku-5-5,1
+4523ca1676810fe72fd6a0342b3f8351,mixed,other,Bom serviço — Demorou um pouco pra atualizar as informações no site fora isso a compra foi tranquila e o produto entregue no prazo.,claude-code-routine-haiku-5-5,1
+46d22bfca604df5b0fd8e58962ecf0cb,negative,delivery,the product's box arrived broken.,claude-code-routine-haiku-5-5,1
+47629364b854b273099f2b6c36bddc0b,neutral,delivery,received,claude-code-routine-haiku-5-5,1
+4a269c8717c558b2b04d56a4f2031290,positive,delivery,"Elogio — Arrived before the deadline, excellent product, I have not used it yet, but I can already see that I am going to like it!",claude-code-routine-haiku-5-5,1
+4d311964abc4738ba75b299b5b89dffa,negative,delivery,"So far I have not received my product, and the purchase status shows the product as delivered, and now I want to know how to proceed.",claude-code-routine-haiku-5-5,1
+4e9abe9089cf9049a144f94ece070330,positive,product_quality,Product with quality,claude-code-routine-haiku-5-5,1
+5247997bc84587c8125a38b3c9562a30,negative,delivery,I did not receive the product!,claude-code-routine-haiku-5-5,1
+547ab0d2fd43f5933238d8a7c9eb807e,negative,wrong_or_missing_item,I received a different product in place of the one I bought. The invoice is in another person's name. Now I have to check how I will do the exchange.,claude-code-routine-haiku-5-5,1
+553ffc8e04f4b493b9d9a2012c278017,negative,wrong_or_missing_item,"I bought a table and another one that has nothing to do with my order came. I cannot get in touch to return it and the deadline is running out. I do not recommend it. Do not buy, it is a scam. Terrible store.",claude-code-routine-haiku-5-5,1
+5c2714f9a02aacb52c57d43dc13662e4,mixed,wrong_or_missing_item,Mistakes happen. I would not stop recommending the store for that. But I bought a white voice amplifier and would have liked to receive it in the colour I asked for. Is it possible to exchange this product?,claude-code-routine-haiku-5-5,1
+60071d11583797c0886483a9ecf4dfb5,negative,delivery,I need it and it has not arrived.,claude-code-routine-haiku-5-5,1
+61a7a644de263a932ea622dcb4a7c348,negative,delivery,"I would not simply recommend it, because the shipments could have the same problem as mine.",claude-code-routine-haiku-5-5,1
+627789e741d234f5effaf419f7d983f3,negative,wrong_or_missing_item,"I received it and kept the goods because I needed them very much, but I think they sent it wrong, in the photo when I bought it showed 2 places, shoe rack and shelf, but it came missing,",claude-code-routine-haiku-5-5,1
+68cb286743b81e363127f87b13ebd5c6,negative,seller_service,Falta confiabilidade — Not reliable,claude-code-routine-haiku-5-5,1
+6996e2de80d04c25e8bb8a3543a91262,positive,seller_service,"That's it, our partner is 10, in Motorola accessories.😀😀😀",claude-code-routine-haiku-5-5,1
+6e2538f4f6cd6de27c37ed5d56c402a7,positive,product_quality,IT IS PRETTY!,claude-code-routine-haiku-5-5,1
+6ee638a4fa5ac0fa3295f9b7aac2a8e0,positive,delivery,Arrived faster than expected...,claude-code-routine-haiku-5-5,1
+6ffb5b95966ccb8796ea1804f2a6605b,negative,other,"muito bom — I paid the boleto twice, I would like to know if I get my money back?",claude-code-routine-haiku-5-5,1
+7092128e42e819a5c1b9e70216564dfc,negative,delivery,I want my product,claude-code-routine-haiku-5-5,1
+796e4d390679fc59c3b710ecd75389a7,positive,general,Everything went as expected.,claude-code-routine-haiku-5-5,1
+7a1333349414c44f06bbfd875af2e672,negative,seller_service,"Well, I want to return the product, I have already requested two returns but they have not replied to me until now, I am outraged about this",claude-code-routine-haiku-5-5,1
+7b5b07af3f6b5c9d4671881cae6063f2,positive,product_quality,wonderful brush set. It was really worth it.,claude-code-routine-haiku-5-5,1
+7dd498082a9b42b4fe2d85129e92380a,negative,wrong_or_missing_item,I DID NOT LIKE THE COLOUR — It is not the colour in the listing. It is pink. I did not like it.,claude-code-routine-haiku-5-5,1
+7ea08db468643c2305022ee1b8f842d3,positive,general,perfect!,claude-code-routine-haiku-5-5,1
+7ef9b60a9b60ff4b7747e54e84fdbbd8,negative,delivery,Purchase made more than 10 days ago and it has not been delivered yet,claude-code-routine-haiku-5-5,1
+81843574b6416b68647e27a7e6e4e1e8,negative,product_quality,"Não gostei — The product was delivered, but the colour is different, it is stained! It looks like bleach was thrown on it. The colour is not harmonious.",claude-code-routine-haiku-5-5,1
+83f5f151f705afc4b99915ca55b61a8a,positive,delivery,Everything is fine! It arrived well before the deadline and very well packed! I recommend,claude-code-routine-haiku-5-5,1
+86e71ff47efd687f39be4450de1cd49a,negative,product_quality,"Watch came with a defect on the strap in the colour, it was not possible to use it. I called to cancel and return the product.",claude-code-routine-haiku-5-5,1
+8a8ec8d610059a3d3c962315a881c2f8,negative,delivery,I did not receive the product!,claude-code-routine-haiku-5-5,1
+8af8b6f27fd4468c4809b1d782c30a28,positive,delivery,"Product arrived in excellent condition and before the deadline, thank you for the attention",claude-code-routine-haiku-5-5,1
+8d98220ba523d4018de8f8adf1e23d02,positive,delivery,"Arrived on the right deadline, products really match the description",claude-code-routine-haiku-5-5,1
+8ebcd810b095e8e10887305a8d33b233,mixed,product_quality,"Arrived before the deadline, but the size did not come right, the measurement they asked me to take was from above the small bone of the ankle, but the ankle band did not close at the calf, I had to buy a bigger one",claude-code-routine-haiku-5-5,1
+8f839c87fc00030e2018ba9d83fef4cd,positive,product_quality,"Super recomendo — Very satisfied with the product!!! Everything the advertising says it is!!! Whoever can, buy a pen with wifi, you will recommend it, for sure.",claude-code-routine-haiku-5-5,1
+9314d6f9799f5bfba510cc7bcd468c01,negative,delivery,"I WOULD LIKE TO KNOW WHAT HAPPENED, I ALWAYS RECEIVED AND THIS PURCHASE NOW DISAPPOINTED ME",claude-code-routine-haiku-5-5,1
+95992db6a1a05c5f9d1c387f53e2924a,mixed,product_quality,"I recommend, because the product purchased is very pretty and has excellent finish... buuut... one unit came with broken glass. And now? Who can solve this small problem? Thank you... :))",claude-code-routine-haiku-5-5,1
+95f6d3d435a8eb7e148a1d0c4709c036,positive,delivery,"Entregou com bastante ant — Speed of delivery, it is a product of excellent quality!",claude-code-routine-haiku-5-5,1
+97a1e24c2ae1fa7f655f817c0010cf8b,negative,delivery,"Almost 2 months since the purchase and so far nothing of the product. Simply terrible, I do not recommend.",claude-code-routine-haiku-5-5,1
+9b84188fd6782d6141e02c6642d7992c,positive,delivery,"I super recommend this site, whenever I buy I am super satisfied. The product always arrives on time or early.
+
+Very good!",claude-code-routine-haiku-5-5,1
+9f10a842da425105ab524ab59084ac2e,neutral,delivery,received,claude-code-routine-haiku-5-5,1
+a09b473f9da87b1b61a7302420bdd17a,positive,product_quality,"Very good this product, I liked it very much indeed",claude-code-routine-haiku-5-5,1
+a3ad03e0725a5cc1fabe2cb7c8277c6f,positive,general,My daughter is very happy.,claude-code-routine-haiku-5-5,1
+a7398f2642a49fe1a4d48fe7123e9ce4,positive,product_quality,Product with quality,claude-code-routine-haiku-5-5,1
+a94eee8faad95408cd413c7cd3d1caa0,negative,delivery,delay in delivery .,claude-code-routine-haiku-5-5,1
+b2df6f98f4760c6eb43809bd7415932a,positive,general,Too good,claude-code-routine-haiku-5-5,1
+b3eac6614276bd1950cc0c6e4988be88,positive,general,Excellent! Super recommend!,claude-code-routine-haiku-5-5,1
+b5711c8606e4c1f83f81dcc33f46dcd5,positive,product_quality,"REALLY IT BREAKS ALL THE LIGHT, AND IT ALSO GAVE CHARM AND ELEGANCE TO MY ROOM. I LOVED IT, SUPER RECOMMEND!!",claude-code-routine-haiku-5-5,1
+b5d0dacd442d40677bb65316924b323d,positive,general,"My daughter loved it very much, he is super happy.",claude-code-routine-haiku-5-5,1
+ba8b29271ef4b992ad468cc69cce3723,negative,other,Mesmo site com 02 FRETES! — It is necessary that at the end of the purchase they combine the products and charge only 01 shipping fee. I paid 02 shipping fees for 02 products (Tintas EPSON).,claude-code-routine-haiku-5-5,1
+bb25bfa4fb74be2ed7c1525db49394df,positive,product_quality,RECOMENDO — The bedspread is very pretty and stands out well on the bed.,claude-code-routine-haiku-5-5,1
+c3c86e1e572e8ebcdd6a1a4a0f388733,positive,general,very — I am very satisfied and I recommend.,claude-code-routine-haiku-5-5,1
+c8868c0fa695c029fff35ceefba170af,positive,general,Everything went as expected.,claude-code-routine-haiku-5-5,1
+c9c6324925ecf667db9b10f6fbce76b9,positive,product_quality,"Very cool pendant! Pretty, very well made! I recommend!",claude-code-routine-haiku-5-5,1
+ca09a450f0d01b195ae83cd011e10f9c,positive,seller_service,"Great seller.
+
+I recommend",claude-code-routine-haiku-5-5,1
+cc81654642803eb21f0a164e476a9a6f,negative,other,I just found the shipping price very high!,claude-code-routine-haiku-5-5,1
+d2eaba9eccdc0ff46d4daa5007bb6719,negative,delivery,"It is responsible for the delivery and sends via Correios, since 26/12 I have not been able to track it and Correios gives me no position, and since I bought the product from you, you should also make sure it arrived...",claude-code-routine-haiku-5-5,1
+d55591529e24aae7e3102ddce6050350,mixed,seller_service,"Arrived on time. I only did not give five stars because the invoice was not sent by email, and the one that came with the product was a poor miniature printout",claude-code-routine-haiku-5-5,1
+d63ca21f7dea5e205b17303f92327b1e,negative,delivery,"I had to go get it at the post office, 5 chairs of greater weight, and carry them home",claude-code-routine-haiku-5-5,1
+d80e530d6b215ee288bc467df2b5baf6,negative,wrong_or_missing_item,I received the product in the wrong colour. The listing said the curtain was lilac with straw and it came lilac with white.,claude-code-routine-haiku-5-5,1
+d96d6316e6830be91bffda6c7b103de0,negative,delivery,I just think that if it were delivered through a carrier it would be faster,claude-code-routine-haiku-5-5,1
+da2c9bbfb2b642fdb28a33b7aabc42eb,positive,product_quality,Doll of excellent quality. Very fast delivery too.,claude-code-routine-haiku-5-5,1
+e0b3aaaeaa777cdb311085a744ee64d4,negative,wrong_or_missing_item,I RECEIVED THE WRONG PRODUCT. WHERE IS WHAT I BOUGHT?????,claude-code-routine-haiku-5-5,1
+e36e401e3e47d442f1b56fd873eaa3c9,positive,delivery,"Great, delivered on time",claude-code-routine-haiku-5-5,1
+e42835037176ddcd402b29456336588a,mixed,product_quality,"Pretty.But the part that holds the chandelier, the support, could be improved",claude-code-routine-haiku-5-5,1
+e460d305de9d3cad98ce337c56706a71,negative,wrong_or_missing_item,"I bought 5 items, only 1 item arrives and it does not even have tracking on the site lannister, and the seller asks me whether I received the lot of 5 items... I am worried about my purchase by being put in this position...",claude-code-routine-haiku-5-5,1
+e4b02fdcd67af08618a36da2d07f1488,negative,delivery,It took a long time to deliver,claude-code-routine-haiku-5-5,1
+e5b48a584cec8406e2722967491b4627,negative,delivery,Zero — I did not receive my product,claude-code-routine-haiku-5-5,1
+e81560c7df792d51c69552c242fb16ab,positive,delivery,On-time delivery and in perfect condition... congratulations.,claude-code-routine-haiku-5-5,1
+e819923a5e6f153ab7ba0b4eeb583852,mixed,product_quality,"Bonito mas mal acabado — The product is cool but really poorly finished. The cup is fantastic. The wooden base is really ugly, but for the cost-benefit it was worth it.",claude-code-routine-haiku-5-5,1
+e83d6523368e167d0dd4a538da5aef3d,negative,delivery,Delay — I want to know if they will deliver the product or not. It has been more than 1 month since I bought it.,claude-code-routine-haiku-5-5,1
+e8f51f0f46e24b107c7a946ceb8ee29c,positive,delivery,"Product delivered before the deadline.
+I recommend.",claude-code-routine-haiku-5-5,1
+ec88349c8d1af6ee9cba1d9b05688116,negative,delivery,"The products were bought on 26/02/2018 and promised by 21/03/2018. Therefore, they did not meet the (long) deadline.",claude-code-routine-haiku-5-5,1
+ef9ba46ec63a6c980d046d0e18b1db43,negative,product_quality,"Tapete Infantil Formato Margarida Dupla Para Quarto
+Conteúdo da Embalagem:
+01 Margarida Dupla 1,30m x 1,18m
+No site constava o tamanho acima o recebido é de 0.77x 0.60cm super pequeno não gostei",claude-code-routine-haiku-5-5,1
+f1728343b05bf4f27c695d38735920b2,neutral,general,6,claude-code-routine-haiku-5-5,1
+f4610f3cdc8731ea4df8748c68f2a01e,positive,delivery,"Bom — I liked it, arrived before the expected date",claude-code-routine-haiku-5-5,1
+f6e5f01b59eb9a9f650ee2bf9b84f120,positive,delivery,Recomendo — Delivery was made within the deadline..,claude-code-routine-haiku-5-5,1
+fb48f7a08d2927bdd3e4197ca6349493,negative,delivery,Improve the accuracy of the delivery date... the expected date was much later.,claude-code-routine-haiku-5-5,1

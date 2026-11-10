@@ -31,7 +31,7 @@ provider:
   # Compatible versions: same major. A breaking contract change bumps the major
   # version (data-product/check_compatibility.py) and fails this agreement until
   # the dashboard is updated and the agreement renewed.
-  contractVersion: 1.4.0
+  contractVersion: 1.5.0
   server: live
   role: dashboard-reader
 
@@ -87,6 +87,17 @@ uses:
     - distance_band
     - is_delivered
     - days_to_deliver
+    - is_delivered_late
+  fct_review_topics:
+    - order_id
+    - purchase_date
+    - customer_state
+    - category_name
+    - review_score
+    - sentiment
+    - topic
+    - translation_en
+    - is_delivered
     - is_delivered_late
 
 # KPI tiles that must equal these semantic-layer metrics (dashboard/tests/test_metrics.py)

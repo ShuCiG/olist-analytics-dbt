@@ -310,6 +310,9 @@ jobs:
       - name: Input data contract (raw)
         run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server local
 
+      - name: Input data contract (review labels)
+        run: uv run datacontract ci data-product/contracts/review-labels.odcs.yaml --server local
+
       - name: dbt deps
         working-directory: transform
         run: uv run dbt deps
@@ -744,6 +747,7 @@ jobs:
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
           echo "orders_loaded=$(tail -n 1 ingest.log | jq '.orders_loaded')" >> "$GITHUB_OUTPUT"
+          echo "labels_loaded=$(tail -n 1 ingest.log | jq '.labels_loaded')" >> "$GITHUB_OUTPUT"
           echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
           echo "removed_columns=$(tail -n 1 ingest.log | jq -c '.removed_columns // {}')" >> "$GITHUB_OUTPUT"
 
@@ -776,7 +780,7 @@ jobs:
       # state:modified+ against its manifest (changed models, seeds, snapshots, tests,
       # the macros they call, configs, and everything downstream). Full build when
       # that baseline isn't enough: no manifest, a manual run (the way to rebuild
-      # prod), orders loaded by this run (new data is no project change), or a changed
+      # prod), orders or review labels loaded by this run (new data is no project change), or a changed
       # uv.lock (a dbt or adapter upgrade changes materialization SQL, which the
       # state comparison doesn't see).
       - name: Build scope
@@ -784,11 +788,13 @@ jobs:
         env:
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           ORDERS_LOADED: ${{ steps.ingest.outputs.orders_loaded }}
+          LABELS_LOADED: ${{ steps.ingest.outputs.labels_loaded }}
           BASELINE_SHA: ${{ steps.baseline.outputs.sha }}
         run: |
           if [ ! -f prod-state/manifest.json ]; then reason="no prod manifest"
           elif [ "$MANUAL" = true ]; then reason="manual run"
           elif [ "$ORDERS_LOADED" != 0 ]; then reason="the load brought ${ORDERS_LOADED:-an unknown number of} orders"
+          elif [ "$LABELS_LOADED" != 0 ]; then reason="the load brought ${LABELS_LOADED:-an unknown number of} review labels"
           elif ! git diff --quiet "$BASELINE_SHA" HEAD -- uv.lock; then reason="uv.lock changed since ${BASELINE_SHA:0:7} (or that commit is unknown)"
           fi
           if [ -n "${reason:-}" ]; then

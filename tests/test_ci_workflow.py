@@ -55,9 +55,10 @@ def test_prod_build_is_slim_only_on_a_trusted_baseline() -> None:
     build = steps[names.index("dbt build (target prod)")]
     assert names.index("Download prod manifest (last prod deploy)") < names.index("Build scope") < names.index(build["name"])
     # Each of these must force a full build (D66)
-    for condition in ("prod-state/manifest.json", "$MANUAL", "$ORDERS_LOADED", "uv.lock"):
+    for condition in ("prod-state/manifest.json", "$MANUAL", "$ORDERS_LOADED", "$LABELS_LOADED", "uv.lock"):
         assert condition in scope["run"], f"full-build condition missing: {condition}"
     assert "steps.ingest.outputs.orders_loaded" in scope["env"]["ORDERS_LOADED"]
+    assert "steps.ingest.outputs.labels_loaded" in scope["env"]["LABELS_LOADED"]
     assert "--select state:modified+ --state ../prod-state" in build["run"]
     assert '[ "$SCOPE" = slim ]' in build["run"], "the full build must stay the default"
     checkout = steps[0]

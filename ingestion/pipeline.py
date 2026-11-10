@@ -64,6 +64,7 @@ the SCHEMA email.
 import argparse
 import csv
 import functools
+import hashlib
 import json
 import os
 import re
@@ -84,6 +85,11 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
+# Review labels (sentiment, topic, English translation): CSV batches kept in the repo,
+# not part of the dump (ingestion/review_labels/, D92)
+LABELS_DIR = ROOT / "ingestion" / "review_labels" / "labels"
+# Labels for reviews that arrive later (classify_api.py): at most this many new texts per run
+LABEL_MAX_TEXTS = int(os.environ.get("OLIST_LABEL_MAX_TEXTS", "500"))
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -313,6 +319,94 @@ def olist_source(
         yield resource
 
 
+def read_review_labels(labels_dir: Path) -> tuple[pa.Table, str]:
+    """Every label batch as one table of strings, and a short sha of the files' content."""
+    paths = sorted(labels_dir.glob("*.csv"))
+    sha = hashlib.sha256()
+    for path in paths:
+        sha.update(path.name.encode())
+        sha.update(path.read_bytes())
+    tables = [
+        pacsv.read_csv(
+            path,
+            parse_options=pacsv.ParseOptions(newlines_in_values=True),
+            convert_options=pacsv.ConvertOptions(
+                column_types={name: pa.string() for name in csv_header(path)},
+                strings_can_be_null=True,
+                # only an empty field is null: "N/A" is a real translation (of "N/D")
+                null_values=[""],
+            ),
+        )
+        for path in paths
+    ]
+    return pa.concat_tables(tables) if tables else pa.table({}), sha.hexdigest()[:16]
+
+
+def loaded_labels_sha(pipeline: dlt.Pipeline) -> str | None:
+    try:
+        with pipeline.sql_client() as client:
+            labels = client.make_qualified_table_name("review_labels")
+            rows = client.execute_sql(f"select max(labels_sha) from {labels}")
+    except DatabaseUndefinedRelation:
+        return None
+    return rows[0][0] if rows else None
+
+
+def label_new_reviews(pipeline: dlt.Pipeline, labels_dir: Path) -> None:
+    """Label review texts that have no label yet, as a new batch file next to the others.
+
+    A repeated text gets its label copied; a text never seen goes to the Claude API, only
+    with ANTHROPIC_API_KEY set (D92). On the static dump nothing is open: one query, no call.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT / "ingestion" / "review_labels"))
+    import classify_api
+
+    loaded = pipeline.default_schema.tables.get("order_reviews", {}).get("columns", {})
+    if not {"review_comment_title", "review_comment_message"} <= loaded.keys():
+        return  # nothing loaded yet, or a feed without review texts
+    try:
+        with pipeline.sql_client() as client:
+            reviews = client.make_qualified_table_name("order_reviews")
+            rows = client.execute_sql(
+                f"""
+                select distinct review_id, review_score,
+                    coalesce(review_comment_title, ''), coalesce(review_comment_message, '')
+                from {reviews}
+                where coalesce(review_comment_title, '') <> '' or coalesce(review_comment_message, '') <> ''
+                """
+            )
+    except DatabaseUndefinedRelation:
+        return
+    keys = ["review_id", "review_score", "review_comment_title", "review_comment_message"]
+    texts = [dict(zip(keys, map(str, row), strict=True)) for row in rows or []]
+    classify_api.label_new_reviews(texts, labels_dir, max_texts=LABEL_MAX_TEXTS)
+
+
+def load_review_labels(pipeline: dlt.Pipeline, labels_dir: Path) -> int:
+    """Replace raw.review_labels when the label files changed; returns the rows loaded.
+
+    Not tied to the order months: labels change with the repo, not with the dump, and
+    a run that skips the orders still has to bring new labels (prod deploys, Airflow).
+    The files' sha is stored in every row, so an unchanged repo costs one query.
+    """
+    table, sha = read_review_labels(labels_dir)
+    if not table.num_rows:
+        print("No review label files: review_labels not loaded")
+        return 0
+    if loaded_labels_sha(pipeline) == sha:
+        print(f"Review labels unchanged ({sha}): load skipped")
+        return 0
+    table = table.append_column("labels_sha", pa.array([sha] * table.num_rows, type=pa.string()))
+    table = with_loaded_at(with_required(table, ["review_id"]), datetime.now(UTC))
+    pipeline.run(
+        dlt.resource([table], name="review_labels", write_disposition="replace", primary_key="review_id")
+    )
+    print(f"Review labels {sha}: {table.num_rows} rows loaded")
+    return table.num_rows
+
+
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
     return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
@@ -426,6 +520,7 @@ def feed_status(
     orders_loaded: int,
     added_columns: dict[str, list[str]],
     dropped_columns: dict[str, list[str]],
+    labels_loaded: int = 0,
 ) -> dict[str, object]:
     """This run's order count and column changes + the raw orders table as it is now.
 
@@ -440,6 +535,8 @@ def feed_status(
         raise ValueError(f"max order_purchase_timestamp is not a timestamp: {last_order_at!r}")
     return {
         "orders_loaded": orders_loaded,
+        # New review labels are new data too: Airflow and the prod deploy rebuild for them
+        "labels_loaded": labels_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -542,8 +639,10 @@ def main() -> None:
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
         status = orders_status(pipeline)
+    label_new_reviews(pipeline, LABELS_DIR)
+    labels_loaded = load_review_labels(pipeline, LABELS_DIR)
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded)))
 
 
 if __name__ == "__main__":

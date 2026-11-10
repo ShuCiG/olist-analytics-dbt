@@ -36,6 +36,13 @@ def write_csv(path: Path, header: list[str], rows: list[tuple]) -> None:
         writer.writerows(rows)
 
 
+LABEL_HEADER = ["review_id", "sentiment", "topic", "translation_en", "labeled_by", "guidelines_version"]
+
+
+def write_labels(path: Path, rows: list[tuple[str, str]]) -> None:
+    write_csv(path, LABEL_HEADER, [(rid, s, "delivery", "Arrived, \"fast\",\nthanks", "test", "1") for rid, s in rows])
+
+
 @pytest.fixture
 def dump(tmp_path: Path) -> Path:
     src = tmp_path / "kaggle"
@@ -70,7 +77,13 @@ def run(dump: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     """Run pipeline.main() with CLI args; returns the feed status (last stdout line)."""
     db = tmp_path / "test.duckdb"
     monkeypatch.setenv("DLT_DATA_DIR", str(tmp_path / "dlt"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # never the real API from a test
+    monkeypatch.setitem(sys.modules, "anthropic", None)
     monkeypatch.setattr(pipeline.kagglehub, "dataset_download", lambda _: str(dump))
+    labels = tmp_path / "labels"
+    labels.mkdir()
+    write_labels(labels / "batch_000.csv", [("rv_o1", "positive"), ("rv_o3", "negative")])
+    monkeypatch.setattr(pipeline, "LABELS_DIR", labels)
 
     def _run(*args: str) -> dict:
         monkeypatch.setattr(sys, "argv", ["pipeline.py", "--duckdb-path", str(db), *args])
@@ -373,6 +386,66 @@ def test_staging_selects_source_columns_by_name() -> None:
         sql = model.read_text(encoding="utf-8").lower()
         assert re.search(r"\{\{\s*source\(", sql), f"{model.name}: expected a source() CTE"
         assert not re.search(r"select\s+\*\s+from\s+source\b|\bsource\.\*", sql), f"{model.name} passes source columns through"
+
+
+def raw_labels(db: Path) -> list[tuple]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        return con.execute(
+            "select review_id, sentiment, translation_en, labels_sha from raw.review_labels order by review_id"
+        ).fetchall()
+
+
+def test_review_labels_load_with_the_first_run(run) -> None:
+    run("--until", "2016-09")
+    rows = raw_labels(run.db)
+    assert [r[:2] for r in rows] == [("rv_o1", "positive"), ("rv_o3", "negative")]
+    assert rows[0][2] == 'Arrived, "fast",\nthanks'  # quotes and newlines survive
+    assert len({r[3] for r in rows}) == 1
+
+
+def test_unchanged_review_labels_are_not_reloaded(run) -> None:
+    assert run("--until", "2016-09")["labels_loaded"] == 2
+    before = raw_labels(run.db)
+    assert run("--until", "2016-09")["labels_loaded"] == 0  # also an order run that skips its load
+    assert raw_labels(run.db) == before
+
+
+def test_new_label_batch_reloads_on_a_skipped_order_run(run, tmp_path: Path) -> None:
+    run()
+    write_labels(tmp_path / "labels" / "batch_001.csv", [("rv_o4", "mixed")])
+    status = run("--next")  # dump used up: orders skip, labels still load
+    assert (status["orders_loaded"], status["labels_loaded"]) == (0, 3)
+    rows = raw_labels(run.db)
+    assert [r[0] for r in rows] == ["rv_o1", "rv_o3", "rv_o4"]
+    assert len({r[3] for r in rows}) == 1
+
+
+def test_null_like_label_text_stays_text(tmp_path: Path) -> None:
+    write_csv(tmp_path / "batch_001.csv", LABEL_HEADER, [("rv_1", "neutral", "general", "N/A", "test", "1")])
+    table, _ = pipeline.read_review_labels(tmp_path)
+    assert table.column("translation_en").to_pylist() == ["N/A"]
+
+
+def test_new_review_with_a_labelled_text_gets_its_label(run, dump: Path) -> None:
+    write_csv(
+        dump / "olist_order_reviews_dataset.csv",
+        ["review_id", "order_id", "review_score", "review_comment_title", "review_comment_message"],
+        [("rv_o1", "o1", "5", "", "bom"), ("rv_o2", "o2", "5", "", "bom"), ("rv_o3", "o3", "1", "", "")]
+        + [(f"rv_{o}", o, "1", "Atraso", "não chegou") for o in ("o4", "o5")],
+    )
+    run("--until", "2016-09")  # rv_o1 and rv_o3 are labelled (fixture); rv_o2 repeats rv_o1's text
+    assert [(r[0], r[1]) for r in raw_labels(run.db)] == [
+        ("rv_o1", "positive"), ("rv_o2", "positive"), ("rv_o3", "negative")
+    ]
+    status = run()  # rv_o4, rv_o5: a new text, no API key in tests -> left open, the run goes on
+    assert status["labels_loaded"] == 0
+    assert len(raw_labels(run.db)) == 3
+
+
+def test_full_refresh_keeps_review_labels(run) -> None:
+    run()
+    run("--full-refresh")
+    assert len(raw_labels(run.db)) == 2
 
 
 def request_deletion(db: Path, *people: str) -> None:

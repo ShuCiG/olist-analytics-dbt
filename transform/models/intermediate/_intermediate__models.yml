@@ -130,3 +130,15 @@ models:
         description: Delivery date promised to the customer at purchase.
       - name: _loaded_at
         description: "{{ doc('loaded_at') }} Of the order row."
+
+  - name: int_order_reviews_labelled
+    description: >
+      The order's latest review (`int_order_reviews_deduplicated`) with its label from
+      `stg_labels__review_labels`. One row per order; orders whose review has no label are left out.
+    config:
+      group: orders
+      access: private
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_tests: [unique, not_null]
