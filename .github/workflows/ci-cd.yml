@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      deletion: ${{ steps.diff.outputs.deletion }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -56,6 +57,7 @@ jobs:
             printf '%s\n' "$files" | python3 .github/scripts/changed_paths.py >> "$GITHUB_OUTPUT"
           else
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "deletion=true" >> "$GITHUB_OUTPUT"
           fi
 
   sqlfluff-lint:
@@ -147,13 +149,29 @@ jobs:
           terraform_version: 1.16.5
           terraform_wrapper: false
 
+      # Provider zips come from GitHub release assets, which sometimes answer 504
+      # (#258, D106): keep the unpacked providers between runs, keyed on the lock
+      # files, so a run downloads only after a provider bump
+      - name: Provider cache directory
+        working-directory: .
+        run: |
+          mkdir -p "$HOME/.terraform.d/plugin-cache"
+          echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
+
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('infra/.terraform.lock.hcl', 'infra/snowflake/.terraform.lock.hcl') }}
+
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
 
-      # Providers come from .terraform.lock.hcl (checksums), no backend access
+      # Providers come from .terraform.lock.hcl (checksums), no backend access;
+      # the init script retries download errors only
       - name: terraform validate
         run: |
-          terraform init -backend=false -lockfile=readonly -input=false
+          bash "$GITHUB_WORKSPACE/.github/scripts/terraform_init.sh" -backend=false -lockfile=readonly -input=false
           terraform validate
 
       # infra/tests/*.tftest.hcl: plan on mock providers, asserts the policy rules
@@ -164,7 +182,7 @@ jobs:
       - name: terraform validate + test (snowflake)
         working-directory: infra/snowflake
         run: |
-          terraform init -backend=false -lockfile=readonly -input=false
+          bash "$GITHUB_WORKSPACE/.github/scripts/terraform_init.sh" -backend=false -lockfile=readonly -input=false
           terraform validate
           terraform test
 
@@ -232,6 +250,31 @@ jobs:
             -v "$RUNNER_TEMP/dummy-key.json:/opt/gcp/key.json:ro" \
             -e GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json \
             --entrypoint python olist-airflow:ci /opt/project/airflow/check_dags.py
+
+  # Fault injection (D100): corrupted dumps through the real loader and dbt on DuckDB,
+  # each defect's expected reaction checked. No warehouse, no Kaggle download. Required check.
+  fault-injection:
+    name: fault injection
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    needs: [changes, python-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: pytest fault_injection
+        run: uv run pytest fault_injection -q
 
   # Required check: gating it on pyright and the Python tests blocks merges with
   # type errors or failing tests. Skipped for docs-only changes (still passes)
@@ -330,6 +373,24 @@ jobs:
       - name: Dashboard tests
         run: uv run pytest dashboard -q
 
+      # The MCP server over the semantic layer (D104), through a real client on these marts
+      - name: MCP server tests
+        run: uv run pytest metrics_mcp -q
+
+      # Static dashboard (D102): Parquet aggregates of the DuckDB marts just built, so
+      # it costs no BigQuery. deploy-prod publishes this artifact at /dashboard/.
+      - name: Build static dashboard
+        run: uv run python dashboard/static_site/export_site.py "$RUNNER_TEMP/static-dashboard"
+
+      - name: Upload static dashboard
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: static-dashboard
+          path: ${{ runner.temp }}/static-dashboard
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: error
+
   # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
   # Builds only modified models + children; unmodified parents are read from prod
   # (--defer to the manifest of the last successful deploy). Full build if none.
@@ -404,10 +465,15 @@ jobs:
             echo "::notice::No prod manifest found, running a full build"
           fi
 
-      # Per-run datasets start empty: Elementary's tables first, as in `dbt build`
+      # Per-run datasets start empty: Elementary's tables first, as in `dbt build`.
+      # Without its artifact tables and the views on them (D103): nothing reads them
+      # here, and each costs BigQuery's minimums. The DuckDB job builds them all.
       - name: dbt run (Elementary tables, target ci)
         working-directory: transform
-        run: uv run dbt run --target ci --select package:elementary
+        run: >-
+          uv run dbt run --target ci --select package:elementary
+          --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+
+          dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
 
       - name: dbt build (target ci)
         working-directory: transform
@@ -419,6 +485,17 @@ jobs:
           else
             uv run dbt build --target ci --exclude package:elementary
           fi
+
+      # Which columns this PR changes and who reads them (D101), from the manifests:
+      # no warehouse query. Before the data diff, whose run-operation overwrites the
+      # build's manifest. A report: never fails the build.
+      - name: Column impact
+        if: ${{ !cancelled() && steps.prod-state.outputs.slim == 'true' }}
+        continue-on-error: true
+        run: |
+          uv run python -m lineage.impact prod-state/manifest.json transform/target/manifest.json column-impact.md \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          cat column-impact.md >> "$GITHUB_STEP_SUMMARY"
 
       # The marts this build made vs their prod tables (audit_helper, D73), for the
       # PR comment of job pr-comments. Right after the build: it reads the build's
@@ -443,13 +520,14 @@ jobs:
           cat ci-cost.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload PR comments
-        if: ${{ !cancelled() && hashFiles('ci-cost.md', 'data-diff.md') != '' }}
+        if: ${{ !cancelled() && hashFiles('ci-cost.md', 'data-diff.md', 'column-impact.md') != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pr-comments
           path: |
             ci-cost.md
             data-diff.md
+            column-impact.md
           retention-days: 7
 
       - name: Drop CI datasets
@@ -457,9 +535,126 @@ jobs:
         working-directory: transform
         run: uv run dbt run-operation drop_isolated_datasets --target ci
 
+  # A deletion request end to end on BigQuery (D105), in per-run datasets with their
+  # own raw (DBT_RAW_SCHEMA): never prod's raw, which apply_deletion_requests
+  # refuses on target ci. Load to 2018-06, run, request the dump's most frequent
+  # buyer (17 orders, 2017-05 to 2018-08), check fails, apply, load the rest (the
+  # loader leaves the person out), run, check passes. Only when the deletion code
+  # changes (`changes.deletion`): two full runs and a fresh load. `run`, not `build`:
+  # slim CI tests the models; the ~200 tests here would double the bytes (each bills
+  # BigQuery's 10 MiB minimum). Its bytes carry their own job label
+  # (CI_COST_SCOPE), out of the PR's cost comment.
+  gdpr-deletion-bigquery:
+    name: deletion request (BigQuery)
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && needs.changes.outputs.code == 'true' && needs.changes.outputs.deletion == 'true'
+    needs: [changes, sqlfluff-lint, python-tests]
+    permissions:
+      contents: read
+      actions: read  # download the prod manifest artifact
+      id-token: write  # OIDC token for Workload Identity Federation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      DBT_CI_SCHEMA: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del
+      DBT_RAW_SCHEMA: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del_raw
+      OLIST_DELETION_REQUESTS: ci_pr_${{ github.event.number }}_${{ github.run_id }}_del_raw.deletion_requests
+      CI_COST_SCOPE: deletion
+      PERSON: 8d50f5eadf50201ccdcedfb9e2ac8455
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: olist-ci@olist-analytics-dbt-472315.iam.gserviceaccount.com
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      # The BigQuery ML models are not trained here (quota, D96): their children read
+      # prod's through --defer
+      - name: Download prod manifest (last prod deploy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
+          gh run download "$run_id" --name prod-manifest --dir prod-state
+
+      - name: Load raw up to 2018-06 (dlt → BigQuery)
+        run: uv run python ingestion/pipeline.py --destination bigquery --dataset "$DBT_RAW_SCHEMA" --until 2018-06
+
+      - name: dbt run (Elementary tables, target ci)
+        working-directory: transform
+        run: >-
+          uv run dbt run --target ci --select package:elementary
+          --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+
+          dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
+
+      - name: dbt run (before the request)
+        working-directory: transform
+        run: uv run dbt run --target ci --exclude package:elementary config.materialized:bqml_model --defer --state ../prod-state
+
+      - name: Request, check fails, apply
+        working-directory: transform
+        run: |
+          uv run dbt run-operation request_deletion --target ci --args "{customer_unique_id: $PERSON}"
+          if out=$(uv run dbt run-operation check_deletion_requests --target ci 2>&1); then
+            echo "$out"; echo "::error::check_deletion_requests passed before the deletion"; exit 1
+          fi
+          grep -q "still in" <<< "$out" || { echo "$out"; exit 1; }
+          # The tables holding the person before the deletion (BigQuery quotes with backticks)
+          grep -E ' rows$' <<< "$out"
+          uv run dbt run-operation apply_deletion_requests --target ci
+
+      - name: Load the rest (dlt → BigQuery)
+        run: uv run python ingestion/pipeline.py --destination bigquery --dataset "$DBT_RAW_SCHEMA"
+
+      - name: dbt run (after the deletion)
+        working-directory: transform
+        run: uv run dbt run --target ci --exclude package:elementary config.materialized:bqml_model --defer --state ../prod-state
+
+      - name: Check the deletion
+        working-directory: transform
+        run: uv run dbt run-operation check_deletion_requests --target ci
+
+      - name: BigQuery cost of this job
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          uv run python .github/scripts/ci_cost.py olist-analytics-dbt-472315 "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$CI_COST_SCOPE" deletion-cost.md \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          cat deletion-cost.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Drop CI datasets
+        if: always()
+        working-directory: transform
+        run: uv run dbt run-operation drop_isolated_datasets --target ci
+
   # The PR comments of the BigQuery build, each updated on every push: its cost
-  # (D72) and its data diff vs prod (D73); none when the build skipped (docs only,
-  # Dependabot). Each file's first line is its marker. A job of its own: the token
+  # (D72), its data diff vs prod (D73) and its column impact (D101); none when the
+  # build skipped (docs only, Dependabot). Each file's first line is its marker; a
+  # second line <!-- update-only --> only updates an earlier comment (no column
+  # changed: no new comment, but one from an earlier push must not stay as it was).
+  # A job of its own: the token
   # that writes PR comments never meets PR code (no checkout, the bodies are the
   # Markdown the build job uploaded).
   pr-comments:
@@ -478,17 +673,17 @@ jobs:
           PR: ${{ github.event.number }}
         run: |
           if ! gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name pr-comments; then
-            echo "::warning::No PR comments in this run: see steps 'Data diff vs prod' and 'BigQuery cost of this run'"
+            echo "::warning::No PR comments in this run: see steps 'Column impact', 'Data diff vs prod' and 'BigQuery cost of this run'"
             exit 0
           fi
-          for file in data-diff.md ci-cost.md; do
+          for file in column-impact.md data-diff.md ci-cost.md; do
             [ -f "$file" ] || { echo "::notice::No $file in this run"; continue; }
             marker=$(head -n 1 "$file")
             id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
               --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
             if [ -n "$id" ]; then
               gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$file" > /dev/null
-            else
+            elif ! sed -n 2p "$file" | grep -q '^<!-- update-only -->$'; then
               gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$file" > /dev/null
             fi
           done
@@ -515,6 +710,8 @@ jobs:
     outputs:
       new_columns: ${{ steps.ingest.outputs.new_columns }}
       removed_columns: ${{ steps.ingest.outputs.removed_columns }}
+      # SLOs burning too fast, for notify-slo (D111)
+      slo_alerts: ${{ steps.slo.outputs.alerts }}
     defaults:
       run:
         shell: bash
@@ -632,14 +829,14 @@ jobs:
       # Unselected parents are prod's own tables, so a slim build needs no --defer.
       # Nothing selected: the step is skipped (an empty build would still run the
       # on-run-end hooks). The manifest uploaded below covers the whole project either way.
-      # The cost mart has a step of its own, after this one.
+      # The cost mart and the SLO model have a step of their own, after this one.
       - name: dbt build (target prod)
         working-directory: transform
         env:
           SCOPE: ${{ steps.scope.outputs.scope }}
           FULL_REFRESH: ${{ inputs.full_refresh && '--full-refresh' || '' }}
         run: |
-          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary +fct_dbt_job_costs)
+          args=(--target prod --exclude-resource-type unit_test --exclude package:elementary +fct_dbt_job_costs fct_slo_daily)
           if [ "$SCOPE" = slim ]; then
             args+=(--select state:modified+ --state ../prod-state)
             selected=$(uv run dbt ls "${args[@]}" --output name -q)
@@ -657,10 +854,12 @@ jobs:
       # Elementary's uploads are off here: the build above already uploaded this
       # deploy's artifacts and results (~170 MiB a time, D56).
       # The model ignores --full-refresh (its rows outlive the 180 days of history).
+      # The SLO model (D111) rides along: it reads Elementary's run history, which the
+      # build above just completed, and must be rebuilt on every deploy, slim or not.
       - name: dbt build (job costs, target prod)
         working-directory: transform
         run: |
-          uv run dbt build --target prod --select +fct_dbt_job_costs --exclude-resource-type unit_test \
+          uv run dbt build --target prod --select +fct_dbt_job_costs fct_slo_daily --exclude-resource-type unit_test \
             --vars '{disable_dbt_artifacts_autoupload: true, disable_run_results: true, disable_tests_results: true, disable_dbt_invocation_autoupload: true}'
 
       # The catalog checks every schema of the project's relations; the job-history
@@ -713,11 +912,33 @@ jobs:
           retention-days: 90
 
       - name: Prepare docs site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p _site
           cp transform/target/static_index.html _site/index.html
           # Data product page + contract catalog at /data-product/ (D37)
           uv run python data-product/build_site.py _site/data-product
+          # Static dashboard at /dashboard/, built by this run's DuckDB job (D102)
+          gh run download "$GITHUB_RUN_ID" --name static-dashboard --dir _site/dashboard
+
+      # SLO page at /slo/ (D111): freshness and quality from the `fct_slo_daily` model
+      # just built, deploy availability from this workflow's runs on main. Optional like
+      # the report below: a broken page must not hold back the docs; flagged SLOs go to
+      # notify-slo, which holds the SMTP secret.
+      - name: SLO report
+        id: slo
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python .github/scripts/slo_report.py --out _site/slo | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: SLO report stub
+        if: steps.slo.outcome == 'failure'
+        run: |
+          mkdir -p _site/slo
+          echo '<!doctype html><meta charset="utf-8"><title>Data SLOs</title><p>The SLO page failed to build in the last deploy; see the GitHub Actions log.</p>'             > _site/slo/index.html
+          echo "::warning::SLO report failed: published a stub at /slo/"
 
       # Observability report at /elementary/ (D38): test and run history, anomaly
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
@@ -851,6 +1072,27 @@ jobs:
           ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
         run: python3 .github/scripts/notify_schema.py
 
+  # An SLO's error budget burns too fast (D111): an SLO email, the deploy stays green.
+  # Own job like notify-schema, so the SMTP secret stays out of the prod writer's job.
+  notify-slo:
+    name: Email on SLO burn
+    needs: deploy-prod
+    if: always() && needs.deploy-prod.outputs.slo_alerts != '' && needs.deploy-prod.outputs.slo_alerts != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Send email
+        env:
+          SLO_ALERTS: ${{ needs.deploy-prod.outputs.slo_alerts }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+        run: python3 .github/scripts/notify_slo.py
+
   # Email the failed jobs (failed step + log excerpt / dbt summary) to the list in
   # repo variable ALERT_EMAILS, via secret SMTP_CONN (same URI as airflow/.env).
   # GitHub's own notification only reaches the person who triggered the run.
@@ -859,7 +1101,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, dbt-build, dbt-build-bigquery, pr-comments, deploy-prod, notify-schema, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

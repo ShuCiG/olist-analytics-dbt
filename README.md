@@ -8,6 +8,7 @@
 [![Data product](https://img.shields.io/badge/data_product-contracts-2F6FDE)](https://shucig.github.io/olist-analytics-dbt/data-product/)
 [![Observability](https://img.shields.io/badge/observability-Elementary-6C47FF)](https://shucig.github.io/olist-analytics-dbt/elementary/)
 [![Dashboard](https://img.shields.io/badge/dashboard-live-FF4B4B?logo=streamlit&logoColor=white)](https://olist-analytics-dbt.streamlit.app/)
+[![Static dashboard](https://img.shields.io/badge/static_dashboard-DuckDB--WASM-FFF000)](https://shucig.github.io/olist-analytics-dbt/dashboard/)
 
 End-to-end analytics engineering on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables), run as a **data product**: an owner, data contracts on its input and
@@ -21,6 +22,7 @@ it month by month as a live feed, and a **Streamlit** dashboard reads the result
 | 📖 **dbt docs** (lineage, columns, tests) | https://shucig.github.io/olist-analytics-dbt/ |
 | 📦 **Data product page** (ports, contracts, consumers) | https://shucig.github.io/olist-analytics-dbt/data-product/ |
 | 🔭 **Observability report** (test history, anomalies) | https://shucig.github.io/olist-analytics-dbt/elementary/ |
+| 🎯 **Data SLOs** (error budget, burn rate, last 28 days) | https://shucig.github.io/olist-analytics-dbt/slo/ |
 
 Built with AI pair programming (Claude Code); the architecture, design decisions and code review are mine.
 The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
@@ -40,7 +42,8 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **One codebase, four warehouses.** The same dbt models run on DuckDB, BigQuery, Databricks and Snowflake with identical
   mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
   Databricks serverless and DuckDB. On Snowflake the project also runs inside the warehouse (dbt Projects on
-  Snowflake), scheduled by a Snowflake task graph that emails its failures. → [Snowflake](#snowflake-inside-the-warehouse)
+  Snowflake), scheduled by a Snowflake task graph that emails its failures. → [Snowflake](#snowflake-inside-the-warehouse),
+  [time and cost per engine](#same-project-four-engines)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets, with PR comments on what the change does to the marts
   (data diff vs prod) and what it bills. Every merge: prod deploy, docs, Airflow image to GHCR.
@@ -48,9 +51,11 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
-- **Semantic layer.** 14 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
-  dashboard's KPI tiles equal them. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 150 data tests, 8 unit tests, enforced model contracts, 278 Python tests; known
+- **Semantic layer.** 32 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
+  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 32 of 35
+  evaluation questions right, 0 wrong numbers; alerts and the agent say which states and segments drove a metric's
+  change. → [Semantic layer](#semantic-layer)
+- **Data quality at every layer.** 196 data tests, 13 unit tests, enforced model contracts, 452 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -72,7 +77,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
 - **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), ELT, cross-database SQL
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
-- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), GHCR images, branch protection,
+- **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), column impact from manifests, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
 - **Cloud and IaC:** Google Cloud (BigQuery, IAM service accounts with least privilege, custom IAM roles, Workload Identity Federation, budget, quota, per-query byte caps, cost per dbt node from job labels and `INFORMATION_SCHEMA.JOBS`), Terraform
   (import of existing resources, GCS remote state), Streamlit Community Cloud
@@ -91,7 +96,7 @@ flowchart LR
 
     subgraph product[Data product olist-commerce · Product Owner]
         raw[raw<br/>9 tables] --> staging[staging<br/>9 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
-        marts --> metrics[semantic layer<br/>14 metrics]
+        marts --> metrics[semantic layer<br/>32 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
 
@@ -128,14 +133,14 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
 | Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
-| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 7 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
-| Output | `metrics` | [semantic models](transform/models/marts/_marts__semantic_models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
-| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 46 columns and 13 metrics it relies on |
+| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 8 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
+| Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
+| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 44 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 170 + 28 + 279 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 170 + 28 + 285 checks on the data;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -159,12 +164,14 @@ erDiagram
     fct_order_items_seller_as_of |o--|| fct_order_items : order_item_sk
     fct_order_items_seller_as_of }o--|| dim_sellers_history : seller_version_id
     fct_order_items }o--|| dim_date : purchase_date
+    fct_shipments }o--|| fct_orders : order_id
+    fct_shipments }o--|| dim_sellers : seller_id
     fct_review_topics |o--|| fct_orders : order_id
 ```
 
 | Model | Grain | Notes |
 |---|---|---|
-| `fct_orders` | order | item, payment, delivery and review measures. Versioned: v2 (latest, table `fct_orders`), v1 deprecated (`fct_orders_v1`) |
+| `fct_orders` | order | item, payment, delivery and review measures. Accumulating snapshot: one timestamp per milestone (purchase → approval → carrier → delivery → review survey → answer), the lag between each pair and `order_stage`, the furthest reached. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English; untranslated ones keep the Portuguese name, missing ones `unknown` |
@@ -172,10 +179,12 @@ erDiagram
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
 | `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) |
+| `fct_shipments` | order × seller | a seller's items in an order: seller (as of the purchase) and customer states, distance between their zip centroids (cross-engine haversine macro, same values on all four engines), delivery days and lateness; the dashboard shows delivery by distance band and the slowest routes ([D93](docs/DECISIONS.md#d93--2026-11-02--seller-to-customer-distance-cross-engine-haversine-fct_shipments)) |
 | `fct_review_topics` | order with a labelled review | sentiment, topic and English translation of the review text (LLM labels, [D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)), next to the order's state, main category and delivery outcome |
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
 | `dim_date` | day | `dbt_date` calendar, 2016–2019; time spine of the semantic layer |
 | `fct_dbt_job_costs` | BigQuery job | platform mart, BigQuery prod only: every job dbt ran, from `INFORMATION_SCHEMA.JOBS` with its node labels ([below](#dashboard)) |
+| `fct_sales_forecast`, `fct_repeat_purchase_scores`, `fct_ml_model_metrics` | week × series, person, metric | **BigQuery ML** in dbt, BigQuery only: three models trained by a custom materialization (`bqml_model`), ARIMA_PLUS sales forecast with a 13-week backtest and a repeat-purchase logistic regression; these tables read them with `ML.FORECAST`, `ML.PREDICT`, `ML.EVALUATE` ([D96](docs/DECISIONS.md)) |
 
 Layers: **staging** (8 Olist views, 1:1 with sources: types, names; raw is loaded as all strings so casting is visible
 and tested), **intermediate** (6 views: pivots, rollups, dedup, the one orders ⨝ customers join), **marts** (tables
@@ -210,6 +219,7 @@ flowchart LR
     int_items[int_order_items_aggregated_to_orders]:::int
     int_delivery[int_orders_delivery_metrics]:::int
     int_reviews[int_order_reviews_deduplicated]:::int
+    int_staged[int_orders_staged]:::int
     int_zip[int_zip_codes_located]:::int
     int_oc[int_orders_joined_to_customers]:::int
 
@@ -226,6 +236,8 @@ flowchart LR
     stg_items --> int_items
     stg_orders --> int_delivery
     stg_reviews --> int_reviews
+    stg_orders --> int_staged
+    int_reviews --> int_staged
     stg_geo --> int_zip
     stg_orders --> int_oc
     stg_customers --> int_oc
@@ -234,7 +246,7 @@ flowchart LR
     int_items --> fct_orders
     int_pay --> fct_orders
     int_delivery --> fct_orders
-    int_reviews --> fct_orders
+    int_staged --> fct_orders
 
     stg_items --> fct_order_items
     int_oc --> fct_order_items
@@ -283,13 +295,14 @@ missing item, seller service, general, other) and a faithful English translation
 
 | Check | What | Where |
 |---|---|---|
-| **173 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 4 singular tests; 9 more on the cost mart in prod | every `dbt build` |
-| **8 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention | every `dbt build` |
+| **196 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
+| **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 477 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 455 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **295 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency | CI |
+| **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
+| **452 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -301,13 +314,45 @@ that the alert emails quote:
 |---|---|
 | `review_id` is not unique; 547 orders have several reviews | composite key `(review_id, order_id)`; latest review per order in `int_order_reviews_deduplicated` |
 | 278 customer zip prefixes missing from geolocation | `relationships` test, `severity: warn`; dims left-join the centroids |
-| 249 orders where amount paid ≠ items + freight (> 1 BRL) | singular test `assert_payments_match_order_amount`, `severity: warn` |
+| 250 orders where amount paid ≠ items + freight (> 1 BRL) | singular test `assert_payments_match_order_amount`, `severity: warn` |
 | 2 payments with 0 installments | range test, `severity: warn` |
 | 2 product categories have no English translation | `coalesce` fallback to the Portuguese name |
 | 1,359 orders handed to the carrier before payment approval (166 before purchase) | `is_not_before`, `severity: warn` |
 | 23 orders delivered to the customer before carrier pickup | `is_not_before`, `severity: warn` |
 
 </details>
+
+### Fault injection
+
+A passing test suite says little if a broken feed would pass too. [`fault_injection/`](fault_injection/)
+writes a small consistent dump, loads and builds its clean months once, then delivers the next month with one
+defect per scenario through the real loader and `dbt build` on DuckDB. Each scenario declares what must react, so a
+change that removes a reaction fails CI; a control month with no defect must stay silent
+([D100](docs/DECISIONS.md)).
+
+| Defect | What catches it | Effect |
+|---|---|---|
+| No defect (control) | nothing may react | |
+| Two different rows for one order | loader | load stops |
+| Duplicated customers | `unique` on staging | build fails |
+| Payment amounts × 100 | payment reconciliation test, Elementary column anomaly | warning |
+| Item prices × 100 | payment reconciliation test | warning |
+| Orders without payments | payment reconciliation test | warning |
+| Delivery before purchase | `is_not_before` on `fct_orders` | build fails |
+| Orders with an unknown customer | `relationships` on staging | build fails |
+| Order lines with an unknown product | `relationships` on staging and `fct_order_items` | build fails |
+| New source column | SCHEMA email, Elementary schema change | warning |
+| Optional source column removed | SCHEMA email | warning |
+| Required source column removed | SCHEMA email, input contract, `not_null` on staging | build fails |
+| Unknown order status | `accepted_values` on staging | build fails |
+| Feed delivers 5 % of the orders | Elementary volume and freshness anomalies | warning |
+| Well-formed but impossible purchase time | cast error in the first test that reads staging | build fails |
+| Review score out of range | `accepted_values` on staging | build fails |
+| Identical duplicate orders | nothing: the loader's merge collapses them, no harm | absorbed |
+| Late status change of a loaded order | **nothing: known gap** | raw keeps the old status |
+
+The known gap: the loader reads each purchase month once, so a later change to an already loaded order never
+arrives. Accepted for a static dump; a live feed would need a load by update time.
 
 ## Data observability
 
@@ -330,6 +375,14 @@ after it. The [report](https://shucig.github.io/olist-analytics-dbt/elementary/)
 prod on every deploy) shows the test history and the metric charts behind each anomaly; the Airflow replay renders
 the same report for its own warehouses after every build, embedded in the Airflow UI ([D82](docs/DECISIONS.md)).
 
+**Service levels.** The data product states three objectives per output port (`data-product/slo.yaml`, mirrored in the
+ODPS descriptor): freshness 95% (a load of new orders is followed by a rebuild of the marts within 24 h), quality 99%
+(dbt runs with every error-severity test passing) and deploy availability 99% (CI/CD runs on `main`). The dbt model
+`fct_slo_daily` counts the first two from Elementary's history, the GitHub Actions runs give the third; the
+[SLO page](https://shucig.github.io/olist-analytics-dbt/slo/) shows the last 28 days with the error budget left and the
+burn rate, and an email goes out when the burn rate over 7 days reaches 2x or the budget is spent
+([D111](docs/DECISIONS.md)).
+
 ## Governance
 
 Set up the way marts are shared across teams (dbt Mesh), even in one repo:
@@ -338,17 +391,33 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   domains `orders` and `parties`, plus `platform` for the cost models, which are not part of the data product.
   Marts are `public` with enforced contracts; intermediate models used inside one group are `private`
   (a `ref` from another group fails at parse time).
-- **Model versions:** `fct_orders` v2 renamed a column, a breaking change, so v1 stays available as a projection of
-  v2 until its `deprecation_date`; `ref('fct_orders')` resolves to the latest version.
+- **Model versions:** `fct_orders` v2 renamed a column, a breaking change, so v1 stayed available as a projection of
+  v2 until its `deprecation_date`, then was dropped. With one version left the model went back to unversioned: the
+  table name and `ref('fct_orders')` stayed, and dbt-core allows the inline semantic layer only on unversioned models
+  ([D99](docs/DECISIONS.md#d99--2026-11-04--semantic-layer-on-the-inline-yaml-spec-fct_orders-unversioned)).
 - **[dbt_project_evaluator](https://github.com/dbt-labs/dbt-project-evaluator)** gates every PR: naming, DAG shape
   (fan-out, rejoins), docs and key-test coverage, contracts on public models, exposures on public models only. Its
   first run led to the `int_orders_joined_to_customers` refactor; accepted exceptions are listed with reasons.
+- **Column-level security on BigQuery:** the columns the output contract classifies `restricted` (the person id,
+  the customer's address) carry Data Catalog policy tags, set by dbt on every build from a taxonomy in Terraform.
+  Only the prod writer, CI and the owner may read them; the dashboard's account gets "access denied" there and
+  counts and joins people on `customer_key`, a SHA-256 of the id with a secret key that only lives in a BigQuery
+  table the build accounts can read (a plain hash of a public id would be reversible). A test keeps
+  `restricted` and the tags equal, and the daily drift check covers who holds the tags
+  ([D94](docs/DECISIONS.md#d94--2026-11-02--column-level-security-for-person-related-columns-policy-tags-customer_key)).
+- **Deletion requests (GDPR erasure):** a request in a restricted table removes the person's customer rows, orders,
+  items, payments and reviews from raw and dlt's staging, patches the incremental models, and the loader leaves the
+  person out of every later load. A check then scans every table of every layer for the id, its `customer_key`, and
+  any order or customer id raw no longer has, so a stale copy fails it too. Time travel on the person datasets is
+  cut to BigQuery's 48 h minimum. Tested end to end on DuckDB on every PR and on BigQuery when the deletion code
+  changes ([D105](docs/DECISIONS.md#d105--2026-11-08--deletion-requests-a-person-removed-from-every-layer-verified)).
 
 ## Semantic layer
 
-14 metrics are defined once in [`_marts__semantic_models.yml`](transform/models/marts/_marts__semantic_models.yml)
-(MetricFlow): semantic models on `fct_orders` and `dim_customers` with entities, dimensions and measures, simple
-metrics with filters, ratio metrics, 2 saved queries, `dim_date` as time spine. MetricFlow writes the SQL for the
+32 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
+(MetricFlow, dbt's inline spec): semantic models on `fct_orders`, `dim_customers` and `fct_customer_cohorts`, entities
+and dimensions on the columns, simple metrics with filters, percentile (median) and ratio metrics, 4
+[saved queries](transform/models/marts/_marts__semantic_models.yml), `dim_date` as time spine. MetricFlow writes the SQL for the
 current warehouse, joins included.
 
 | Metric | Definition |
@@ -358,6 +427,8 @@ current warehouse, joins included.
 | `customers`, `revenue_per_customer` | people who ordered in the period; revenue / them |
 | `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
 | `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |
+| `median_hours_to_approve`, `median_days_approved_to_carrier`, `median_days_carrier_to_customer`, `median_days_delivered_to_review`, `median_hours_review_to_answer` | order funnel: median time per stage (approximate percentile, the only one MetricFlow has on BigQuery) |
+| `orders_awaiting_approval`, `orders_awaiting_shipping`, `orders_in_transit`; `awaiting_approval_rate`, `awaiting_shipping_rate`, `in_transit_rate` (over `orders`, `approved_orders`, `shipped_orders`) | open orders stuck at a stage; their share of the orders that reached it |
 | `new_customers`, `repeat_customers`, `repeat_customer_rate` | people by first order (cohort); of them, who ordered again; the share |
 | `cohort_size`, `retained_customers`, `cohort_retention_rate` | from `fct_customer_cohorts`, by `cohort__months_since_first_order`: people acquired; of them, who ordered in that month; the share |
 | `ltv_3_months`, `cohort_revenue_to_date` | revenue per acquired person in months 0–2 (cohorts old enough); cumulative cohort revenue |
@@ -370,6 +441,33 @@ uv run mf query --metrics revenue,average_order_value --group-by metric_time__mo
 The dashboard keeps its own SQL (it runs without dbt), and a test compares every KPI tile with `mf query` on the
 same data and period. Same numbers on DuckDB and BigQuery: 99,441 orders, R$ 15,735,527.03 revenue, 6.77 % late
 deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the month after their first.
+
+### Agents query metrics, not tables
+
+Text-to-SQL can invent its own definition of revenue. [`metrics_mcp/`](metrics_mcp/) is an MCP server over these metrics
+on DuckDB: an agent lists metrics and dimensions and asks for values, and MetricFlow writes the SQL. No tool takes SQL.
+A filter is a dimension, an operator and values, because MetricFlow's own `where` passes SQL through as written. The
+connection is read-only.
+
+A fifth tool, `explain_change`, answers *why* a metric moved: for two periods it splits the change by the members
+of a dimension (customer state, order status, repeat customer) and ranks them. The members add up to the total
+change; for a ratio such as the late delivery rate each member's part is split into **mix** (it became a bigger or
+smaller share of the orders) and **rate** (its own rate moved). The same module drives the Airflow run email: when
+revenue, orders, average order value or the late delivery rate moves by 10 % or more against the month before, the
+email shows who drove it ([D110](docs/DECISIONS.md)). On November 2017 against October, revenue rose by 407,436 BRL
+(+53 %): São Paulo 37 %, Rio de Janeiro 16 %, Minas Gerais 15 %.
+
+An [evaluation](metrics_mcp/eval/questions.yml) sends 35 business questions to Claude Haiku 5.5 limited to these tools,
+each in a fresh session, and grades the final answers against `mf query`:
+
+| Questions | Result |
+|---|---|
+| 27 answerable (numbers, filters, periods, rankings, cohorts, why a metric changed) | 24 right; 2 with the right numbers under keys of their own, 1 with no parseable answer |
+| 8 to refuse (no such metric or dimension, a raw SQL request, a delete) | 8 refused |
+
+The questions come from someone who knows the catalog, on one model and one run, so this shows the server works
+for an agent, not how it does on any question. Details and the grader changes are in
+[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation) and D110.
 
 ## Orchestration and alerts
 
@@ -395,7 +493,9 @@ flowchart LR
 ```
 
 **Alerts:** at most one report per run: `FAILED` (the error and log tail; for dbt, the failed nodes), `OK: +800
-orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). A new column in
+orders, data up to 2017-01, 3 dbt warnings`, or `STALE: no new orders for 25 h` (about once a day). An `OK` email
+also says why a business metric moved by 10 % or more against the month before: the top members per dimension, with
+mix and rate effects for ratios (`metric_drivers` task, [D110](docs/DECISIONS.md)). A new column in
 a source file lands in raw only (staging selects by name) and sends `SCHEMA: 1 new source column in orders`; a column
 missing from a source file sends `SCHEMA: 1 source column removed in orders` on every load until fixed, from
 Airflow and from the prod deploy ([D61](docs/DECISIONS.md)). Warn-test
@@ -424,7 +524,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 |---|---|
 | sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main`, dbt v2 parse (warning only, [D83](docs/DECISIONS.md)) | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
-| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages (catalog re-read only for changed relations on slim deploys, [D77](docs/DECISIONS.md)); manifest kept for slim CI |
+| slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the column impact of the change, the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages (catalog re-read only for changed relations on slim deploys, [D77](docs/DECISIONS.md)); manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |
 
 Weekly and on demand, a separate workflow loads a few months into Databricks and runs the full build there as a
@@ -432,11 +532,16 @@ service principal limited to its own catalog, tests both data contracts on those
 ([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md), [D81](docs/DECISIONS.md)). When Free Edition can't start the warehouse, the run waits up to
 20 minutes, then ends as skipped with a warning instead of a failure email ([D78](docs/DECISIONS.md)).
 A third workflow does the same on Snowflake every week (full load into per-run schemas, dropped after), then
-redeploys the in-warehouse project and its task graph from main ([D85](docs/DECISIONS.md)).
+redeploys the in-warehouse project and its task graph from main ([D85](docs/DECISIONS.md)). Cloud Scheduler starts
+both weekly workflows on time through GitHub's dispatch API (GitHub's own `schedule` fired hours late), and the daily
+drift check fails when a week was missed ([D95](docs/DECISIONS.md)).
 
-Two PR comments, updated on each push, come from the BigQuery build. The **data diff** compares every mart the build
+Three PR comments, updated on each push, come from the BigQuery build. The **column impact** names who a change
+reaches: per changed column (added, removed, retyped, computed differently) the downstream columns, metrics, contract
+columns, usage agreement entries and exposures, from the manifests of the PR and of prod with no warehouse query
+([D101](docs/DECISIONS.md)). The **data diff** compares every mart the build
 made with its prod table row by row on the primary key (`dbt-labs/audit_helper`): rows modified / added / removed,
-the columns that differ, schema changes; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
+the columns that differ, schema changes, floats rounded to 9 decimals so an ML retrain's noise doesn't read as a change; a refactor shows no differences ([D73](docs/DECISIONS.md)). The **cost**
 comment lists what the build billed, the most expensive nodes each next to its last prod build, Elementary's uploads
 apart from dbt's own queries; CI finds its own jobs by a run label in `JOBS_BY_USER`, without the prod writer's role
 ([D72](docs/DECISIONS.md)).
@@ -472,12 +577,43 @@ On a Snowflake trial account the project runs three ways, with the same marts ro
   ([`dbt_projects_profiles.yml`](transform/dbt_projects_profiles.yml)). `EXECUTE DBT PROJECT` builds it in 74 s.
 - **Tasks instead of Airflow**: [`snowflake/tasks.sql`](snowflake/tasks.sql) runs Elementary's models, then
   `dbt build`, daily on the X-Small warehouse; a finalizer task emails the failed tasks with dbt's error
-  (task error integrations take cloud queues only). ~0.05 credits a run.
+  (task error integrations take cloud queues only). ~0.075 credits a run, ~2.3 a month
+  ([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)).
 
 The account is code ([`infra/snowflake`](infra/snowflake)): warehouse with 60 s auto-suspend, an account-wide
 resource monitor (20 credits a month), roles, key-pair service users, the email integration.
 
+## Same project, four engines
+
+One commit, the full dump already in each engine's `raw` (same row counts on all four), 4 threads, Elementary's
+tables built first and not timed, then `dbt build --exclude package:elementary`
+([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)):
+
+| | DuckDB | Snowflake | BigQuery | Databricks |
+|---|---|---|---|---|
+| Runs on | a laptop, in process | X-Small Gen2 warehouse (trial, AWS eu-central-1) | on-demand, EU | Free Edition, serverless 2X-Small SQL warehouse (AWS us-east-2) |
+| `dbt build` (wall clock) | 38 s (48 s) | 108 s (126 s) | 150 s (165 s) | 294 s (315 s) |
+| without Elementary's on-run-end upload | 26 s | 66 s | 102 s | 219 s |
+| Result | PASS 194, WARN 7 | PASS 179, WARN 7 | PASS 179, WARN 7 | PASS 194, WARN 7 |
+| Cost of one build | none | 0.063 credits: 168 s of warehouse time incl. the 60 s auto-suspend (≈ $0.17–0.25 at list price) | 2.74 GiB billed by 294 jobs, most at the 10 MiB minimum (≈ $0.017 at list price, $0 in the free tier) | ~1.7 DBU: 1.3 for the SQL warehouse's hour (incl. Elementary's setup and the idle time before its 10 min auto-stop), 0.4 for the Python model's serverless job; $0 on Free Edition |
+| What the engine needed | the reference: dev and every PR | integer division is `NUMBER(p, 6)` → `to_float()`; `TIMESTAMP_LTZ` for `_loaded_at`; one `week_of_year` for all engines ([D85](docs/DECISIONS.md#d85--2026-10-30--snowflake-as-a-fourth-engine-dbt-core-dbt-projects-on-snowflake-a-task-graph), [D86](docs/DECISIONS.md#d86--2026-10-31--one-week_of_year-on-every-engine)) | no parameterized types in `CAST` → `to_money()` dispatch, contract types per engine ([D15](docs/DECISIONS.md#d15--2026-10-11--bigquery-targets-and-cross-db-types)); day partitions on raw ([D70](docs/DECISIONS.md#d70--2026-10-25--raw-order-tables-partitioned-by-load-day-incremental-filter-that-prunes)); no Python model ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) | liquid clustering instead of partitions, `timestamp` / `string` types ([D58](docs/DECISIONS.md#d58--2026-10-21--databricks-as-a-third-engine-free-edition)); the Python model as a serverless notebook job ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) |
+
+DuckDB and Databricks also build the Python RFM model and its 14 tests (66 s of Databricks' time as a serverless
+job). Otherwise the slowest node on every engine is Elementary's on-run-end hook, which uploads the run's results to
+its tables: 12 s on DuckDB, 42–75 s on the cloud engines. The cloud times are mostly per-query overhead, not data:
+BigQuery processed 0.66 GiB for the whole build.
+
 ## Dashboard
+
+A [static page on GitHub Pages](https://shucig.github.io/olist-analytics-dbt/dashboard/) shows the main KPIs and
+charts with no app to wake up and no BigQuery read: the browser queries 11 KB of Parquet aggregates with DuckDB-WASM.
+CI builds them from the DuckDB marts, publishes aggregates only (no row under 10 orders or people), and a test holds
+every KPI to the semantic layer metrics in all three periods the page offers. The first visit downloads about 7.5 MB
+of query engine from public CDNs, cached afterwards ([D102](docs/DECISIONS.md)). Data:
+[Olist on Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce),
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the aggregates are shared under the same licence.
+
+The full app runs on Streamlit:
 
 Five pages over the marts (sales, delivery & reviews, customers & sellers, cohorts & retention, what customers write), a shared date filter, and a sidebar
 showing how fresh the data is. It runs on DuckDB or BigQuery with the same SQL, and the deployed app reads the
@@ -490,6 +626,8 @@ prod deploys, the Airflow replay and PR CI. The page lists bytes billed per targ
 outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
 ([D71](docs/DECISIONS.md)).
 
+Another BigQuery-only page shows the BigQuery ML models: the revenue forecast against actuals with its backtest error, and how well a first order predicts a second (not much: ROC AUC 0.57). BigQuery ML bills training on what the input query scans, at 50 times a query's price and quota: making the inputs tables took one training from ~20 GiB of the daily quota to 1.6 GiB ([D96](docs/DECISIONS.md)).
+
 | Sales overview | Customers & sellers |
 |---|---|
 | ![Sales overview](docs/images/dashboard-overview.png) | ![Customers & sellers](docs/images/dashboard-customers.png) |
@@ -497,6 +635,8 @@ outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIO
 ![Cohorts & retention](docs/images/dashboard-cohorts.png)
 
 ![dbt cost on BigQuery](docs/images/dashboard-costs.png)
+
+![Forecasts & repeat buyers on BigQuery ML](docs/images/dashboard-ml.png)
 
 ## Quickstart
 
@@ -524,9 +664,11 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 │   ├── snapshots/ seeds/ macros/ tests/
 ├── data-product/                # ODPS descriptor, ODCS contracts, consumer agreements, checks, product page
 ├── airflow/                     # Docker Compose, Dockerfile, DAG factory (Cosmos)
-├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement)
+├── dashboard/                   # Streamlit app + tests (pages, KPI = metric, SQL = agreement), static_site/ for Pages
 ├── alerting/                    # alert emails shared by Airflow and CI
-├── lineage/                     # column lineage (sqlglot) and exposure jobs for the OpenLineage events
+├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
+├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
+├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email
@@ -571,11 +713,16 @@ Options that were tried or priced, then left out:
   with a BigLake catalog. Builds took about 2× as long, readers need a metadata export after every build, and dropped or
   replaced tables leave billed files in the bucket
   ([D90](docs/DECISIONS.md#d90--2026-11-01--iceberg-tables-for-the-marts-biglake-read-from-duckdb-evaluated-rejected)).
+- **dbt Mesh: a consumer project for cohorts and RFM (dbt-loom).** The split built with the same marts (0 diffs), but
+  unit tests can't mock the other project's models, YAML anchors, doc blocks, generic tests and macros had to be copied,
+  and the dbt v2 parser refuses the plugin. One owner deploys one repo: groups, access levels and contracts already
+  draw the boundaries inside the project
+  ([D97](docs/DECISIONS.md#d97--2026-11-03--dbt-mesh-producer-and-consumer-projects-dbt-loom-evaluated-rejected)).
 - **dbt deps inside Snowflake, the repo as a Git repository source.** Both need an external access integration,
   which trial accounts don't allow; the packages go up with the code instead ([D85](docs/DECISIONS.md)).
 
 ## Next
 
-Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dropping `fct_orders` v1 after its deprecation date (2026-12-31, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
+Planned work is tracked as [issues](https://github.com/ShuCiG/olist-analytics-dbt/issues) on a public [roadmap board](https://github.com/users/ShuCiG/projects/2) (Todo / In progress / Done); PRs close them with `Closes #N`. Open, among others: dropping `fct_orders` v1 after its deprecation date (2026-11-04, #66), and rotating the Databricks CI secret before it expires (2027-04-19, #91).
 
 The history of the project and the reasoning behind each choice: [docs/DECISIONS.md](docs/DECISIONS.md).

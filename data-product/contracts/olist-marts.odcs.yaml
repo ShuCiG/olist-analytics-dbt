@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.2.0
+version: 1.5.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -90,10 +90,10 @@ schema:
   - name: fct_orders
     physicalName: fct_orders
     physicalType: table
-    description: One row per order. dbt model fct_orders, version 2 (latest).
+    description: One row per order. dbt model fct_orders.
     authoritativeDefinitions:
       - type: businessDefinition
-        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_orders.v2
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_orders
     properties:
       - name: order_id
         logicalType: string
@@ -107,6 +107,14 @@ schema:
         relationships:
           - type: foreignKey
             to: dim_customers.customer_unique_id
+      - name: customer_key
+        logicalType: string
+        required: true
+        classification: internal
+        description: Pseudonym of the person (keyed SHA-256 of customer_unique_id); readable without access to the id.
+        relationships:
+          - type: foreignKey
+            to: dim_customers.customer_key
       - name: order_status
         logicalType: string
         required: true
@@ -116,6 +124,19 @@ schema:
             arguments:
               validValues: [created, approved, invoiced, processing, shipped, delivered, canceled, unavailable]
             mustBe: 0
+      - name: order_stage
+        logicalType: string
+        required: true
+        description: Furthest milestone reached (accumulating snapshot); a review counts only after delivery.
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [purchased, approved, shipped, delivered, reviewed]
+            mustBe: 0
+      - name: is_order_open
+        logicalType: boolean
+        required: true
       - name: purchase_date
         logicalType: date
         required: true
@@ -130,6 +151,10 @@ schema:
         logicalType: timestamp
       - name: estimated_delivery_date
         logicalType: date
+      - name: review_created_at
+        logicalType: timestamp
+      - name: review_answered_at
+        logicalType: timestamp
       - name: items_count
         logicalType: integer
         required: true
@@ -166,6 +191,14 @@ schema:
         logicalType: number
         required: true
       - name: hours_to_approve
+        logicalType: integer
+      - name: days_approved_to_carrier
+        logicalType: integer
+      - name: days_carrier_to_customer
+        logicalType: integer
+      - name: days_delivered_to_review
+        logicalType: integer
+      - name: hours_review_to_answer
         logicalType: integer
       - name: days_to_deliver
         logicalType: integer
@@ -281,6 +314,12 @@ schema:
         required: true
         unique: true
         classification: restricted
+      - name: customer_key
+        logicalType: string
+        required: true
+        unique: true
+        classification: internal
+        description: Pseudonym of the person (keyed SHA-256 of customer_unique_id); readable without access to the id.
       - name: zip_code_prefix
         logicalType: string
         classification: restricted
@@ -438,6 +477,61 @@ schema:
           where months_since_first_order = 0 and active_customers <> cohort_size
         mustBe: 0
 
+  - name: fct_shipments
+    physicalName: fct_shipments
+    physicalType: table
+    description: >-
+      Delivery against distance: one row per shipment (the items of one seller in one order), with
+      the seller-to-customer distance between zip centroids and the order's delivery outcome.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_shipments
+    properties:
+      - name: shipment_sk
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: order_id
+        logicalType: string
+        required: true
+      - name: seller_id
+        logicalType: string
+        required: true
+      - name: purchase_date
+        logicalType: date
+      - name: seller_state
+        logicalType: string
+      - name: customer_state
+        logicalType: string
+      - name: is_same_state
+        logicalType: boolean
+      - name: distance_km
+        logicalType: number
+        logicalTypeOptions:
+          minimum: 0
+      - name: distance_band
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: ['0-100 km', '100-500 km', '500-1000 km', '1000-2000 km', '2000+ km', unknown]
+            mustBe: 0
+      - name: items_count
+        logicalType: integer
+        required: true
+        logicalTypeOptions:
+          minimum: 1
+      - name: is_delivered
+        logicalType: boolean
+      - name: days_to_deliver
+        logicalType: integer
+      - name: is_delivered_late
+        logicalType: boolean
+    quality:
+      - *not_empty_rule
   - name: fct_review_topics
     physicalName: fct_review_topics
     physicalType: table

@@ -1,7 +1,7 @@
 """KPI tiles of the pages, one query each, for a purchase-date period.
 
 Kept out of the page scripts so a test can run the same SQL: these numbers must
-equal the dbt Semantic Layer metrics (transform/models/marts/_marts__semantic_models.yml),
+equal the dbt Semantic Layer metrics (transform/models/marts/_marts__models.yml),
 checked by dashboard/tests/test_metrics.py against `mf query`.
 """
 
@@ -22,7 +22,7 @@ def sales(period: Period) -> pd.Series:
     kpi = query(f"""
         select
             count(*) as orders,
-            count(distinct customer_unique_id) as customers,
+            count(distinct customer_key) as customers,
             sum(case when order_status not in ({_LOST}) then order_amount end) as revenue,
             sum(case when order_status not in ({_LOST}) then 1 else 0 end) as sold_orders
         from {table('fct_orders')}
@@ -53,7 +53,7 @@ def customers(period: Period) -> pd.Series:
     return query(f"""
         with per_customer as (
             select
-                customer_unique_id,
+                customer_key,
                 count(*) as orders,
                 sum(case when order_status not in ({_LOST}) then order_amount else 0 end) as spend
             from {table('fct_orders')}

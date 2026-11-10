@@ -37,3 +37,9 @@ def test_stateful_resources_prevent_destroy() -> None:
     assert stateful
     unprotected = [r for r, body in stateful.items() if not re.search(r"prevent_destroy\s*=\s*true", body)]
     assert not unprotected, f"datasets and buckets hold data; add lifecycle {{ prevent_destroy = true }}: {unprotected}"
+
+
+def test_no_secret_values() -> None:
+    # A secret version carries its value into the state; the owner adds it with gcloud (D95)
+    versions = [r for r in _resources() if r.startswith("google_secret_manager_secret_version.")]
+    assert not versions, f"secret values stay out of Terraform: {versions}"

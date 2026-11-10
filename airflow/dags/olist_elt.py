@@ -417,6 +417,40 @@ def build_dag(wh: Warehouse) -> DAG:
             **({"pool": wh.pool} if wh.pool else {}),
         )
 
+        # Which members moved a business metric past its threshold (alerting/metric_drivers.py,
+        # D110): MetricFlow on this warehouse, the latest month vs the one before. The last
+        # stdout line is JSON, taken by `report` from XCom. Beside edr_report, not behind it:
+        # a failed report must not hide the drivers. Its own failure is a skip, not a failed
+        # run: the email just goes out without drivers.
+        # MetricFlow reads the semantic manifest, it never parses: the image's one (target_airflow)
+        # was parsed with the default env and names catalog `olist`, not this warehouse (#269).
+        # So `dbt parse` first, with the warehouse's env, into the task's own target path
+        # (DBT_TARGET_PATH below): the producer's partial parse stays untouched, and the next
+        # run's parse is partial too.
+        metric_drivers = BashOperator(
+            task_id="metric_drivers",
+            bash_command=(
+                f"{DBT_EXECUTABLE} parse --quiet --project-dir {DBT_PROJECT_DIR}"
+                f" --profiles-dir {DBT_PROJECT_DIR} --target {wh.dbt_target}"
+                f" && {VENV_BIN / 'python'} -m alerting.metric_drivers --target {wh.dbt_target}"
+                " --threshold {{ var.value.get('olist_metric_drift_threshold', 0.10) }}"
+                " --min-base {{ var.value.get('olist_metric_drift_min_orders', 100) }}"
+                f" || exit {EDR_FAILED}"
+            ),
+            cwd=str(PROJECT_DIR),
+            env={
+                **wh.env,
+                **DBT_CLOCK_ENV,
+                # Read by `dbt parse` and by alerting.metric_drivers
+                "DBT_TARGET_PATH": str(DBT_CACHE_DIR / f"metric_drivers_{wh.name}"),
+            },
+            append_env=True,
+            skip_on_exit_code=EDR_FAILED,
+            trigger_rule=TriggerRule.NONE_SKIPPED,
+            # In the pool: on DuckDB it opens the file
+            **({"pool": wh.pool} if wh.pool else {}),
+        )
+
         email_report = PythonOperator(
             task_id="report",
             python_callable=report,
@@ -447,6 +481,7 @@ def build_dag(wh: Warehouse) -> DAG:
         ingest >> new_orders >> elementary_tables >> dbt >> edr_report >> email_report
         # Directly too: a failed dbt must hold back the email even if edr_report ran
         dbt >> email_report
+        dbt >> metric_drivers >> email_report
         ingest >> schema_email
         dag.get_task(PRODUCER_TASK_ID) >> lineage
     return dag

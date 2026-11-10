@@ -84,6 +84,33 @@ def bar_h(
     _show(chart, height or max(160, 30 * len(df)))
 
 
+def bar_v(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    title: str,
+    fmt: str,
+    order: list[str],
+    extra_tooltip: list[alt.Tooltip] | None = None,
+    height: int = 260,
+) -> None:
+    """Single-series vertical bars over an ordered category (bands, buckets), in `order`, not by value."""
+    chart = (
+        alt.Chart(df)
+        .mark_bar(color=series_colors()[0], cornerRadiusEnd=4)
+        .encode(
+            x=alt.X(f"{x}:N", title=None, sort=order, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y(f"{y}:Q", title=title, axis=alt.Axis(format=fmt)),
+            tooltip=[
+                alt.Tooltip(f"{x}:N", title=x.replace("_", " ").capitalize()),
+                alt.Tooltip(f"{y}:Q", title=title, format=fmt),
+                *(extra_tooltip or []),
+            ],
+        )
+    )
+    _show(chart, height)
+
+
 def bar_grouped(
     df: pd.DataFrame, x: str, y: str, group: str, title: str, fmt: str, height: int = 260
 ) -> None:
@@ -158,3 +185,58 @@ def curve(df: pd.DataFrame, x: str, y: str, title: str, fmt: str, height: int = 
         base.mark_point(color=color, filled=True, size=64),
     )
     _show(chart, height)
+
+
+def forecast(df: pd.DataFrame, title: str, fmt: str, height: int = 300) -> None:
+    """Actual vs predicted over weeks (`week_start_date`): actual solid, predicted
+    dashed (identity not by color alone) over its prediction interval band.
+
+    Columns: week_start_date, actual_value, predicted_value, predicted_lower_bound,
+    predicted_upper_bound.
+    """
+    actual_color, predicted_color = series_colors()
+    long = df.melt(
+        id_vars=["week_start_date"], value_vars=["actual_value", "predicted_value"],
+        var_name="series", value_name="value",
+    ).dropna(subset=["value"])
+    long["series"] = long["series"].replace({"actual_value": "Actual", "predicted_value": "Predicted"})
+    x = alt.X("week_start_date:T", title=None, axis=alt.Axis(format="%b %Y", grid=False))
+    band = (
+        alt.Chart(df.dropna(subset=["predicted_value"]))
+        .mark_area(color=predicted_color, opacity=0.18)
+        .encode(x=x, y=alt.Y("predicted_lower_bound:Q"), y2="predicted_upper_bound:Q")
+    )
+    lines = (
+        alt.Chart(long)
+        .mark_line(strokeWidth=2)
+        .encode(
+            x=x,
+            y=alt.Y("value:Q", title=title, axis=alt.Axis(format=fmt)),
+            color=alt.Color(
+                "series:N",
+                scale=alt.Scale(domain=["Actual", "Predicted"], range=[actual_color, predicted_color]),
+                legend=alt.Legend(title=None, orient="top"),
+            ),
+            strokeDash=alt.StrokeDash(
+                "series:N", scale=alt.Scale(domain=["Actual", "Predicted"], range=[[1, 0], [6, 3]]), legend=None
+            ),
+        )
+    )
+    hover = alt.selection_point(fields=["week_start_date"], nearest=True, on="pointerover", empty=False)
+    rule = (
+        alt.Chart(df)
+        .mark_rule(color="gray")
+        .encode(
+            x=x,
+            opacity=alt.condition(hover, alt.value(0.5), alt.value(0)),
+            tooltip=[
+                alt.Tooltip("week_start_date:T", title="Week of", format="%d %b %Y"),
+                alt.Tooltip("actual_value:Q", title="Actual", format=fmt),
+                alt.Tooltip("predicted_value:Q", title="Predicted", format=fmt),
+                alt.Tooltip("predicted_lower_bound:Q", title="90 % interval from", format=fmt),
+                alt.Tooltip("predicted_upper_bound:Q", title="to", format=fmt),
+            ],
+        )
+        .add_params(hover)
+    )
+    _show(alt.layer(band, lines, rule), height)

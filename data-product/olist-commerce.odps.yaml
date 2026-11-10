@@ -8,7 +8,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: olist-commerce
 name: Olist commerce analytics
-version: 1.2.0
+version: 1.6.0
 status: active
 domain: commerce
 type: aggregate
@@ -59,7 +59,7 @@ outputPorts:
       Star schema in BigQuery (prod and hourly live feed) and DuckDB (local); also built and
       contract-tested weekly on Databricks (CI only).
     contractId: olist-marts
-    version: 1.2.0
+    version: 1.5.0
     inputContracts:
       - id: olist-raw
         version: 1.0.2
@@ -68,18 +68,43 @@ outputPorts:
     customProperties:
       - property: implementation
         value: dbt public models with enforced contracts (transform/models/marts)
+      - property: sloWindowDays
+        value: 28
+        description: Window of the error budget; the page shows the same days.
+      - property: sloFreshness
+        value: 0.95
+        description: Share of loads of new orders followed by a rebuild of the marts within 24 hours.
+      - property: sloQuality
+        value: 0.99
+        description: Share of dbt runs in which every error-severity test passed.
+      - property: sloDeployAvailability
+        value: 0.99
+        description: Share of CI/CD runs on main that finished successfully.
   - name: metrics
     type: semantic-layer
     description: >-
-      Business metrics (revenue, average order value, late delivery rate, repeat customer
-      rate, cohort retention, ...) defined once in the dbt Semantic Layer, queried with MetricFlow on either
+      Business metrics (revenue, average order value, late delivery rate, order funnel stage
+      times, repeat customer rate, cohort retention, ...) defined once in the dbt Semantic Layer, queried with MetricFlow on either
       warehouse.
     inputContracts:
       - id: olist-marts
-        version: 1.2.0
+        version: 1.5.0
     authoritativeDefinitions:
       - type: implementation
-        url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__semantic_models.yml
+        url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__models.yml
+    customProperties:
+      - property: sloWindowDays
+        value: 28
+        description: Window of the error budget; the page shows the same days.
+      - property: sloFreshness
+        value: 0.95
+        description: Share of loads of new orders followed by a rebuild of the marts within 24 hours.
+      - property: sloQuality
+        value: 0.99
+        description: Share of dbt runs in which every error-severity test passed.
+      - property: sloDeployAvailability
+        value: 0.99
+        description: Share of CI/CD runs on main that finished successfully.
 
 managementPorts:
   - name: docs
@@ -87,12 +112,19 @@ managementPorts:
     type: topic
     url: https://shucig.github.io/olist-analytics-dbt/
     description: dbt docs with lineage, column definitions and tests.
+  - name: slo
+    content: observability
+    type: topic
+    url: https://shucig.github.io/olist-analytics-dbt/slo/
+    description: >-
+      Service level objectives (freshness, quality, deploy availability), error budget and
+      burn rate over the last 28 days. Targets: data-product/slo.yaml.
   - name: alerts
     content: observability
     type: topic
     description: >-
       Email on every failed CI/CD job and Airflow run, plus a daily OK / stale-data report
-      of the live feed.
+      of the live feed, and on an error budget burning too fast (see slo).
 
 customProperties:
   - property: dbtGroups

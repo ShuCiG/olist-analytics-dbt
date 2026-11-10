@@ -35,7 +35,7 @@ TRANSFORM = REPO / "transform"
 DESCRIPTOR = PRODUCT_DIR / "olist-commerce.odps.yaml"
 ODPS_SCHEMA = PRODUCT_DIR / "odps-json-schema-v1.1.0.json"
 # dbt groups outside the Olist product: `platform` = how the platform runs (cost mart, D71)
-NOT_PRODUCT_GROUPS = {"platform"}
+NOT_PRODUCT_GROUPS = {"platform", "ml"}
 # dbt sources outside the product: BigQuery's own job history, read by the cost mart (D71)
 NOT_PRODUCT_SOURCES = {"bigquery"}
 
@@ -168,6 +168,22 @@ def test_output_contract_matches_dbt_marts(
             name for name, col in built.items() if any(c["type"] == "primary_key" for c in col["constraints"])
         }
         assert {n for n, p in promised.items() if p.get("primaryKey")} == dbt_keys, f"{where}: primary key"
+
+
+def test_restricted_columns_carry_a_policy_tag(
+    product: dict[str, Any], contracts: dict[str, dict[str, Any]], manifest: dict[str, Any]
+) -> None:
+    """Column-level security on BigQuery (D94): exactly the columns the contract classifies
+    `restricted` get a policy tag in dbt, so a reader without the tag's role can't read them."""
+    contract = output_contract(product, contracts, "marts")
+    for obj in contract["schema"]:
+        node = mart_model(manifest, obj["physicalName"])
+        restricted = {p["name"] for p in obj["properties"] if p.get("classification") == "restricted"}
+        tagged = {name for name, col in node["columns"].items() if col.get("policy_tags")}
+        assert tagged == restricted, f"{obj['name']}: tagged {sorted(tagged)} vs restricted {sorted(restricted)}"
+        for name in tagged:
+            for tag in node["columns"][name]["policy_tags"]:
+                assert "/policyTags/" in tag, f"{obj['name']}.{name}: {tag!r} is not a rendered policy tag"
 
 
 def test_metrics_port_points_to_the_semantic_layer(product: dict[str, Any], manifest: dict[str, Any]) -> None:

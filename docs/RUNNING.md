@@ -101,6 +101,38 @@ uv run python data-product/build_site.py site/data-product      # product page +
 
 On Windows set `PYTHONUTF8=1` (the CLI prints emoji the console code page can't encode).
 
+## Fault injection
+
+```bash
+cd transform && uv run dbt deps && cd ..
+uv run pytest fault_injection                       # all scenarios, ~13 min (4 at a time)
+uv run pytest fault_injection -k missing_payments   # one scenario: baseline + its build
+```
+
+DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defect: a function and a `Scenario` in
+`fault_injection/scenarios.py`, a row in the README table. `fault_injection/test_deletion.py` (a deletion request
+end to end, D105) shares the baseline: `uv run pytest fault_injection/test_deletion.py`, ~5 min.
+
+## Deletion requests (GDPR)
+
+A person's erasure request (D105): request, apply, rebuild, check. No load may run meanwhile (pause the Airflow
+DAG, no deploy running). The request table stays: the loader leaves its people out of every later load.
+
+```bash
+cd transform
+uv run dbt run-operation request_deletion --args "{customer_unique_id: <id>}"   # --target prod: as the owner
+uv run dbt run-operation apply_deletion_requests
+uv run dbt build --select source:olist+ --exclude config.materialized:bqml_model
+uv run dbt run-operation check_deletion_requests                                 # fails while anyone is left
+```
+
+- Prod: `--target prod` on each command. Then the Airflow BigQuery replay with the same request table:
+  `DBT_RAW_SCHEMA=airflow_raw` and `--target airflow` on apply, build and check.
+- Local / Airflow DuckDB: each DuckDB file has its own `pii_keys.deletion_requests` (`DBT_DUCKDB_PATH` picks the file).
+- Another request table: `OLIST_DELETION_REQUESTS=<schema>.<table>`, read by the loader and dbt alike.
+- Deleted rows stay readable through BigQuery time travel for 48 h on the person datasets (`infra/datasets.tf`),
+  then 7 days of fail-safe.
+
 ## Semantic layer queries
 
 ```bash
@@ -115,6 +147,36 @@ DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics or
 ```
 
 `mf` has no `--target` flag: `profiles.yml` takes the default target from `DBT_TARGET`.
+
+## MCP server over the semantic layer
+
+Needs built marts on DuckDB and a manifest parsed on target `dev`:
+
+```bash
+cd transform && uv run dbt parse && cd ..
+claude mcp add olist-metrics --scope local -- uv run --directory "$(pwd)" python -m metrics_mcp.server
+```
+
+Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values`, `query_metrics` and `explain_change` (a metric's change between two periods split by dimension members, D110). The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
+
+```bash
+uv run pytest metrics_mcp                                       # the server through a real client; needs built marts
+uv run python -m metrics_mcp.eval.evaluate --model haiku --out metrics_mcp/eval/results/haiku.json
+uv run python -m metrics_mcp.eval.evaluate --model haiku --out /tmp/one.json --only revenue_sp_2018
+```
+
+The evaluation sends each question in [`metrics_mcp/eval/questions.yml`](../metrics_mcp/eval/questions.yml) to a fresh headless Claude Code limited to these tools. It uses the subscription limit, about 13,000 tokens and 30 s a question, so it runs by hand and not in CI.
+
+## Why a metric moved
+
+`explain_change` and the run email's driver block share `alerting/metric_drivers.py`. To run the email check by hand on a built warehouse (prints one JSON line; `--month` picks the later month, default the month of the newest order):
+
+```bash
+cd transform && uv run dbt parse && cd ..
+uv run python -m alerting.metric_drivers --target mcp --month 2017-11 2>/dev/null
+```
+
+Settings in the Airflow DAGs: Variables `olist_metric_drift_threshold` and `olist_metric_drift_min_orders` (airflow/README.md).
 
 ## Observability report (Elementary)
 
@@ -197,6 +259,8 @@ uv run streamlit run dashboard/app.py                                   # DuckDB
 DASHBOARD_BACKEND=bigquery uv run streamlit run dashboard/app.py        # BigQuery prod marts (ADC key)
 DASHBOARD_BACKEND=bigquery MARTS_DATASET=airflow_marts uv run streamlit run dashboard/app.py  # Airflow-fed marts
 uv run pytest dashboard                                                 # pages render, KPIs = metrics, SQL = agreement
+uv run python dashboard/static_site/export_site.py _site/dashboard      # static page + Parquet, from the DuckDB marts (D102)
+uv run python -m http.server -d _site 8000                              # open http://localhost:8000/dashboard/ (needs internet: the engine loads from CDNs)
 ```
 
 Deployed on Streamlit Community Cloud from `main` (entrypoint `dashboard/app.py`; it installs the slim
@@ -209,6 +273,7 @@ App secrets:
 DASHBOARD_BACKEND = "bigquery"
 MARTS_DATASET = "airflow_marts"   # default "marts" (prod)
 # COSTS_DATASET = "marts"         # cost page (BigQuery only): where fct_dbt_job_costs lives, default prod "marts"
+# ML_DATASET = "marts"            # BigQuery ML page: where the ML marts live (D96), default prod "marts"
 
 [gcp_service_account]   # fields of the service account's JSON key
 type = "service_account"
@@ -253,6 +318,20 @@ cd transform && uv run dbt run-operation drop_isolated_datasets --target ci   # 
 
 The model ignores `--full-refresh` (its rows outlive the 180 days of job history); drop the table to rebuild it.
 
+### PR column impact
+
+What slim CI posts on a PR (D101). Local: compile what the branch changes against the last prod deploy's manifest,
+then read both manifests. No warehouse data: `dbt compile` only needs BigQuery metadata for the deferral.
+
+```bash
+run_id=$(gh api "repos/ShuCiG/olist-analytics-dbt/actions/artifacts?name=prod-manifest" \
+  --jq '[.artifacts[] | select(.workflow_run.head_branch == "main")][0].workflow_run.id')
+gh run download "$run_id" --name prod-manifest --dir prod-state
+(cd transform && DBT_CI_SCHEMA=ci_impact_local uv run dbt compile --target ci --select state:modified+ \
+  --exclude package:elementary --defer --state ../prod-state)
+uv run python -m lineage.impact prod-state/manifest.json transform/target/manifest.json column-impact.md
+```
+
 ### PR data diff
 
 What slim CI posts on a PR (D73), run locally as `olist-ci`: build the changed models into throwaway datasets
@@ -262,7 +341,8 @@ deferred to the last prod deploy's manifest, compare the marts that built with p
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/olist-ci.json DBT_CI_SCHEMA=ci_diff_check
 run_id=$(gh api "repos/ShuCiG/olist-analytics-dbt/actions/artifacts?name=prod-manifest" \n  --jq '[.artifacts[] | select(.workflow_run.head_branch == "main")][0].workflow_run.id')
 gh run download "$run_id" --name prod-manifest --dir prod-state
-cd transform && uv run dbt run --target ci --select package:elementary
+cd transform && uv run dbt run --target ci --select package:elementary \
+  --exclude dbt_columns+ dbt_exposures+ dbt_groups+ dbt_metrics+ dbt_models+ dbt_seeds+ dbt_snapshots+ dbt_sources+ dbt_tests+
 uv run dbt build --target ci --select state:modified+ --exclude package:elementary --defer --state ../prod-state
 cd .. && uv run python .github/scripts/data_diff.py prod-state/manifest.json data-diff.md   # Markdown of the comment
 cd transform && uv run dbt run-operation drop_isolated_datasets --target ci
@@ -329,6 +409,39 @@ variable `SNOWFLAKE_ACCOUNT` and secret `SNOWFLAKE_PRIVATE_KEY` (the PEM text of
 secret it skips. When the trial ends: delete the secret, `terraform destroy` in `infra/snowflake` (the database has
 `prevent_destroy`: remove it first), or keep everything on a paid account.
 
+## Engines comparison (re-measure)
+
+The README table "Same project, four engines" (D91): one commit, each engine's existing `raw`, `ci_eng_*` schemas.
+Use a profiles directory outside the repo with copies of `dev` (path to a copy of `data/olist.duckdb`), `ci`,
+`databricks` and `snowflake_ci` from `transform/profiles.yml`, each with `threads: 4` and schema / dataset `ci_eng`
+(Databricks: keep the token, catalog `olist`). Name them `ci_duckdb`, `ci`, `databricks_ci`, `snowflake_ci`: the
+drop macro accepts only these target names for `ci_*` schemas.
+
+```bash
+cd transform
+P=/path/to/eng-profiles                     # profiles.yml as above
+for t in ci_duckdb ci databricks_ci snowflake_ci; do
+  uv run dbt run --profiles-dir $P --target $t -s package:elementary -q        # not timed
+  date -u +%FT%TZ; time uv run dbt build --profiles-dir $P --target $t --exclude package:elementary
+  cp target/run_results.json $P/$t.run_results.json                           # elapsed_time, per-node times
+  [ $t = ci_duckdb ] || uv run dbt run-operation drop_isolated_datasets --profiles-dir $P --target $t
+done
+```
+
+Databricks Free Edition: log in to the workspace first if it was idle for a while; an unused workspace refuses even to
+start its warehouse (`denyReason: INACTIVE`, D91). The Python model leaves a notebook folder
+`/Users/<you>/dbt_python_models/olist/ci_eng_marts`: delete it in the workspace browser.
+
+Cost of each build, by its UTC time window:
+
+- BigQuery: `select count(*), sum(total_bytes_billed) from region-eu.INFORMATION_SCHEMA.JOBS_BY_USER where
+  creation_time between <start> and <end> and job_type = 'QUERY'`.
+- Snowflake (as `ACCOUNTADMIN`; `ACCOUNT_USAGE` lags up to ~3 h): warehouse up / down times from
+  `snowflake.account_usage.warehouse_events_history`, credits per hour from `warehouse_metering_history`, per query
+  from `query_attribution_history`. X-Small Gen2 = 1.35 credits/h.
+- Databricks: `select usage_start_time, sku_name, usage_quantity from system.billing.usage where usage_date = <day>`
+  (hourly rows, a few hours late). Free Edition bills nothing.
+
 ## Airflow
 
 ```bash
@@ -344,11 +457,21 @@ Or run a published image instead of building: `OLIST_AIRFLOW_IMAGE=ghcr.io/shuci
 ## Development hooks
 
 ```bash
-uv run pre-commit install   # whitespace / YAML / secrets checks, no commits to main,
-                            # sqlfluff on changed SQL, pyright + pytest on Python changes
-uv run sqlfluff lint transform/models transform/tests
-uv run pyright
+uv run pre-commit install   # pre-commit: whitespace / YAML / secrets checks, no commits to main,
+                            # sqlfluff on changed SQL, pyright + pytest on Python changes,
+                            # project evaluator when the dbt graph changes (~1-2 min)
+                            # pre-push: ci-local, every CI check that needs no cloud (~4 min)
+uv run python .github/scripts/ci_local.py --list         # the checks and the CI steps they mirror
+uv run python .github/scripts/ci_local.py                # all of them, as the pre-push hook does
+uv run python .github/scripts/ci_local.py --only evaluator sqlfluff
 ```
+
+`ci_local.py` runs the CI commands as `ci-cd.yml` writes them (a test fails when one changes in the
+workflow only): sqlfluff, pyright, pytest, the audit-report and contract-versioning checks, the data
+product tests, the project evaluator and `terraform fmt`. Four lanes run in parallel, and the first
+failure prints its output with the CI job it stands for. Builds on a warehouse, fault injection,
+the Airflow image and `terraform validate` / `test` stay CI-only. Skip a hook on purpose only:
+`git commit --no-verify`, `git push --no-verify`.
 
 How a change goes: an issue (Task or Bug form) → a branch per issue → a PR whose description has `Closes #N`.
 New issues and PRs land on the [roadmap board](https://github.com/users/ShuCiG/projects/2) by themselves; merging
@@ -398,7 +521,59 @@ The third job, **Service account keys** (D63), lists the user-managed keys of ev
 - `key on an account that should have none  <account>  <key id>` — a key nobody declared: delete it, or, if the
   account really needs one, add it to `infra/sa_keys.yaml` with where it is used.
 
+The fourth job, **Weekly engine runs** (D95), fails when `databricks.yml` or `snowflake.yml` has no successful run on
+main within 7.5 days: the Monday dispatch didn't happen (see *Weekly runs* below). A run that started and failed sends
+its own email.
+
 Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next run is green.
+
+## Weekly runs (Cloud Scheduler)
+
+`databricks.yml` and `snowflake.yml` have no GitHub `schedule` (D95). Cloud Scheduler jobs `weekly-databricks`
+(Mondays 06:17 UTC) and `weekly-snowflake` (06:37) start the Cloud Workflows workflow `github-dispatch`
+(region `europe-west1`, `infra/scheduler.tf`), which calls GitHub's `workflow_dispatch` API with a token from
+Secret Manager. Terraform makes the secret `github-dispatch-token` empty; the token goes in by hand, so its value never
+sits in the Terraform state.
+
+**Token (once, then on expiry):**
+
+1. https://github.com/settings/personal-access-tokens/new: name `olist-github-dispatch`, expiration up to a year,
+   resource owner `ShuCiG`, *Only select repositories* → `olist-analytics-dbt`, *Repository permissions* →
+   **Actions: Read and write** (nothing else). Generate, copy.
+2. Store it as a new version (the workflow reads `latest`). In Windows PowerShell, with the token copied to the
+   clipboard, check its shape first (a fine-grained token is 93 characters and starts with `github_pat_`):
+
+   ```powershell
+   $p = (Get-Clipboard | Out-String).Trim()
+   "length=$($p.Length) github_pat=$($p.StartsWith('github_pat_'))"
+   $f = New-TemporaryFile
+   [IO.File]::WriteAllText($f, $p)
+   gcloud secrets versions add github-dispatch-token --data-file="$f" --project=olist-analytics-dbt-472315
+   Remove-Item $f; Remove-Variable p
+   ```
+
+   Through a file, not a pipe: Windows PowerShell 5.1 appends a line break to a string piped into a native command,
+   and GitHub rejects the token with it. Pasting into `Read-Host -AsSecureString` stored a wrong value once (401).
+   In bash: `read -rs TOKEN; printf '%s' "$TOKEN" | gcloud secrets versions add github-dispatch-token --data-file=-`.
+
+3. On rotation, disable the old version afterwards: `gcloud secrets versions list github-dispatch-token`, then
+   `gcloud secrets versions disable <n> --secret=github-dispatch-token`.
+
+**Check or trigger a dispatch** (a trigger starts a real engine run):
+
+```bash
+gcloud scheduler jobs run weekly-databricks --location=europe-west1 --project=olist-analytics-dbt-472315
+gcloud workflows executions list github-dispatch --location=europe-west1 --project=olist-analytics-dbt-472315 --limit=5
+gh run list -w databricks.yml -L 3
+```
+
+The first `terraform apply` can fail with `Workflows service agent does not exist`: the API was enabled seconds
+earlier and Google creates its service agent with a delay. Plan and apply again a few minutes later (or create it:
+`gcloud beta services identity create --service=workflows.googleapis.com`).
+
+A failed execution (`state: FAILED`) shows GitHub's answer in `gcloud workflows executions describe <id>`:
+401 = token expired or revoked (new token, step 2), 404 = token lacks access to the repository, 422 = workflow file
+or `workflow_dispatch` trigger missing on main.
 
 ## Service account keys
 

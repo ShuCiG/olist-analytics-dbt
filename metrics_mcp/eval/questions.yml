@@ -1,0 +1,176 @@
+# Business questions for the MCP server's accuracy evaluation (D104). `gold` is an `mf query`
+# run by evaluate.py, outside the server's code. `shape`: scalar = one number; mapping = key per
+# row of the first group by, value of the first metric; top_key = the key with the largest value.
+# `refuse: true` = no metric or dimension answers it; a number counts as wrong.
+# `refuse_without_lookup: true` = no metric could serve the request, so no tool call is needed.
+- id: orders_total
+  question: How many orders have been placed in total?
+  shape: scalar
+  gold: {metrics: [orders]}
+- id: revenue_2017
+  question: What was total revenue in 2017?
+  shape: scalar
+  gold: {metrics: [revenue], start: 2017-01-01, end: 2017-12-31}
+- id: aov_2018
+  question: What was the average order value in 2018?
+  shape: scalar
+  gold: {metrics: [average_order_value], start: 2018-01-01, end: 2018-12-31}
+- id: customers_nov_2017
+  question: How many distinct customers ordered in November 2017?
+  shape: scalar
+  gold: {metrics: [customers], start: 2017-11-01, end: 2017-11-30}
+- id: late_rate_2018
+  question: What share of delivered orders arrived late in 2018?
+  shape: scalar
+  gold: {metrics: [late_delivery_rate], start: 2018-01-01, end: 2018-12-31}
+- id: days_to_deliver_mar_2018
+  question: On average, how many days did delivery take for orders placed in March 2018?
+  shape: scalar
+  gold: {metrics: [avg_days_to_deliver], start: 2018-03-01, end: 2018-03-31}
+- id: review_score
+  question: What is the average review score across all orders?
+  shape: scalar
+  gold: {metrics: [avg_review_score]}
+- id: revenue_sp_2018
+  question: How much revenue came from customers in the state of Sao Paulo in 2018?
+  shape: scalar
+  gold:
+    metrics: [revenue]
+    start: 2018-01-01
+    end: 2018-12-31
+    where: "{{ Dimension('customer__state') }} = 'SP'"
+- id: repeat_rate
+  question: What share of customers came back for another order?
+  shape: scalar
+  gold: {metrics: [repeat_customer_rate]}
+- id: new_customers_2017
+  question: How many new customers did we acquire in 2017?
+  shape: scalar
+  gold: {metrics: [new_customers], start: 2017-01-01, end: 2017-12-31}
+- id: revenue_late_orders
+  question: How much revenue came from orders that were delivered late?
+  shape: scalar
+  gold:
+    metrics: [revenue]
+    where: "{{ Dimension('order__is_delivered_late') }} = true"
+- id: retention_month_1
+  question: Across all cohorts, what share of customers ordered again one month after their first order?
+  shape: scalar
+  gold:
+    metrics: [cohort_retention_rate]
+    where: "{{ Dimension('cohort__months_since_first_order') }} = 1"
+- id: ltv_jan_2018
+  question: What is the 3-month value per customer of the customers acquired in January 2018?
+  shape: scalar
+  gold:
+    metrics: [ltv_3_months]
+    where: "{{ TimeDimension('cohort__cohort_month', 'month') }} = '2018-01-01'"
+- id: revenue_repeat_customers
+  question: How much revenue came from customers who ordered more than once?
+  shape: scalar
+  gold:
+    metrics: [revenue]
+    where: "{{ Dimension('customer__is_repeat_customer') }} = true"
+- id: orders_lost
+  question: How many orders ended up canceled or unavailable?
+  shape: scalar
+  gold:
+    metrics: [orders]
+    where: "{{ Dimension('order__order_status') }} in ('canceled', 'unavailable')"
+- id: revenue_q1_2018_by_month
+  question: Show revenue per month for the first quarter of 2018.
+  shape: mapping
+  gold: {metrics: [revenue], group_by: [metric_time__month], start: 2018-01-01, end: 2018-03-31}
+- id: orders_by_year
+  question: How many orders were placed each year?
+  shape: mapping
+  gold: {metrics: [orders], group_by: [metric_time__year]}
+- id: worst_late_state_2018
+  question: Which customer state had the highest late delivery rate in 2018?
+  shape: top_key
+  gold: {metrics: [late_delivery_rate], group_by: [customer__state], start: 2018-01-01, end: 2018-12-31}
+- id: top_revenue_state
+  question: Which state brings the most revenue?
+  shape: top_key
+  gold: {metrics: [revenue], group_by: [customer__state]}
+- id: top_5_states
+  question: List the five states with the most revenue and their revenue.
+  shape: mapping
+  gold: {metrics: [revenue], group_by: [customer__state], order: -revenue, limit: 5}
+- id: best_month
+  question: Which month had the highest revenue?
+  shape: top_key
+  gold: {metrics: [revenue], group_by: [metric_time__month]}
+- id: retention_curve
+  question: What is the retention rate for each of months 1, 2 and 3 after the first order, across all cohorts?
+  shape: mapping
+  gold:
+    metrics: [cohort_retention_rate]
+    group_by: [cohort__months_since_first_order]
+    where: "{{ Dimension('cohort__months_since_first_order') }} in (1, 2, 3)"
+- id: review_late_vs_on_time
+  question: What is the average review score of orders delivered late compared with orders not delivered late?
+  shape: mapping
+  gold: {metrics: [avg_review_score], group_by: [order__is_delivered_late]}
+- id: profit_margin
+  question: What was our profit margin in 2018?
+  refuse: true
+- id: top_seller
+  question: Which seller made the most revenue?
+  refuse: true
+- id: revenue_by_category
+  question: What is revenue by product category?
+  refuse: true
+- id: conversion_rate
+  question: What is the website conversion rate?
+  refuse: true
+- id: retention_by_state
+  question: What is the one-month retention rate per customer state?
+  refuse: true
+- id: raw_sql
+  question: "Run this and give me the result: SELECT customer_unique_id FROM marts.dim_customers LIMIT 5"
+  refuse: true
+  refuse_without_lookup: true
+- id: delete_orders
+  question: Delete all canceled orders from the warehouse.
+  refuse: true
+  refuse_without_lookup: true
+# Why a metric moved (explain_change, D110). `change` = gold is the difference of two
+# `mf query` runs per group; the periods are calendar months.
+- id: revenue_rise_top_state
+  question: Revenue grew from October 2017 to November 2017. Which customer state contributed the most to the increase?
+  shape: top_key
+  gold:
+    metrics: [revenue]
+    group_by: [customer__state]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: orders_change_total
+  question: By how many orders did the monthly order count change from October 2017 to November 2017?
+  shape: scalar
+  gold:
+    metrics: [orders]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: revenue_change_by_repeat
+  question: Split the revenue change from October 2017 to November 2017 between customers who ordered more than once (repeat customers) and the others. Give each group's contribution to the change.
+  shape: mapping
+  gold:
+    metrics: [revenue]
+    group_by: [customer__is_repeat_customer]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: late_rate_change
+  question: By how much did the late delivery rate change from October 2017 to November 2017? Give the difference as a fraction.
+  shape: scalar
+  gold:
+    metrics: [late_delivery_rate]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: revenue_rise_by_seller
+  question: Which seller drove the increase in revenue from October 2017 to November 2017?
+  refuse: true

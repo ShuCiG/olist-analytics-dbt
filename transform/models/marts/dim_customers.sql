@@ -50,6 +50,8 @@ order_stats as (
 final as (
     select
         latest.customer_unique_id,
+        -- Pseudonym of the person for readers without access to the id (D94)
+        {{ customer_key('latest.customer_unique_id') }} as customer_key,
         latest.zip_code_prefix,
         latest.city,
         latest.state,

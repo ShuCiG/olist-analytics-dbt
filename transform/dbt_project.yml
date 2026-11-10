@@ -33,6 +33,12 @@ flags:
   require_ref_searches_node_package_before_root: true
 
 vars:
+  # Column-level security on BigQuery (D94): the policy tags of infra/pii.tf
+  # (`terraform output pii_policy_tags`), set on the person-related columns of the
+  # marts (policy_tags in _marts__models.yml). Other adapters ignore policy_tags.
+  pii_policy_tags:
+    person_id: projects/olist-analytics-dbt-472315/locations/eu/taxonomies/7858280527972507286/policyTags/4966082808365662401
+    person_location: projects/olist-analytics-dbt-472315/locations/eu/taxonomies/7858280527972507286/policyTags/3919577397577050111
   # Elementary's clock (D38). Anomaly tests look back from "now"; the data is a
   # 2016-2018 dump, so "now" is the last order in the data, not the wall clock.
   # Default = the dump's last order (full loads: CI, prod); Airflow's replay passes
@@ -43,8 +49,10 @@ vars:
   # freshness run here (Airflow's producer, CI, CD) sits next to a build that uploads
   # the same artifacts, so freshness only uploads its own results (D55). Per
   # command, not via `--vars`: a changed `--vars` drops dbt's partial parse (D50).
-  # Elementary reads the rendered "True" / "False" as a boolean.
-  disable_dbt_artifacts_autoupload: "{{ flags.WHICH == 'freshness' }}"
+  # Elementary reads the rendered "True" / "False" as a boolean. Off on target `ci`:
+  # its per-run datasets have no artifact tables (D103). There `--defer` would point
+  # the upload at tables that don't exist and fail the on-run-end hook.
+  disable_dbt_artifacts_autoupload: "{{ flags.WHICH == 'freshness' or target.name == 'ci' }}"
   # Anomaly tests on incremental models (fct_order_items) recompute every bucket of
   # the training window, as they do for tables. Otherwise Elementary computes only
   # missing buckets but scores only metrics stored after the model's last full
@@ -76,6 +84,9 @@ models:
     intermediate:
       +materialized: view
       +schema: intermediate
+      # Inputs of the BigQuery ML models, enabled with them (marts/ml below)
+      ml:
+        +enabled: &bqml_enabled "{{ target.type == 'bigquery' and target.name != 'airflow' }}"
     marts:
       +materialized: table
       +schema: marts
@@ -89,6 +100,15 @@ models:
       platform:
         +enabled: *job_costs_enabled
         +group: platform
+      # BigQuery ML (D96): models trained, applied and evaluated in SQL. BigQuery
+      # only (the other engines have no BigQuery ML), and not in Airflow's replay:
+      # its early months are too short a history to train on, and the live
+      # dashboard reads these tables from prod `marts` (setting `ML_DATASET`).
+      # Protected, not part of the data product (like D81). The intermediate/ml
+      # folder above holds their inputs, enabled the same way.
+      ml:
+        +enabled: *bqml_enabled
+        +access: protected
   # Project linter, off by default: CI runs it as its own step with
   # DBT_PROJECT_EVALUATOR=true (D32). Off, its nodes stay out of every build,
   # Airflow's manifest and the warn-test list of the alert emails.

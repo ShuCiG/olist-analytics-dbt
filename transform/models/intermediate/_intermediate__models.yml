@@ -67,11 +67,28 @@ models:
         description: "{{ doc('order_id') }}"
         data_tests: [unique, not_null]
 
+  - name: int_orders_staged
+    description: >
+      Latest review of each order (score, milestones), the lags around it and the furthest stage
+      the order reached (fulfilment first: a review counts only after delivery).
+      One row per order, including orders without a review.
+    config:
+      group: orders
+      access: private
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_tests: [unique, not_null]
+      - name: order_stage
+        description: Furthest milestone reached; see fct_orders.
+        data_tests: [not_null]
+
   - name: int_zip_codes_located
     description: One centroid (avg lat/lng) per zip code prefix.
+    # Protected, not private: fct_shipments (group orders) locates the customer's zip
     config:
       group: parties
-      access: private
+      access: protected
     columns:
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }}"

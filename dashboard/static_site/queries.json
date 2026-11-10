@@ -1,0 +1,9 @@
+{
+  "kpis": "select * from 'kpis.parquet' where period_id = ?",
+  "monthly": "select make_date(yr, mo, 1)::varchar as month, orders, revenue, avg_days_to_deliver, late_delivery_rate from 'monthly.parquet' where period_id = ? order by yr, mo",
+  "categories": "select category, revenue, orders from 'categories.parquet' where period_id = ? order by revenue desc",
+  "payments": "select method, share, amount from 'payments.parquet' where period_id = ? order by share desc",
+  "states": "select state, late_delivery_rate, orders from 'states.parquet' where period_id = ? order by late_delivery_rate desc",
+  "review_scores": "select delivery, review_score, share, orders from 'review_scores.parquet' where period_id = ? order by review_score, delivery",
+  "retention": "select months_since_first_order, retention_rate, value_per_customer, customers from 'retention.parquet' where period_id = ? order by 1"
+}

@@ -26,6 +26,7 @@ from streamlit.testing.v1 import AppTest
 DASHBOARD = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DASHBOARD))  # Streamlit-style imports
 
+import export_site  # noqa: E402
 import kpis  # noqa: E402
 import warehouse  # noqa: E402
 
@@ -105,3 +106,24 @@ def test_dashboard_reads_exactly_the_declared_columns(
         f"read but not declared: {sorted(read - declared)}\n"
         f"declared but not read: {sorted(declared - read)}"
     )
+
+
+def test_static_dashboard_reads_only_declared_columns(agreement: dict[str, Any]) -> None:
+    # The static page is a smaller view of the same consumer: it needs no column of its own
+    if warehouse.BACKEND != "duckdb":
+        pytest.skip("The static dashboard is built from DuckDB only")
+    sql: list[str] = []
+    original = warehouse.query
+
+    def recording(text: str):
+        sql.append(text)
+        return original(text)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(warehouse, "query", recording)
+        mp.setattr(kpis, "query", recording)
+        export_site.tables()
+    schema = contract_schema(agreement)
+    read = {pair for text in sql for pair in columns_read(text, schema)}
+    declared = {(table, col) for table, cols in agreement["uses"].items() for col in cols}
+    assert read and read <= declared, f"read but not declared: {sorted(read - declared)}"

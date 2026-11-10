@@ -14,6 +14,7 @@ STATUS = {
     "STALE": ("#9a6700", "#fff6dc", "Stale data"),
     "FAILED": ("#cf222e", "#ffebe9", "Failed"),
     "SCHEMA": ("#0969da", "#ddf4ff", "Schema change"),
+    "SLO": ("#9a6700", "#fff6dc", "Error budget"),
 }
 FONT = "-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
 MONO = "SFMono-Regular,Consolas,Menlo,monospace"

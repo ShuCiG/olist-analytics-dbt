@@ -17,3 +17,7 @@ groups:
     description: How the data platform itself runs, e.g. what each dbt node costs on BigQuery. Not part of the Olist data product.
     owner:
       name: Aliaksandr Letsko
+  - name: ml
+    description: Models trained, applied and evaluated with BigQuery ML (D96), their inputs and outputs. BigQuery only, not part of the Olist data product.
+    owner:
+      name: Aliaksandr Letsko

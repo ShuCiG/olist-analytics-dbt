@@ -4,11 +4,13 @@ Terraform for the project's Google Cloud side (decision D46 in `docs/DECISIONS.m
 
 | File | What |
 |---|---|
-| `datasets.tf` | 16 BigQuery datasets: prod (`raw`, `raw_staging`, `staging`, `intermediate`, `marts`, `seeds`, `snapshots`, `elementary`) and the same set for the Airflow DAG (`airflow_*`) |
+| `datasets.tf` | 16 BigQuery datasets: prod (`raw`, `raw_staging`, `staging`, `intermediate`, `marts`, `seeds`, `snapshots`, `elementary`) and the same set for the Airflow DAG (`airflow_*`); time travel 48 h on the ones with person rows (`raw`, `raw_staging`, `intermediate`, `marts` and twins, D105) |
 | `service_accounts.tf` | `dbt-runner`, `dashboard-reader`, `olist-ci` (no keys, see below) |
 | `wif.tf` | Workload Identity Federation for GitHub Actions: pool, OIDC provider limited to this repo, one impersonation binding per account |
 | `drift.tf` | `terraform-plan`: read-only account for the scheduled drift check (`.github/workflows/drift.yml`, D60) |
 | `job_history.tf` | custom role `jobHistoryViewer` (`bigquery.jobs.listAll` only) for `dbt-runner`: the cost mart reads the project's job history (D71) |
+| `pii.tf` | column-level security (D94): taxonomy `olist-pii` with policy tags `person_id` and `person_location`, Fine-Grained Reader for `dbt-runner`, `olist-ci` and the owner (`owner_member` in `terraform.tfvars`), custom role `policyTagUser` (attach tags to columns), dataset `pii_keys` with the secret behind `customer_key` (readable by `dbt-runner`, `olist-ci`, the owner) |
+| `scheduler.tf` | weekly engine runs (D95): Cloud Scheduler jobs → Cloud Workflows `github-dispatch` (`workflows/github_dispatch.yaml`) → GitHub `workflow_dispatch`; account `github-dispatch`, secret `github-dispatch-token` (value added with gcloud, never in the state) |
 | `iam_allowlist.yaml` | IAM bindings outside Terraform on purpose; the drift check fails on any other (D62) |
 | `sa_keys.yaml` | Accounts that may hold a JSON key and where it is used; the drift check fails on older than 90 days or any other key (D63) |
 | `iam.tf` | project roles and dataset read grants, additive (`*_iam_member`) |
@@ -21,6 +23,17 @@ Out of scope on purpose:
 - **Service account keys.** A key made by Terraform is stored in the state in plain text. GitHub Actions needs none (`wif.tf`); the local Airflow stack and Streamlit use keys created in the console.
 - **`ci_*` datasets.** Each lives for one PR CI run (`drop_isolated_datasets --target ci`).
 - **Tables.** dlt and dbt own everything inside the datasets.
+
+## The `customer_key` secret (once)
+
+After the first apply of `pii.tf`, create the key inside BigQuery; its value never leaves it (D94):
+
+```bash
+bq query --use_legacy_sql=false --project_id=olist-analytics-dbt-472315   'create table pii_keys.customer_key as select to_hex(sha256(generate_uuid() || generate_uuid())) as secret'
+```
+
+Replacing it changes every `customer_key` in the next build (fine for the dashboard, which reads the key and its
+join partner from the same build).
 
 ## Run
 
@@ -46,8 +59,9 @@ terraform apply
 - GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests) and `terraform-plan` (from the `drift-check` environment), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
 - `terraform-plan` holds viewer-type roles only and reads only the state bucket and the billing account.
 - `jobHistoryViewer` holds `bigquery.jobs.listAll` only, and only `dbt-runner` holds it.
+- `github-dispatch` holds `workflows.invoker` and read access to its one secret; the weekly jobs run in UTC as that account.
 
-`tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources, and every dataset and bucket has `prevent_destroy`.
+`tests/test_infra.py` (pytest) covers what `terraform test` can't see: there are no service account key resources and no secret versions (values), and every dataset and bucket has `prevent_destroy`.
 
 ```bash
 cd infra && terraform init -backend=false && terraform test

@@ -27,6 +27,15 @@ override_resource {
   }
 }
 override_resource {
+  target          = google_service_account.github_dispatch
+  override_during = plan
+  values = {
+    name   = "projects/olist-analytics-dbt-472315/serviceAccounts/github-dispatch@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    email  = "github-dispatch@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    member = "serviceAccount:github-dispatch@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+  }
+}
+override_resource {
   target = google_project_iam_member.this
 }
 override_resource {
@@ -227,11 +236,12 @@ run "drift_check" {
   command = plan
 
   # The drift check's account reads and never writes: viewer-type roles only
-  # (D60). serviceUsageConsumer lets it bill its API calls to the project.
+  # (D60). serviceUsageConsumer lets it bill its API calls to the project. Role names
+  # end in "Viewer" or, for some services, ".viewer" (roles/datacatalog.viewer).
   assert {
     condition = alltrue([
       for m in google_project_iam_member.terraform_plan :
-      can(regex("(Viewer|Reviewer|serviceUsageConsumer)$", m.role))
+      can(regex("(Viewer|Reviewer|\\.viewer|serviceUsageConsumer)$", m.role))
     ])
     error_message = "terraform-plan may hold viewer roles only on the project."
   }
@@ -242,5 +252,27 @@ run "drift_check" {
       && google_billing_account_iam_member.terraform_plan.role == "roles/billing.viewer"
     )
     error_message = "terraform-plan reads the state bucket and the billing account, nothing more."
+  }
+}
+
+run "weekly_dispatch" {
+  command = plan
+
+  # The dispatcher starts workflows and reads its one secret, nothing else (D95)
+  assert {
+    condition = (
+      google_project_iam_member.github_dispatch_invoker.role == "roles/workflows.invoker"
+      && google_secret_manager_secret_iam_member.github_dispatch.role == "roles/secretmanager.secretAccessor"
+      && google_secret_manager_secret_iam_member.github_dispatch.member == google_service_account.github_dispatch.member
+    )
+    error_message = "github-dispatch holds workflows.invoker on the project and secretAccessor on its secret only."
+  }
+
+  assert {
+    condition = alltrue([
+      for j in google_cloud_scheduler_job.weekly :
+      j.time_zone == "Etc/UTC" && j.http_target[0].oauth_token[0].service_account_email == google_service_account.github_dispatch.email
+    ])
+    error_message = "Weekly jobs run in UTC as github-dispatch."
   }
 }

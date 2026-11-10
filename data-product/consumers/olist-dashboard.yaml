@@ -14,7 +14,9 @@ startDate: "2026-10-13"
 purpose: >-
   Public demo dashboard: sales, delivery performance, reviews, customers and sellers, read
   hourly from the live feed. Shown to anyone with the link; no row-level personal data on screen
-  (customers are counted, never listed).
+  (customers are counted, never listed). The static page on GitHub Pages is a smaller view of the
+  same consumer, built from these columns; its published aggregates are checked in
+  dashboard/tests/test_static_site.py.
 
 consumer:
   name: Streamlit dashboard (dashboard/)
@@ -29,14 +31,14 @@ provider:
   # Compatible versions: same major. A breaking contract change bumps the major
   # version (data-product/check_compatibility.py) and fails this agreement until
   # the dashboard is updated and the agreement renewed.
-  contractVersion: 1.2.0
+  contractVersion: 1.5.0
   server: live
   role: dashboard-reader
 
 # Columns read, per table. Taken from the dashboard's SQL and kept equal to it by the test.
 uses:
   fct_orders:
-    - customer_unique_id
+    - customer_key
     - order_status
     - purchase_date
     - order_amount
@@ -58,7 +60,7 @@ uses:
     - item_amount
     - _loaded_at
   dim_customers:
-    - customer_unique_id
+    - customer_key
     - state
   dim_products:
     - product_id
@@ -77,6 +79,14 @@ uses:
     - retention_rate
     - cumulative_revenue
     - cumulative_revenue_per_customer
+  fct_shipments:
+    - purchase_date
+    - seller_state
+    - customer_state
+    - distance_km
+    - distance_band
+    - is_delivered
+    - days_to_deliver
   fct_review_topics:
     - order_id
     - purchase_date

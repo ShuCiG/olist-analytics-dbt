@@ -59,7 +59,7 @@ states = query(f"""
         avg(case when o.is_delivered_late then 1.0 else 0.0 end) as late_rate,
         avg(o.days_to_deliver) as avg_days
     from {table('fct_orders')} as o
-    inner join {table('dim_customers')} as c on o.customer_unique_id = c.customer_unique_id
+    inner join {table('dim_customers')} as c on o.customer_key = c.customer_key
     where o.is_delivered and {period_filter('o.purchase_date')}
     group by 1
     having count(*) >= 100
@@ -83,3 +83,62 @@ with right:
         ],
     )
     st.caption("States with at least 100 delivered orders in the period.")
+
+st.subheader("Distance from seller to customer")
+st.caption(
+    "One shipment = the items of one seller in an order (`fct_shipments`), delivered ones only. Distance between "
+    "the seller's and the customer's zip centroids; the seller where it was at the purchase."
+)
+bands = query(f"""
+    select
+        distance_band,
+        count(*) as shipments,
+        avg(days_to_deliver) as avg_days,
+        avg(case when is_delivered_late then 1.0 else 0.0 end) as late_rate
+    from {table('fct_shipments')}
+    where is_delivered and distance_band <> 'unknown' and {period_filter()}
+    group by 1
+""")
+order = ["0-100 km", "100-500 km", "500-1000 km", "1000-2000 km", "2000+ km"]
+
+left, right = st.columns(2)
+with left:
+    st.markdown("**Days to deliver by distance**")
+    charts.bar_v(bands, "distance_band", "avg_days", "Avg days to deliver", ".1f", order,
+                 extra_tooltip=[alt.Tooltip("shipments:Q", title="Shipments", format=",")])
+with right:
+    st.markdown("**Late deliveries by distance**")
+    charts.bar_v(bands, "distance_band", "late_rate", "Delivered late", ".0%", order,
+                 extra_tooltip=[alt.Tooltip("shipments:Q", title="Shipments", format=",")])
+
+MIN_SHIPMENTS = 200
+routes = query(f"""
+    select
+        seller_state,
+        customer_state,
+        count(*) as shipments,
+        avg(distance_km) as avg_km,
+        avg(days_to_deliver) as avg_days,
+        avg(case when is_delivered_late then 1.0 else 0.0 end) as late_rate
+    from {table('fct_shipments')}
+    where is_delivered and {period_filter()}
+    group by 1, 2
+    having count(*) >= {MIN_SHIPMENTS}
+    order by late_rate desc
+    limit 10
+""")
+st.markdown("**Routes with the most late deliveries**")
+st.dataframe(
+    routes,
+    hide_index=True,
+    width="stretch",
+    column_config={
+        "seller_state": "From (seller)",
+        "customer_state": "To (customer)",
+        "shipments": st.column_config.NumberColumn("Shipments", format="%d"),
+        "avg_km": st.column_config.NumberColumn("Avg distance, km", format="%.0f"),
+        "avg_days": st.column_config.NumberColumn("Avg days", format="%.1f"),
+        "late_rate": st.column_config.NumberColumn("Late", format="percent"),
+    },
+)
+st.caption(f"State-to-state routes with at least {MIN_SHIPMENTS} delivered shipments in the period.")

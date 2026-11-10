@@ -5,9 +5,8 @@ name: Databricks
 # lives in environment `databricks-ci`, which admits only main (Free Edition has no
 # GitHub OIDC federation, so no keyless login as in D57).
 on:
-  schedule:
-    # Off the full hour: GitHub delays or drops schedules at :00 (the first one fired 6 h late)
-    - cron: "17 6 * * 1"  # Mondays 06:17 UTC
+  # Weekly: Cloud Scheduler dispatches it on Mondays 06:17 UTC (infra/scheduler.tf,
+  # D95); GitHub's own schedule fired hours late. The drift check flags a missed week.
   workflow_dispatch:
 
 concurrency:

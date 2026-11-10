@@ -8,7 +8,9 @@ name: Terraform drift
 # allowlist (D62). Job sa-keys flags service account keys older than the limit in
 # infra/sa_keys.yaml or on accounts that should have none (D63). Read-only: all
 # run as terraform-plan (infra/drift.tf, viewer roles only), and nothing takes the
-# state lock.
+# state lock. Job weekly-runs flags a weekly engine run that Cloud Scheduler failed
+# to start (D95); it reads GitHub only. This workflow stays on GitHub's schedule
+# (late by hours, D95) so that it doesn't depend on the dispatch it watches.
 on:
   schedule:
     - cron: "0 5 * * *"  # daily 05:00 UTC
@@ -43,6 +45,9 @@ jobs:
     env:
       # Environment secret; the local equivalent is infra/terraform.tfvars
       TF_VAR_billing_account: ${{ secrets.BILLING_ACCOUNT }}
+      # The owner's Fine-Grained Reader on the PII policy tags (pii.tf); without it the
+      # plan would show those grants as to be destroyed
+      TF_VAR_owner_member: user:${{ secrets.IAM_OWNER }}
       TF_IN_AUTOMATION: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -165,9 +170,28 @@ jobs:
       - name: Check key age
         run: uv run python .github/scripts/sa_keys.py olist-analytics-dbt-472315
 
+  # databricks.yml / snowflake.yml are started by Cloud Scheduler (infra/scheduler.tf);
+  # a dispatch that fails leaves no run behind to send an email
+  weekly-runs:
+    name: Weekly engine runs
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read  # run list of the weekly workflows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Last successful run of each
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/weekly_runs.py
+
   notify-failure:
     name: Email on failure
-    needs: [terraform-plan, iam-bindings, sa-keys]
+    needs: [terraform-plan, iam-bindings, sa-keys, weekly-runs]
     if: failure()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

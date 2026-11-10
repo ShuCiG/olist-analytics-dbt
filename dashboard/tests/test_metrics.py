@@ -1,7 +1,7 @@
 """Dashboard KPIs = dbt Semantic Layer metrics, on the same warehouse.
 
 The pages compute their KPI tiles in their own SQL (dashboard/kpis.py); the
-metric definitions live in transform/models/marts/_marts__semantic_models.yml.
+metric definitions live in transform/models/marts/_marts__models.yml.
 This test asks MetricFlow (`mf query`) for the same numbers and compares, so a
 change to either side that makes them disagree fails CI.
 
@@ -17,12 +17,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # Streamlit-style imports
 
+import export_site  # noqa: E402
 import kpis  # noqa: E402
 import warehouse  # noqa: E402
 
@@ -100,6 +102,15 @@ CUSTOMERS = {"customers": "customers", "avg_spend": "revenue_per_customer"}
 REPEAT = {"customers": "new_customers", "repeat_rate": "repeat_customer_rate"}
 COHORTS = {"new_customers": "new_customers", "ltv_3m": "ltv_3_months"}
 RETENTION = {"retention_m1": 1, "retention_m3": 3}  # tile -> month of cohort_retention_rate
+# The same tiles on the static dashboard: kpis.parquet column -> metric
+STATIC_SALES = SALES
+STATIC_DELIVERY = {
+    "delivered_orders": "delivered_orders",
+    "avg_days_to_deliver": "avg_days_to_deliver",
+    "late_delivery_rate": "late_delivery_rate",
+    "avg_review_score": "avg_review_score",
+}
+STATIC_COHORTS = COHORTS
 
 
 def test_usage_agreement_lists_these_metrics() -> None:
@@ -152,3 +163,20 @@ def test_cohort_kpis(tmp_path: Path, period: kpis.Period) -> None:
         at_month = f"{{{{ Dimension('cohort__months_since_first_order') }}}} = {month}"
         rate = mf_query(tmp_path, ["cohort_retention_rate"], *period_args(period), "--where", at_month)
         assert_same(dashboard, rate, {column: "cohort_retention_rate"})
+
+
+@pytest.mark.parametrize("period_id", export_site.PERIODS)
+def test_static_dashboard_kpis(tmp_path: Path, static_site: Path, period_id: str) -> None:
+    # What the public page shows, read back from the published Parquet, per offered period
+    parquet = (static_site / "data" / "kpis.parquet").as_posix()
+    published = duckdb.execute(f"select * from '{parquet}' where period_id = ?", [period_id]).df().iloc[0]
+    numbers = published.drop(["period_id", "period_label"])
+    period_range = period_args(export_site.PERIODS[period_id][1])
+    delivered = "{{ Dimension('order__is_delivered') }} = true"
+    for pairs, where in ((STATIC_SALES, []), (STATIC_DELIVERY, ["--where", delivered]), (STATIC_COHORTS, [])):
+        metrics = mf_query(tmp_path, list(pairs.values()), *period_range, *where)
+        assert_same(numbers, metrics, pairs)
+    for column, month in RETENTION.items():
+        at_month = f"{{{{ Dimension('cohort__months_since_first_order') }}}} = {month}"
+        rate = mf_query(tmp_path, ["cohort_retention_rate"], *period_range, "--where", at_month)
+        assert_same(numbers, rate, {column: "cohort_retention_rate"})

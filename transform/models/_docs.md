@@ -6,7 +6,7 @@ dlt loads the raw CSV files in monthly chunks, dbt builds staging → intermedia
 These docs are generated from the BigQuery prod build; the same project runs on DuckDB locally and in CI,
 on Databricks (weekly CI), and month by month in Airflow (Cosmos).
 
-- **Facts:** `fct_orders` (one row per order; versioned, v1 deprecated), `fct_order_items` (one row per line item),
+- **Facts:** `fct_orders` (one row per order; versioned, latest v2), `fct_order_items` (one row per line item),
   `fct_order_items_seller_as_of` (line items with the seller version current at purchase)
 - **Dimensions:** `dim_customers`, `dim_sellers`, `dim_sellers_history` (SCD2 from snapshot `snap_sellers`),
   `dim_products`, `dim_date`

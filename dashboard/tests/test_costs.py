@@ -59,4 +59,5 @@ def test_cost_page_before_the_first_deploy(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_cost_page_only_on_bigquery() -> None:
     app = (DASHBOARD / "app.py").read_text(encoding="utf-8")
-    assert 'if warehouse.BACKEND == "bigquery":\n    pages.append(st.Page("views/costs.py"' in app
+    block = app.split('if warehouse.BACKEND == "bigquery":\n', 1)[1].split("\npage = ", 1)[0]
+    assert '    pages.append(st.Page("views/costs.py"' in block

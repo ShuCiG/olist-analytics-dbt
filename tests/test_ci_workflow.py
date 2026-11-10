@@ -109,11 +109,18 @@ def test_pr_comments_never_meet_pr_code() -> None:
     assert cost["continue-on-error"] is True
     # Right after the build (its run_results.json), also after failed tests; before the cost step (counts its bytes) (D73)
     diff = steps[names.index("Data diff vs prod")]
-    assert names.index("dbt build (target ci)") + 1 == names.index(diff["name"]) < names.index(cost["name"])
+    assert names.index("dbt build (target ci)") < names.index(diff["name"]) < names.index(cost["name"])
     assert diff["continue-on-error"] is True and diff["if"] == "${{ !cancelled() && steps.prod-state.outputs.slim == 'true' }}"
+    # Right after the build, before the data diff: its run-operation overwrites the manifest the impact reads (D101)
+    impact = steps[names.index("Column impact")]
+    assert names.index("dbt build (target ci)") + 1 == names.index(impact["name"]) and names.index(impact["name"]) + 1 == names.index(diff["name"])
+    assert impact["continue-on-error"] is True and impact["if"] == diff["if"]
     upload = steps[names.index("Upload PR comments")]
-    assert "ci-cost.md" in upload["with"]["path"] and "data-diff.md" in upload["with"]["path"]
+    assert all(name in upload["with"]["path"] for name in ("ci-cost.md", "data-diff.md", "column-impact.md"))
     job = jobs["pr-comments"]
+    # No column changed: an earlier comment is updated, no new one is opened
+    post = job["steps"][0]["run"]
+    assert "for file in column-impact.md data-diff.md ci-cost.md" in post and "<!-- update-only -->" in post
     assert job["needs"] == "dbt-build-bigquery" and "result != 'skipped'" in job["if"]
     assert job["permissions"] == {"actions": "read", "pull-requests": "write"}
     # The token that writes PR comments runs no code of the PR
@@ -133,6 +140,31 @@ def _gcp_auth(job: dict) -> list[dict]:
     return [s for s in job.get("steps", []) if s.get("uses", "").startswith("google-github-actions/auth@")]
 
 
+def test_static_dashboard_is_built_without_bigquery_and_published_by_the_deploy() -> None:
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    build = jobs["dbt-build"]
+    assert "id-token" not in build.get("permissions", {}), "the DuckDB job holds no GCP identity"
+    runs = [step.get("run", "") for step in build["steps"]]
+    assert any("dashboard/static_site/export_site.py" in run for run in runs)
+    uploads = [s for s in build["steps"] if s.get("with", {}).get("name") == "static-dashboard"]
+    assert len(uploads) == 1
+    (prepare,) = [s for s in jobs["deploy-prod"]["steps"] if s.get("name") == "Prepare docs site"]
+    assert "--name static-dashboard --dir _site/dashboard" in prepare["run"]
+    assert "dbt-build" in jobs["deploy-prod"]["needs"]
+
+
+def test_slim_ci_builds_no_elementary_artifact_tables() -> None:
+    # D103: each of the nine artifact tables, with the views on it (`+`), is left out
+    steps = _jobs()["dbt-build-bigquery"]["steps"]
+    run = next(s["run"] for s in steps if s.get("name") == "dbt run (Elementary tables, target ci)")
+    assert "--select package:elementary" in run
+    excluded = run.split("--exclude", 1)[1].split()
+    assert sorted(excluded) == sorted(
+        f"dbt_{name}+"
+        for name in ("columns", "exposures", "groups", "metrics", "models", "seeds", "snapshots", "sources", "tests")
+    )
+
+
 def test_no_gcp_key_secrets() -> None:
     # Keys were replaced by Workload Identity Federation (D57)
     for name, job in _jobs().items():
@@ -144,7 +176,7 @@ def test_no_gcp_key_secrets() -> None:
 def test_gcp_auth_uses_federation() -> None:
     jobs = _jobs()
     users = {name for name, job in jobs.items() if _gcp_auth(job)}
-    assert users == {"dbt-build-bigquery", "deploy-prod"}
+    assert users == {"dbt-build-bigquery", "gdpr-deletion-bigquery", "deploy-prod"}
     for name in users:
         (step,) = _gcp_auth(jobs[name])
         assert step["with"]["workload_identity_provider"] == "${{ env.GCP_WIF_PROVIDER }}"
@@ -198,7 +230,10 @@ def test_needs_build(paths: list[str], build: bool) -> None:
 
 # Jobs that cost BigQuery bytes or minutes of image builds; they and their
 # dependants skip when `changes` says docs only
-GATED = {"dbt-project-evaluator", "airflow-dags", "dbt-build", "dbt-build-bigquery", "deploy-prod"}
+GATED = {
+    "dbt-project-evaluator", "airflow-dags", "fault-injection", "dbt-build", "dbt-build-bigquery",
+    "gdpr-deletion-bigquery", "deploy-prod",
+}
 
 
 def test_expensive_jobs_skip_docs_only_changes() -> None:
@@ -209,6 +244,35 @@ def test_expensive_jobs_skip_docs_only_changes() -> None:
         assert "needs.changes.outputs.code == 'true'" in jobs[name]["if"], name
     for name in ("deploy-docs", "publish-airflow-image"):
         assert jobs[name]["needs"] == "deploy-prod"
+
+
+@pytest.mark.parametrize(
+    ("paths", "deletion"),
+    [
+        (["transform/macros/deletion_requests.sql"], True),
+        (["README.md", "ingestion/pipeline.py"], True),
+        (["transform/macros/customer_key.sql"], True),
+        (["transform/models/marts/fct_orders.sql", ".github/workflows/ci-cd.yml"], False),
+        ([], True),
+    ],
+)
+def test_deletion_job_runs_when_deletion_code_changes(paths: list[str], deletion: bool) -> None:
+    assert changed_paths.touches_deletion(paths) is deletion
+
+
+def test_deletion_job_deletes_only_from_its_own_datasets() -> None:
+    job = _jobs()["gdpr-deletion-bigquery"]
+    env = job["env"]
+    assert env["DBT_CI_SCHEMA"].startswith("ci_")
+    # Its own raw and request table, under the datasets the cleanup drops (suffix _raw)
+    assert env["DBT_RAW_SCHEMA"] == env["DBT_CI_SCHEMA"] + "_raw"
+    assert env["OLIST_DELETION_REQUESTS"] == env["DBT_RAW_SCHEMA"] + ".deletion_requests"
+    assert env["DBT_CI_SCHEMA"] != _jobs()["dbt-build-bigquery"]["env"]["DBT_CI_SCHEMA"]
+    runs = [s.get("run", "") for s in job["steps"]]
+    assert all("--target ci" in r for r in runs if "dbt " in r and "dbt deps" not in r)
+    assert job["steps"][-1]["if"] == "always()" and "drop_isolated_datasets" in runs[-1]
+    (step,) = _gcp_auth(job)
+    assert step["with"]["service_account"].startswith(CI_SA)
 
 
 def test_required_checks_are_not_path_filtered() -> None:
@@ -263,7 +327,8 @@ def test_databricks_runs_on_main_only() -> None:
     # no pull_request trigger, so PR code never runs next to it
     workflow = _databricks()
     triggers = workflow[True]  # PyYAML reads the `on:` key as boolean True
-    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    # Weekly runs come from Cloud Scheduler as workflow_dispatch (D95)
+    assert set(triggers) == {"workflow_dispatch"}
     job = workflow["jobs"]["dbt-build-databricks"]
     assert job["environment"] == "databricks-ci"
     assert MAIN_ONLY in job["if"]
@@ -337,6 +402,10 @@ def test_drift_check_is_read_only_and_alerts() -> None:
     assert "-lock=false" in plan and "-detailed-exitcode" in plan and 'exit "$code"' in plan
     assert "apply" not in yaml.safe_dump(job)
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
+    # The watchdog of the weekly dispatch reads GitHub only: no GCP, no environment (D95)
+    weekly = jobs["weekly-runs"]
+    assert MAIN_ONLY in weekly["if"] and "environment" not in weekly and not _gcp_auth(weekly)
+    assert weekly["permissions"] == {"contents": "read", "actions": "read"}
 
 
 def test_schema_email_after_prod_load_without_the_prod_job_holding_smtp() -> None:
@@ -406,5 +475,3 @@ def test_databricks_skips_when_the_warehouse_is_unavailable() -> None:
     assert probe < names.index("Ingest raw data (dlt → Databricks)")
     for step in job["steps"][probe + 1:]:
         assert "steps.warehouse.outputs.available == 'true'" in step.get("if", ""), f"runs without a warehouse: {step['name']}"
-    cron = _databricks()[True]["schedule"][0]["cron"]
-    assert cron.split()[0] not in {"0", "00"}, "GitHub delays or drops schedules at the full hour"
