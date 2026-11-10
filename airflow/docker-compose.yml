@@ -208,6 +208,12 @@ services:
         airflow variables get olist_stale_after_hours >/dev/null 2>&1 \
           || airflow variables set olist_stale_after_hours 24 \
                --description "STALE email after this many hours without new orders"
+        airflow variables get olist_metric_drift_threshold >/dev/null 2>&1 \
+          || airflow variables set olist_metric_drift_threshold 0.10 \
+               --description "OK email explains a metric that moved by this much (relative, latest month vs the one before)"
+        airflow variables get olist_metric_drift_min_orders >/dev/null 2>&1 \
+          || airflow variables set olist_metric_drift_min_orders 100 \
+               --description "... and only when the earlier month had at least this many orders"
 
   airflow-apiserver:
     <<: *airflow-common

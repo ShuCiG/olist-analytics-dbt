@@ -421,10 +421,17 @@ def build_dag(wh: Warehouse) -> DAG:
         # stdout line is JSON, taken by `report` from XCom. Beside edr_report, not behind it:
         # a failed report must not hide the drivers. Its own failure is a skip, not a failed
         # run: the email just goes out without drivers.
+        # MetricFlow reads the semantic manifest, it never parses: the image's one (target_airflow)
+        # was parsed with the default env and names catalog `olist`, not this warehouse (#269).
+        # So `dbt parse` first, with the warehouse's env, into the task's own target path
+        # (DBT_TARGET_PATH below): the producer's partial parse stays untouched, and the next
+        # run's parse is partial too.
         metric_drivers = BashOperator(
             task_id="metric_drivers",
             bash_command=(
-                f"{VENV_BIN / 'python'} -m alerting.metric_drivers --target {wh.dbt_target}"
+                f"{DBT_EXECUTABLE} parse --quiet --project-dir {DBT_PROJECT_DIR}"
+                f" --profiles-dir {DBT_PROJECT_DIR} --target {wh.dbt_target}"
+                f" && {VENV_BIN / 'python'} -m alerting.metric_drivers --target {wh.dbt_target}"
                 " --threshold {{ var.value.get('olist_metric_drift_threshold', 0.10) }}"
                 " --min-base {{ var.value.get('olist_metric_drift_min_orders', 100) }}"
                 f" || exit {EDR_FAILED}"
@@ -433,8 +440,7 @@ def build_dag(wh: Warehouse) -> DAG:
             env={
                 **wh.env,
                 **DBT_CLOCK_ENV,
-                # MetricFlow parses the project itself: its own target path keeps the
-                # producer's partial parse untouched
+                # Read by `dbt parse` and by alerting.metric_drivers
                 "DBT_TARGET_PATH": str(DBT_CACHE_DIR / f"metric_drivers_{wh.name}"),
             },
             append_env=True,

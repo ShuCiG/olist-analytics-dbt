@@ -466,17 +466,28 @@ def metricflow_runner(engine: Any) -> Runner:
     return run
 
 
-def load_engine(target: str, project_dir: Path, profiles_dir: Path | None = None) -> Any:
-    """MetricFlow's engine on a dbt target; stdout stays untouched for the caller."""
-    os.environ["DBT_TARGET"] = target
-    os.environ["DBT_PROJECT_DIR"] = str(project_dir)
-    os.environ["DBT_PROFILES_DIR"] = str(profiles_dir or project_dir)
-    with contextlib.redirect_stdout(sys.stderr):
-        from dbt_metricflow.cli.cli_configuration import CLIConfiguration
+def load_engine(target: str, project_dir: Path, manifest_path: Path, profiles_dir: Path | None = None) -> Any:
+    """MetricFlow's engine on a dbt target, over the semantic manifest at `manifest_path`.
 
-        configuration = CLIConfiguration()
-        configuration.setup(configure_file_logging=False)
-        return configuration.mf
+    Not `CLIConfiguration().mf`: that one reads `<project>/target/semantic_manifest.json`, a
+    hard-coded path that ignores DBT_TARGET_PATH (#269). The caller parses the project with the
+    warehouse's env into its own target dir, so the manifest names the right catalog / dataset.
+    stdout stays untouched for the caller.
+    """
+    os.environ["DBT_TARGET"] = target
+    with contextlib.redirect_stdout(sys.stderr):
+        from dbt.adapters.factory import get_adapter_by_type
+        from dbt_metricflow.cli.dbt_connectors.adapter_backed_client import AdapterBackedSqlClient
+        from dbt_metricflow.cli.dbt_connectors.dbt_config_accessor import dbtProjectMetadata
+        from metricflow.engine.metricflow_engine import MetricFlowEngine
+        from metricflow_semantics.model.dbt_manifest_parser import parse_manifest_from_dbt_generated_manifest
+        from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
+
+        # `dbt debug` inside registers the adapter for the target's profile
+        metadata = dbtProjectMetadata.load_from_paths(profiles_path=profiles_dir or project_dir, project_path=project_dir)
+        manifest = parse_manifest_from_dbt_generated_manifest(manifest_json_string=manifest_path.read_text(encoding="utf-8"))
+        adapter: Any = get_adapter_by_type(metadata.profile.credentials.type)  # a BaseAdapter; typed as the protocol
+        return MetricFlowEngine(semantic_manifest_lookup=SemanticManifestLookup(manifest), sql_client=AdapterBackedSqlClient(adapter))
 
 
 def latest_month(runner: Runner) -> datetime.date:
@@ -498,10 +509,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-base", type=float, default=DEFAULT_MIN_BASE)
     args = parser.parse_args(argv)
 
-    engine = load_engine(args.target, args.project_dir)
+    # The same file for MetricFlow and the specs: the one `dbt parse` wrote for this target
+    manifest_path = Path(os.environ.get("DBT_TARGET_PATH") or args.project_dir / "target") / "semantic_manifest.json"
+    engine = load_engine(args.target, args.project_dir, manifest_path)
     runner = metricflow_runner(engine)
-    target_path = Path(os.environ.get("DBT_TARGET_PATH") or args.project_dir / "target")
-    specs = specs_from_manifest(json.loads((target_path / "semantic_manifest.json").read_text(encoding="utf-8")))
+    specs = specs_from_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
     with contextlib.redirect_stdout(sys.stderr):
         month = datetime.date.fromisoformat(args.month + "-01") if args.month else latest_month(runner)
         result = run_check(runner, specs, month, args.threshold, args.min_base)

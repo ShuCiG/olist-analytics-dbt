@@ -1,6 +1,7 @@
 """Metric change drivers (D110): the maths and the email block, on a fake runner (no warehouse, no MetricFlow)."""
 
 import datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -380,3 +381,41 @@ def test_months_and_labels() -> None:
     assert metric_drivers.month_period(datetime.date(2016, 2, 1)).end == datetime.date(2016, 2, 29)
     assert metric_drivers.month_period(datetime.date(2017, 12, 1)).label == "2017-12"
     assert Period(datetime.date(2017, 10, 5), datetime.date(2017, 11, 5)).label == "2017-10-05 to 2017-11-05"
+
+
+def test_load_engine_reads_the_given_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#269: MetricFlow gets the manifest the task parsed for its warehouse, not `<project>/target/`.
+
+    The fixture names catalog `airflow` (the Airflow DuckDB file); the project dir has no target/.
+    No warehouse: explain only renders SQL.
+    """
+    from dbt.adapters.factory import FACTORY
+    from dbt_metricflow.cli.dbt_connectors import dbt_config_accessor
+    from metricflow.engine.metricflow_engine import MetricFlowExplainResult, MetricFlowQueryRequest
+
+    class Adapter:
+        @staticmethod
+        def type() -> str:
+            return "duckdb"
+
+    class Credentials:
+        type = "duckdb"
+
+    class Metadata:
+        profile = type("Profile", (), {"credentials": Credentials})
+
+    def load_from_paths(profiles_path: Path, project_path: Path) -> Metadata:
+        assert project_path == tmp_path
+        return Metadata()
+
+    monkeypatch.setattr(dbt_config_accessor.dbtProjectMetadata, "load_from_paths", staticmethod(load_from_paths))
+    monkeypatch.setattr(FACTORY, "lookup_adapter", lambda adapter_type: Adapter())
+    monkeypatch.delenv("DBT_TARGET", raising=False)
+    manifest = Path(__file__).parent / "fixtures" / "semantic_manifest_airflow.json"
+
+    engine = metric_drivers.load_engine("dev", tmp_path, manifest)
+
+    explained: MetricFlowExplainResult = engine.explain(MetricFlowQueryRequest.create(metric_names=["orders"], group_by_names=["order__order_status"]))
+    sql = explained.sql_statement.sql
+    assert '"airflow"."marts"."fct_orders"' in sql or "airflow.marts.fct_orders" in sql, sql
+    assert "olist" not in sql
