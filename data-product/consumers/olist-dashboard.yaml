@@ -87,6 +87,7 @@ uses:
     - distance_band
     - is_delivered
     - days_to_deliver
+    - is_delivered_late
   fct_review_topics:
     - order_id
     - purchase_date

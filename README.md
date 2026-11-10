@@ -137,7 +137,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
 | Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 8 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
-| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 53 columns and 13 metrics it relies on |
+| Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 54 columns and 13 metrics it relies on |
 
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
