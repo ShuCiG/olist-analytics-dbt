@@ -1,0 +1,119 @@
+review_id,sentiment,topic,translation_en,labeled_by,guidelines_version
+02e5d591a55c27f6b272867ec4c3f92d,negative,delivery,They did not deliver the product and now they claim there is difficulty in delivery. A simple washing machine cover that should have been delivered to a neighborhood in the state capital with full infrastructure.,claude-code-routine-haiku-5-5,1
+035362de61083d1a66c533718aaa5687,negative,delivery,"I received the product, however I had to go to the Correios agency in Bragança to pick it up, which ended up not being worth it, because I live far from the agency and paid the freight for Correios to deliver it to my home.",claude-code-routine-haiku-5-5,1
+04140a64699a75ecbf17ad7c0697b645,positive,product_quality,Great!!! — I liked the product very much!!! Excellent.,claude-code-routine-haiku-5-5,1
+041dc62dcfb723a3ee7cad2169b8aaea,positive,product_quality,It is beautiful! Super fluffy,claude-code-routine-haiku-5-5,1
+05d8e3e070a820150bee6185b0f93dcc,positive,product_quality,"Super recommend — The wallpaper is beautiful, it exceeds all expectations. Product delivered before the deadline.",claude-code-routine-haiku-5-5,1
+07b211604ea47b4950ab8a4ef055c487,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+08d0f1b64c00983a4ce651b1f2846216,positive,delivery,Recommended — Product arrived before the deadline,claude-code-routine-haiku-5-5,1
+09b6cfb705cab248cdb1ed054e6169ce,positive,delivery,"Evaluation — 100%, product delivered before expected.",claude-code-routine-haiku-5-5,1
+0b9740c80aede334780599d37387228c,negative,seller_service,"Terrible service, they don't deliver on time, without any satisfaction to the customer. Horrible!",claude-code-routine-haiku-5-5,1
+0c480e673a22ad07678a700da942b0e8,positive,delivery,"I received everything right, in good condition for use",claude-code-routine-haiku-5-5,1
+138dadf93f94252cab273cfdca784790,negative,delivery,They have not delivered yet and the delivery date has already passed.,claude-code-routine-haiku-5-5,1
+181b6c4a5e29eedb4e758642f9e07ee8,positive,general,Very good,claude-code-routine-haiku-5-5,1
+1a5b3dd79b3eb25a4b2ac68b29fd192e,negative,delivery,I still have not received the book!,claude-code-routine-haiku-5-5,1
+1ab6b1aee4d8710f149028a6dfeb3e52,positive,delivery,Excellent delivery and product.,claude-code-routine-haiku-5-5,1
+1c483e4c47d3a977e9bfc6430acb749a,negative,product_quality,The remote control did not work on the azamerica s1005,claude-code-routine-haiku-5-5,1
+1dd7bd03e2da69ec352debf3857d298c,positive,delivery,"5 — super recommend, product arrived well before the agreed time",claude-code-routine-haiku-5-5,1
+25bf713399dd3acac15aefcf8cf7860d,negative,seller_service,"The product was on the site, but later it showed as unavailable. This caused some irritation because I had already paid, and it was the first time I had this problem with lannister. I hope it does not happen novamen",claude-code-routine-haiku-5-5,1
+27ef9d40acc62d6b59fbe1bcb72708c5,negative,delivery,I DID NOT LIKE IT BECAUSE I HAD TO PICK IT UP AT THE CORREIOS,claude-code-routine-haiku-5-5,1
+2c18759c5b2d77637277a2aacdf73ffd,positive,product_quality,I recommend this product.,claude-code-routine-haiku-5-5,1
+2c92f770cadb6d43e5ff428e80e2624e,negative,wrong_or_missing_item,I did not receive the correct merchandise. I bought 2 (two) UNITS and ONLY 1 (one) unit arrived.,claude-code-routine-haiku-5-5,1
+2ca9052d2f833492f4a5dda1d92f21be,positive,delivery,Super fast delivery and I am very satisfied with the product. ..,claude-code-routine-haiku-5-5,1
+2d5369cab620a25a50c6aa3393eeabda,negative,wrong_or_missing_item,"product delivered on the date, but it came wrong, waiting for the solution",claude-code-routine-haiku-5-5,1
+2e49e61a67969111a1b7f9188d9f98f1,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+366d16639e317789dd65d3d3dccf50df,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+396eacbff771557619771e8d4b58ee77,negative,seller_service,My merchandise did not arrive and nobody contacted to resolve anything...,claude-code-routine-haiku-5-5,1
+3c31794f48f644517c5e95161f9364aa,positive,general,it was my first time I bought and I bought more times,claude-code-routine-haiku-5-5,1
+3d33fe0e1a463975187574f2b9a7e510,positive,delivery,super fast delivery,claude-code-routine-haiku-5-5,1
+3da63a10b27ee356d98a5be6f0be6201,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+3e402399577c0d3bf39f28e1d221b456,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+429a04310c29fabac0a93d243e81bdf8,negative,product_quality,I have not used it yet ..the charger is strange...I will have to look for an adapter ....then I will come back to talk,claude-code-routine-haiku-5-5,1
+45bc34eef33badd39f0563df591cdbcd,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+46107de7ef5bea096eeecf6454bab22d,negative,wrong_or_missing_item,"I am waiting for the rest of the purchase, only 1 item came.",claude-code-routine-haiku-5-5,1
+469d5afe7af797c63fa2ad0730d080fa,neutral,general,ccccccccc cccccccc ccccc ccc,claude-code-routine-haiku-5-5,1
+48df825d3e1d18c88951706e5860692f,positive,delivery,"We received it almost 1 month before the expected date, very affordable product!! Recommend!!!",claude-code-routine-haiku-5-5,1
+4a3091b8c980f5ac943c81b8c128da1f,negative,wrong_or_missing_item,I bought 3 headphones and only received 1,claude-code-routine-haiku-5-5,1
+4a59973d20fc53cf87614911af2f37ef,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+4a6b6d2ec30eb3b9e0775a2cb44d752e,positive,delivery,"Perfect delivery. — Very good speed of delivery, I recommend!",claude-code-routine-haiku-5-5,1
+4c78f66fb6aae3311ff3d107fcf64670,positive,product_quality,"Very good product — A good finish, compatible with what I wanted.",claude-code-routine-haiku-5-5,1
+54857ec4df889572a7134c36ede148e8,positive,delivery,Good — At first it is good.. and the delivery was on time..,claude-code-routine-haiku-5-5,1
+6428ed9f319965ef1dd60d882f0d05f1,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+644fb639a68e98008f0fda5496225f92,negative,wrong_or_missing_item,terrible — a piece of the stand is missing and I can't assemble it,claude-code-routine-haiku-5-5,1
+64ac46c3ccf3709497ce56cc48f50cea,mixed,product_quality,Liked — Arrived super fast ..before the deadline ... The plastic is a bit soft but overall good and functional product,claude-code-routine-haiku-5-5,1
+654ad2cbb6d7e67177173f7ff1926021,negative,product_quality,THE COLOR IS THE SAME AS THE ORDER . BUT THE FABRIC IS NOT .,claude-code-routine-haiku-5-5,1
+6c208420bcdbe78a40af381af749dd4c,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+6e670ff39e912d73541ad2f0e3d8fc61,positive,delivery,Arrived quickly and in perfect condition.,claude-code-routine-haiku-5-5,1
+6f1fbe669f04d59cddb12a531252050d,mixed,delivery,"The product arrived a little after the delivery date, but I am satisfied. I believe the truckers' strike influenced the delay.",claude-code-routine-haiku-5-5,1
+7327b9e19695b7b91696569433affa23,positive,product_quality,"Good product, I have nothing to complain about, the delivery was before the deadline.",claude-code-routine-haiku-5-5,1
+7415f25e60adcc252fa6db47c6914c20,positive,delivery,fast delivery and the product is wonderful,claude-code-routine-haiku-5-5,1
+776322716dcf071790e80ca840e1ea3b,positive,other,"Recommend — Product very well packaged, with no damage to the packaging, speed of delivery, showing a lot of professionalism. I liked it!!!",claude-code-routine-haiku-5-5,1
+78d1190a2809cc4fbd29712c323e57e6,negative,delivery,"It could be faster. Everyone wants to sell online, but most fail on the delivery deadline. There is no justification for taking so long.",claude-code-routine-haiku-5-5,1
+79e527a0be11573fa24ef9019c5dfe72,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+7ad23e6fecef59c0148f485b109e1fdf,negative,wrong_or_missing_item,"Have a contact number — I bought 3 items, only one arrived; the right thing would have been for them to come all together, or am I wrong..",claude-code-routine-haiku-5-5,1
+7aff80bf35df822907d79d26a8de7833,positive,product_quality,"I have not used it yet but the material seems good, I liked it!!",claude-code-routine-haiku-5-5,1
+7b56cd21b06ef29191da01b0938d0db0,negative,wrong_or_missing_item,I bought an Apple cell phone battery charger cable and received a computer USB cable made in China without even a brand.,claude-code-routine-haiku-5-5,1
+7bc15b7bfcffa5328ee33c83f7be950b,negative,product_quality,"I received the product within the deadline, but the voltage (commonly called voltage) of the lamp does not match the one indicated on the holder's plug. The holder is for 250V and the lamp is 127 V.",claude-code-routine-haiku-5-5,1
+7fcbfacbb41dc45f002e8555c2ad7aee,negative,wrong_or_missing_item,I bought a double bed sheet and a single one arrived. I want to return the same one.,claude-code-routine-haiku-5-5,1
+80e989186527f2df6d26c7aeba39250f,negative,product_quality,When inflating the float I noticed it was deflating quickly; I put it in the water to look better and found that there are two defective glue points. I need the float to be replaced.,claude-code-routine-haiku-5-5,1
+815e1b04599377590d462178d524b69a,negative,wrong_or_missing_item,"I bought a Brush in GOLD color and they sent it in pink, and they also put the brush box inside another Laka brand box, completely torn, a disregard for the consumer.",claude-code-routine-haiku-5-5,1
+81c9de806ad085621924f80cd2c65a1f,positive,delivery,Store review — Very fast delivery,claude-code-routine-haiku-5-5,1
+82ae0519c06d5873ad9598e8d8ea6be5,positive,seller_service,"Perfect Service — I have nothing to complain about, it was my first purchase at the Lannister online store and it was very, very smooth; I followed everything through the APP (which I highly recommend, by the way.) Great service.",claude-code-routine-haiku-5-5,1
+83cfa25aacfc6512ca6e7fbbc82e0cd3,negative,seller_service,"I still have not received the product. Nobody contacted me. I do not recommend it to anyone. I have been a baratheon customer for a long time, first time this situation happens.",claude-code-routine-haiku-5-5,1
+84e1169a47db614480cd85f5a54004b8,positive,general,Awesome,claude-code-routine-haiku-5-5,1
+86e2fa8139ae40d203b6a7b3222fe34d,negative,delivery,Delivery delay — There is no way to evaluate the product because it has not yet been delivered to my home. I would like to know why of the delay and where my product is now.,claude-code-routine-haiku-5-5,1
+86e7dfdbaa74dce74de7072aae43fa3d,positive,general,"I recommend, you will not regret it",claude-code-routine-haiku-5-5,1
+89ab5e140a31b666f8036f663cd94e84,negative,delivery,I only didn't like it because the delivery time is very long; I ended up buying it anyway for lack of a faster shipping option.,claude-code-routine-haiku-5-5,1
+8aa5905667b126c8cd113a1ab88ecf74,positive,product_quality,"super recommend — excellent product, fast delivery. recommend.",claude-code-routine-haiku-5-5,1
+8e5cc237a254a1a50f8fed7d8185a49f,positive,general,Score 1000,claude-code-routine-haiku-5-5,1
+90aad395500d0867e01e1e8a680df27d,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+91ab0a294525d542dfeaa1216a97e6f4,negative,wrong_or_missing_item,I did not receive product — Order with two products... only 1 delivered,claude-code-routine-haiku-5-5,1
+94d950a41403f4a115ab713488ddb3cd,positive,product_quality,"Perfect product, arrived before the deadline!",claude-code-routine-haiku-5-5,1
+96d308c91f38ae2c99da987849a9e0a6,positive,delivery,Product delivered before the expected date. Congratulations,claude-code-routine-haiku-5-5,1
+9820c73449fdacc59185d514646d39c5,negative,seller_service,"I did not receive the product and my order status says it was delivered. Furthermore, I cannot reach them by phone and they do not reply to my email.",claude-code-routine-haiku-5-5,1
+9c8dec22e76c10ea9da9997073dd41b0,positive,general,"Everything went as agreed, nothing to complain about.",claude-code-routine-haiku-5-5,1
+9e777134822164c128bef9faee9dbb84,negative,wrong_or_missing_item,waiting to resolve the wrong delivery,claude-code-routine-haiku-5-5,1
+a44891f74fe94f29dbbfa6f7b60cceba,positive,delivery,"Very good ! — Fast, and it even came with a free gift! top",claude-code-routine-haiku-5-5,1
+a553875413fd30a7f78cd701b0064a6f,positive,delivery,"I recommend the product and the supplier, because the delay in delivery was caused by the Correios services.",claude-code-routine-haiku-5-5,1
+a7ca43954a4abd9a400d2c57a26e48cf,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+a938af311ca07acc30267e41ec1036de,positive,delivery,"Delivery before the deadline — Once again very happy to have bought here, super fast delivery..",claude-code-routine-haiku-5-5,1
+aaa8004def95e0ab0724afd2adbbe466,positive,delivery,"yes I recommend — the delivery was super fast, before the expected date",claude-code-routine-haiku-5-5,1
+ad830c3df49c3b74fed8dd582b71f4b2,negative,wrong_or_missing_item,I bought 2 kits and only received 1.,claude-code-routine-haiku-5-5,1
+b01c713ffbe4f0c260a93d8380d953c0,positive,product_quality,Good product — Product meets the expectations of use. Super fast delivery.,claude-code-routine-haiku-5-5,1
+b16247154a847628ebdb31518a9d7a39,negative,delivery,"So far nothing of my product, I would like to know when I will receive it...",claude-code-routine-haiku-5-5,1
+b5cbfcbb6718a07a50fecb23deab71aa,positive,delivery,"Arrived on time, good product",claude-code-routine-haiku-5-5,1
+bdde6cf2d23af6f71250fc957305346f,positive,product_quality,"Loved it — Perfect, the pendants",claude-code-routine-haiku-5-5,1
+be635446dfc207a862431f0b9af619f1,mixed,product_quality,"The product meets the specifications, but it shed a little aluminum on first use.",claude-code-routine-haiku-5-5,1
+bf84564d9d27cf5b7940e10bfa2ee4ec,negative,delivery,"I paid for it to be delivered to my home, but the Correios did not deliver even with someone at home 24h, because my sister had surgery and could not leave or stay alone at home; if it were not on my way I would return it.",claude-code-routine-haiku-5-5,1
+c14edc0d83dfc6fcf76fa3365fba442e,positive,general,"GREAT PURCHASE, GREAT PRODUCT, DELIVERY WITHIN THE DEADLINE. SCORE 10.",claude-code-routine-haiku-5-5,1
+c35bcb5bcbff6e6cabbf99a4489122b2,positive,delivery,"Product arrived before the expected deadline, very well packaged, no problems!!",claude-code-routine-haiku-5-5,1
+c40a24ec98217d21314be25e8d9d7222,positive,product_quality,Product as I expected,claude-code-routine-haiku-5-5,1
+c935ac1d7f6ee772115fa843721620f6,positive,product_quality,"great product, I recommend it to everyone",claude-code-routine-haiku-5-5,1
+d05a708e72ca34c1d5193965d740abed,positive,delivery,"Good purchase, I recommend — Product delivered successfully, now it is time to use it to assess the quality within the warranty period.",claude-code-routine-haiku-5-5,1
+d1e72b4afc71a57731f869681958c4c9,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+d5139472c8e5c29887a4941d2f19eff7,positive,delivery,"Perfect, delivered on time and well packaged, I recommend",claude-code-routine-haiku-5-5,1
+d6b2a6e5f38cd70bf9a6cac5c4c8e4c8,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+d81b3f1e904b9b30f2023a87227d03d2,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+d893c91bbe3a17088ad854621e32f40e,positive,delivery,Arrived well before the deadl — Before the deadline and everything right. I will buy again,claude-code-routine-haiku-5-5,1
+d8c4b08520b472507e686851eb9e4dd4,positive,delivery,super fast delivery,claude-code-routine-haiku-5-5,1
+d92095a461b40afed6baeafbd158c3ce,positive,general,everything happened as expected,claude-code-routine-haiku-5-5,1
+da22290a58ce7a19e47600705cacdfed,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+de487803a249760171e0b6793e5b33f0,negative,delivery,"the product was held at the post office, I was not able to go pick it up on time",claude-code-routine-haiku-5-5,1
+debbc81988f8db1746fad038a9191bcd,negative,delivery,delay in delivery.,claude-code-routine-haiku-5-5,1
+dec92ea6d80912145863fda1cc53da18,negative,delivery,I have not received the product yet. I need it urgently. I am waiting.,claude-code-routine-haiku-5-5,1
+df8e67cece77fd2f5acab02e27d6eac2,positive,product_quality,Good — Beautiful doll .as it is a gift I did not take it out of the box to see how it is .but apparently everything is fine,claude-code-routine-haiku-5-5,1
+ea1ed075e7f1ea608e0430aa71e82618,positive,delivery,Good — Even with the strike it arrived fast,claude-code-routine-haiku-5-5,1
+eadb24f1d5f07a9d8791f8f6479b60b1,positive,product_quality,As advertised. Very beautiful.,claude-code-routine-haiku-5-5,1
+edfdcb8828b34f00366c6fdf2720a4d1,positive,delivery,"Arrived 20 days before the deadline, perfect",claude-code-routine-haiku-5-5,1
+ef9f29d4972831c52ac3cd1d01e816d8,negative,wrong_or_missing_item,of 2 products only 1 was sent — I bought two products and the main one was not sent!,claude-code-routine-haiku-5-5,1
+efbb15263768e29a134abc6c50b41bcb,positive,general,I liked it.,claude-code-routine-haiku-5-5,1
+f22466954dbdffd8e5136b26824da94d,mixed,product_quality,"Product delivered as described, great quality. However it did not meet my main need, which was to use it on my LG 55"" TV: it did not pair, did not even find it. On the cell phone it worked perfectly.",claude-code-routine-haiku-5-5,1
+f406bdd247e319fb2d1d83557435dd12,positive,delivery,"very good, product delivered before the deadline",claude-code-routine-haiku-5-5,1
+f45da1806236731e19ae04c4c706be9a,positive,general,Great — I am satisfied,claude-code-routine-haiku-5-5,1
+f4fad24d4bb3462bab004be9a0b753f0,positive,seller_service,"Excellent service, the product arrived before the deadline. Satisfied customer.",claude-code-routine-haiku-5-5,1
+f5a2d41eea497ced7f92833426228fc8,positive,general,GOOD,claude-code-routine-haiku-5-5,1
+f914da6bd4845ce20198b6bf807a5575,positive,general,Score 1000,claude-code-routine-haiku-5-5,1
+fac6571201b18fdf3b22db06450a8f7a,negative,delivery,did not receive — I did not receive my purchase,claude-code-routine-haiku-5-5,1
+fafb73c3ebf26412c0f6c4780ebcc9e4,negative,seller_service,Return — I requested the return and received a deadline to get the customer's reply. The customer simply did not reply. I made the return request within the 7-day deadline according to the consumer code.,claude-code-routine-haiku-5-5,1
+fb42b6ba523c69532c9f061dc37e9c33,positive,delivery,"Delivered before the deadline, correctly.",claude-code-routine-haiku-5-5,1
+fb444feaafb29a8ec0b076e35ecfe2d6,positive,delivery,Arrived very quickly and the product exactly as advertised,claude-code-routine-haiku-5-5,1

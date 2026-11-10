@@ -1,0 +1,113 @@
+review_id,sentiment,topic,translation_en,labeled_by,guidelines_version
+0132e8c41fd4825325e464dd25543aff,neutral,delivery,product on time — Still evaluating its usefulness...,claude-code-routine-sonnet-5-5,1
+02d40b52a746c7d3fdeb703d1a56e072,negative,delivery,"Gloves — I bought it but it hasn't been delivered yet, I wanted to know where the product is",claude-code-routine-sonnet-5-5,1
+050dc4f9ce082f29487766337c5fd7d9,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+0a7df6ce87d6db8ecbf0f4bbaaa5f5f2,mixed,delivery,"There was a delay in delivery, but due to the Post Office and not the Store, the lace should be firmer in the fabric, but worth it!",claude-code-routine-sonnet-5-5,1
+0c8611fbad93a3f3cc2aa1b6e191fa82,positive,delivery,"I've already bought various products and have always been very satisfied with the deadline and the product.
+Deliveries have always happened before the stipulated deadline. Perfect!",claude-code-routine-sonnet-5-5,1
+0f2a8aec9dd11f281c325003ef2b6e42,positive,product_quality,"Great quality product, super soft and sturdy fabric. Delivery well ahead of the expected time.",claude-code-routine-sonnet-5-5,1
+1190944ca3127d321c8c4a0dda24f87e,positive,general,Very satisfied,claude-code-routine-sonnet-5-5,1
+1b13d22a07c9298b30180e7fb6e92d17,positive,general,Awesome,claude-code-routine-sonnet-5-5,1
+1d1f77be061360fbb0f14dfb7d085b97,negative,delivery,"I just found the delivery very slow, even though it was within the deadline. From 02/01 when it was posted in the South to leaving for Belo Horizonte on 14/01, this delay is very strange.",claude-code-routine-sonnet-5-5,1
+1e733f7b69d1fe917006989f0038e685,negative,delivery,There was an impediment reported in another e-mail justifying the delay in the delivery of the product. At this moment I still haven't received the purchase. I await information. Patrícia,claude-code-routine-sonnet-5-5,1
+1e92b3e035f0d9b738f6011a94932651,positive,delivery,Fast delivery — I received it before the deadline,claude-code-routine-sonnet-5-5,1
+240a4b356c64afdb9477234a185373cb,mixed,delivery,"Good — Although the product arrived within the deadline, it took quite long.",claude-code-routine-sonnet-5-5,1
+27e941b38898e835949dbeb80184f4c3,mixed,other,"The product came whole and is working well, however it was packed in a very risky way, susceptible to damage and so on.",claude-code-routine-sonnet-5-5,1
+2a52fe3d058e862e193684e8800dfca4,neutral,general,I haven't used the product yet,claude-code-routine-sonnet-5-5,1
+2c4e7bfd2d78e95ec5048f45e33f1d88,positive,delivery,"Excellent, it arrived 16 days before expected",claude-code-routine-sonnet-5-5,1
+2d0931354a88a09c7cfa869df8d0c410,positive,general,Very excellent,claude-code-routine-sonnet-5-5,1
+2f4630e2e0dcb3feef0ceba022315569,negative,delivery,"Unfortunately it's worth paying a bit more and buying in a physical store in your city, all the stores including stark have terrible delivery times for products!",claude-code-routine-sonnet-5-5,1
+3018996ea82cb24fadec2263b59b90b4,negative,wrong_or_missing_item,"There were two chairs, only one arrived",claude-code-routine-sonnet-5-5,1
+315fd495121f46999a1ef5e6396ce52d,mixed,delivery,"quality product. I haven't tested it yet, because the cell phone I bought along with it hasn't been delivered yet",claude-code-routine-sonnet-5-5,1
+34af2f7c4b3ec348698485781c2bf296,positive,delivery,it came as agreed and was delivered ahead of time. very good!,claude-code-routine-sonnet-5-5,1
+34ed10642bcd8406ad0061fb36ec8b54,positive,product_quality,so pretty,claude-code-routine-sonnet-5-5,1
+378d117b1f490fb31cb7281b06ba1bb7,positive,delivery,"Very fast — Product arrived 5 days before the expected deadline, everything came right.",claude-code-routine-sonnet-5-5,1
+37bf9d29aac41845bf39c6910c489d30,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+39d6e9780be9845b2a952c468249481b,negative,wrong_or_missing_item,I bought 2 scissors kits and only 1 kit arrived at my home,claude-code-routine-sonnet-5-5,1
+3a4510614c73207efb47e783d4e406c5,positive,delivery,"Punctuality — I liked the punctuality of the delivery, which was done well before the deadline. I recommend the store.",claude-code-routine-sonnet-5-5,1
+3d2043e67ff742d570dbc89a2dbcecdf,positive,general,Excellent — I buy and I recommend,claude-code-routine-sonnet-5-5,1
+3d980ccdd5e8995ae529ca2f18077802,positive,other,I highly recommend — Excellent value for money.,claude-code-routine-sonnet-5-5,1
+4066a28eefe9e750aa01ad19ab2fe494,negative,delivery,My order still hasn't arrived,claude-code-routine-sonnet-5-5,1
+43d8e78966af9a8945cd778a29cd4ee3,negative,wrong_or_missing_item,I bought two toners and only one came.,claude-code-routine-sonnet-5-5,1
+472da10b174d6d282fca5b924cb544bd,mixed,delivery,"I usually receive items well before the deadline given by the site. But since the Post Office has been running late, this time it was on the last expected day.",claude-code-routine-sonnet-5-5,1
+48fcd835a9f588c5ed2175b71528185b,negative,seller_service,purchase cancelled by the sel — The purchase was cancelled without me having requested it!,claude-code-routine-sonnet-5-5,1
+4b40642234bcb1e0539f39dfccb251cb,negative,wrong_or_missing_item,the scale came missing some little pins on its tray,claude-code-routine-sonnet-5-5,1
+4c5fe123a33e17f64737cf8c4e8e951a,positive,general,"Great purchase, delivered on time",claude-code-routine-sonnet-5-5,1
+4cdf8a5d8ebfc1b155cd03c7bd53d9dc,negative,product_quality,"its audio is not good, it's very low (and the sound seems somewhat ""muffled""). You put it on maximum volume and you can barely hear properly. Besides, the quality falls very short.",claude-code-routine-sonnet-5-5,1
+50c4627e14cfaaa8f504f77e1b2bab0f,positive,delivery,"All good. — The order was delivered very fast, it came very well protected. I recommend the store.",claude-code-routine-sonnet-5-5,1
+53afc2ec8f7823b12df9420b06db98a0,positive,seller_service,good purchase — good seller,claude-code-routine-sonnet-5-5,1
+53b032264ff4d9c3ac89119cd224a3d7,positive,delivery,Correct product and delivery within the deadline,claude-code-routine-sonnet-5-5,1
+53bdd47e56c31c07e0c8b7c5a412a0b3,negative,delivery,"I DON'T RECOMMEND! — I still haven't received the product, and considering the truckers' strike, it should have been delivered already.",claude-code-routine-sonnet-5-5,1
+562b41d751ef524b71d16532c65e7fac,positive,product_quality,"good value for money — good and cheap product, does what the manufacturer claims, fast delivery and before the deadline, well packed, I recommend it.",claude-code-routine-sonnet-5-5,1
+56aa9b39924c7408d13861e714f0fc94,neutral,delivery,"Unforeseen things happen, I know the store is serious. I hope my products arrive soon.",claude-code-routine-sonnet-5-5,1
+574b50d33e9b363d87967377b63112c7,positive,delivery,"It came within the agreed deadline, super well packed.",claude-code-routine-sonnet-5-5,1
+61add5da06a97e71e9e5de9beb7c70d0,negative,delivery,when I bought the product the delivery was 15 business days and it's been almost thirty and I still haven't received it,claude-code-routine-sonnet-5-5,1
+64d03ce539d9ad688ac1c682c1aeb552,negative,delivery,The product still hasn't arrived and they give no explanation at all,claude-code-routine-sonnet-5-5,1
+671026223a554a2e17f2bdd7f6df9fb1,negative,seller_service,"I request information about the purchase and the refund of the purchase? If the amount is returned, I would recommend the store, yes",claude-code-routine-sonnet-5-5,1
+692d8bf87554563793e70841d992d9d4,negative,seller_service,My product that I CANCELLED before the invoice was generated still hasn't arrived for me to refuse.,claude-code-routine-sonnet-5-5,1
+6f3a39d9a95c6539cbba7ae5cb131d1e,neutral,other,"I'm going to give it as a gift, so I don't know yet if it's tasty. I hope the person likes it.",claude-code-routine-sonnet-5-5,1
+6f6e9652780c49c182c2ac5ec5f60357,negative,product_quality,"Damaged product — Unfortunately I received the product, which is a solution for bitten nails, with an empty and damaged bottle",claude-code-routine-sonnet-5-5,1
+778a5b297ce32bfb9470a294f18b8f3c,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+7911240a746880bc112ae6afb6c0b33c,negative,wrong_or_missing_item,"I bought the product for my barber course, while I was cutting my first hair, after using the scissors I saw that it was 6.0 and not 5.5 as in the title of the product I purchased.",claude-code-routine-sonnet-5-5,1
+7afd8ba1c97176d137fece852c96cfab,positive,other,the site is very good,claude-code-routine-sonnet-5-5,1
+7cef106f6b24c1e51f5a74114f8b6c79,positive,general,"EXCELLENT, I RECOMMEND — great.",claude-code-routine-sonnet-5-5,1
+80c0cf198518515917a8616ddc0f4260,positive,general,Very satisfied,claude-code-routine-sonnet-5-5,1
+83c0bf970a71076d120ded9329a7b056,negative,seller_service,"Negative — When checking the product's availability it was in stock, but after finishing the purchase, after payment, I found out they didn't have the product in stock, so I had to keep calling for them to return the money.",claude-code-routine-sonnet-5-5,1
+84c05c33ccf19424e5b9bca4b0e6dbfb,positive,product_quality,Beautiful! Soft and of great quality!,claude-code-routine-sonnet-5-5,1
+8b085defb14ff6825dbba5594bf4bd7d,mixed,product_quality,"I don't recommend! — The product is not worth the price charged. The headphone material is low quality, except for the sound, which is very good.",claude-code-routine-sonnet-5-5,1
+8b5939810f5454fcbb50765827fd7130,positive,other,Good value for money.,claude-code-routine-sonnet-5-5,1
+8e8a9a3c6c30764f232a6efa06613b4e,negative,wrong_or_missing_item,I received the wrong product!,claude-code-routine-sonnet-5-5,1
+8f37678bbd57a98fe74b650313e72720,positive,delivery,GREAT — Products received in 2 days and working!,claude-code-routine-sonnet-5-5,1
+91a6b372f3de95a3d765b016fe876fc7,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+932997d62c4ca54077b33c573c778a38,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+944b53fe2aaad7bf9629a0843e1be401,positive,product_quality,"Great product!! — so far everything perfect, product and delivery on time",claude-code-routine-sonnet-5-5,1
+9566238008197f539da881e32ba160dc,negative,seller_service,"I received no support from targaryen regarding the product, only stark informed me about it. I don't know how it will be with my card and the refund of the amount.",claude-code-routine-sonnet-5-5,1
+977431a1f7a33d41da65508b383c46dc,mixed,product_quality,"The product was delivered on time but when I took it out of the package and opened it, it broke.",claude-code-routine-sonnet-5-5,1
+9aae10a2dde0ac1653a7e3f4c78fed44,negative,delivery,So far I haven't received the merchandise... I'm waiting.. I'm going to cancel the purchase,claude-code-routine-sonnet-5-5,1
+9b124b1f41b4dc3516c5c0b514ed9284,negative,seller_service,they don't have the product ready for immediate delivery and don't honor the delivery dates.,claude-code-routine-sonnet-5-5,1
+9e9a6c51bf17af1c3e3bd9d33ff6ff14,positive,product_quality,"Great — Product as advertised, well packed, fast delivery.",claude-code-routine-sonnet-5-5,1
+9efad59d4c1b0df31d4379e240d31be8,positive,delivery,"Excellent, the product arrived within the expected deadline, I recommend it to anyone.",claude-code-routine-sonnet-5-5,1
+a0be385e0ba2a87876aa93671c80a1ef,positive,general,Congratulations. I'm very satisfied,claude-code-routine-sonnet-5-5,1
+a466f9510a45ebe5b87ae0b86a294b68,negative,wrong_or_missing_item,Disorganized — They delivered only one! Terrible,claude-code-routine-sonnet-5-5,1
+a8b82e74bcd702f9554b4ce498905a62,positive,delivery,"I always recommend. — The lannister stores, as always, punctual with their customers, congratulations!!!",claude-code-routine-sonnet-5-5,1
+ace2d531efaf140af684fe2f62d95851,positive,general,Good — Meets expectations!,claude-code-routine-sonnet-5-5,1
+aef38b75e77107950ea4c5849658ec28,negative,delivery,For now my rating of this store is bad and I wouldn't recommend it to anyone. Because I still haven't received the product I bought and I don't even know if I will receive it. I'm waiting for some reply from them,claude-code-routine-sonnet-5-5,1
+b0b72ad5d06025206613fc172f941876,positive,general,Awesome,claude-code-routine-sonnet-5-5,1
+b0ee4699306c7645dcefb333c3dbf1c6,positive,product_quality,Very good product,claude-code-routine-sonnet-5-5,1
+b18204ed1b39d84c36cca10a2b45643d,negative,delivery,It's the first time a product hasn't arrived on time,claude-code-routine-sonnet-5-5,1
+b28309e8253951a954123e039d3242f7,negative,delivery,Product was not delivered. Invoice was not sent. The complaints phone number doesn't work.,claude-code-routine-sonnet-5-5,1
+b35041292c711e10c0589a676b4c88d6,negative,delivery,"I received my product, but with a certain delay.",claude-code-routine-sonnet-5-5,1
+b38723e7e62ac14f4c306bbec1422948,positive,general,Perfect!!! delivery way before expected. very beautiful product and with quality.,claude-code-routine-sonnet-5-5,1
+b46298a391ab5c3aee3da642d24290fa,positive,general,"I received everything right, as I requested",claude-code-routine-sonnet-5-5,1
+b49943805e8540e7cf39e3d7fcc6887c,positive,product_quality,Satisfied — Satisfied with my product and also delivered within the deadline.,claude-code-routine-sonnet-5-5,1
+b62e4565633f1c463c516d696fb32168,positive,general,Awesome,claude-code-routine-sonnet-5-5,1
+b7258356fea46a0f91f06443dd39a34a,mixed,wrong_or_missing_item,I received the curtain but the rod that the advertisement said would come didn't come. The curtain is beautiful.,claude-code-routine-sonnet-5-5,1
+b749476af4854c1e4522b4f0ca5f69f3,negative,delivery,"the product was not delivered, but it is paid for",claude-code-routine-sonnet-5-5,1
+b7c683ec171cf5e54f75d6a7c6f076eb,positive,product_quality,"Great product — It met my expectations, excellent product with a great price.",claude-code-routine-sonnet-5-5,1
+bbdf4b38a60dca20150293ed2162288d,positive,delivery,I recommend — Fast delivery and with quality,claude-code-routine-sonnet-5-5,1
+beaebb0293d5c0a300dbb40224be5403,negative,product_quality,"The product came packed, but dented.",claude-code-routine-sonnet-5-5,1
+bf4a50b3996a23e671e771ffb9ebbc49,negative,wrong_or_missing_item,"I don't recommend — I received the wrong product, I would like to return it, and I want my money back.",claude-code-routine-sonnet-5-5,1
+c37988a3362a841ce0a0a8f2232884ab,negative,seller_service,"I received the product with the box open, no seal, no invoice, no purchase order and with a sender different from the ad. I want my money back. Dissatisfaction",claude-code-routine-sonnet-5-5,1
+c3d03d375a3169a02f2e54f0433d4e1b,negative,wrong_or_missing_item,"I need to return it — The product came wrong, I need to return it, I already got in touch but so far got no reply",claude-code-routine-sonnet-5-5,1
+c7904f887693da0000f7fe5066d726cb,negative,wrong_or_missing_item,The pepper grinder didn't come in the box,claude-code-routine-sonnet-5-5,1
+c911eb02e4a4c952b9810a4423fd5769,positive,general,Awesome,claude-code-routine-sonnet-5-5,1
+c962f6d122d61d1139814be204618cf1,negative,product_quality,I would have expected a product that was not MADE IN CHINA.,claude-code-routine-sonnet-5-5,1
+c9b75b50eaad93310a5ee6f923832bd1,positive,delivery,I highly recommend — fast and straightforward delivery,claude-code-routine-sonnet-5-5,1
+c9fa49205d25cfcb9f9166c94ceb965a,mixed,wrong_or_missing_item,"I loved the product.. — I loved the investment, although I've only tested it so far. However, according to the reviews I saw on the internet, the product comes with the thermal glove and certificate, but mine came with nothing besides the manual",claude-code-routine-sonnet-5-5,1
+ca46d0e3d722082f9d8cece5b150e829,positive,other,Great — Product very well packed and everything correct.,claude-code-routine-sonnet-5-5,1
+cdda9cc8712d6815f13ed5973d89ae41,positive,product_quality,"It came as advertised. Well packed, and the watch really doesn't have that annoying tick-tock noise.",claude-code-routine-sonnet-5-5,1
+d270fe4dd3457ee4f1e22de7fb559582,negative,wrong_or_missing_item,"INCOMPLETE DELIVERY — I received only one unit so far, the Giovana Bedspread, the Beatriz Bedspread is missing.",claude-code-routine-sonnet-5-5,1
+db356fdf3332f7c3c2bfd18c409a8d0b,positive,delivery,"The product was delivered well before the deadline, well packed and according to the specifications, I'm extremely satisfied, top grade for the company.",claude-code-routine-sonnet-5-5,1
+e40ec5125c4e5e9d4156573429db256a,positive,general,"5 — how good that there is a serious company in this Brazil,
+and we have to trust that Brazil can be fixed indeed!
+it's with companies like lannister that we're proud to be Brazilian. I recommend it.",claude-code-routine-sonnet-5-5,1
+e4911afa33032492738728e2d67827cd,positive,product_quality,"SHOW, perfect, it even came with free batteries, the packaging very well made so as not to damage the product, congratulations",claude-code-routine-sonnet-5-5,1
+e4e50748d2d683f0d3de0b2089265b22,negative,wrong_or_missing_item,"The pieces came as requested, but the measurements did not come as per the order.",claude-code-routine-sonnet-5-5,1
+e5f9f233ad844f06a1b8243e8fb8d5d6,positive,delivery,arrived before the date,claude-code-routine-sonnet-5-5,1
+e741c8efa84c4bf6f0f03bcc5441bfcb,neutral,delivery,"Deadline — Within what was agreed, now put it on the asphalt and mark the km since there are several different rubbers because we are in Brazil",claude-code-routine-sonnet-5-5,1
+e9ec48da361dc89f434aa3c356dcab40,negative,product_quality,"I hated the product, it arrived damaged, all crooked and without any grace or beauty, I have already asked for cancellation, I await action, I complained on a specialized site and I intend to file a lawsuit.",claude-code-routine-sonnet-5-5,1
+ec49fc52d1d7bafe31c99da933cf1484,positive,product_quality,"I recommend — Very good product, within the conditions it was advertised. It arrived before the deadline.",claude-code-routine-sonnet-5-5,1
+ec96094e10760eea75f5f69a6f8cfa57,negative,delivery,My product still hasn't be — I still haven't received my product.,claude-code-routine-sonnet-5-5,1
+eeeff8a244743343ca581b1c03f0e9ed,negative,wrong_or_missing_item,"They delivered the wrong product, I requested a sheet without elastic and the store sent one with elastic, smaller than the one I bought.",claude-code-routine-sonnet-5-5,1
+f09e27e8caa28870d448eef18801ec5c,mixed,product_quality,"In the ad it was PERCALE, but it's not percale, it has polyester.... I'm allergic to polyester, that's why I bought it. I only didn't return it because I'll use it in my son's room, the product is pretty",claude-code-routine-sonnet-5-5,1
+f36417fa8dba0747ae9d439e599f5b47,positive,delivery,"I haven't been able to assemble the chair yet, I'm waiting to find someone to assemble it. Other than that, everything is fine, the product arrived on time.",claude-code-routine-sonnet-5-5,1
