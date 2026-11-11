@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.6.0
+version: 1.7.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -304,6 +304,61 @@ schema:
         query: select count(*) from {schema}.{model} where item_amount <> price + freight_value
         mustBe: 0
 
+  - name: fct_order_payments
+    physicalName: fct_order_payments
+    physicalType: table
+    description: >-
+      One row per payment of an order (an order can be paid in parts, by several methods);
+      the payment type lives here. Paid amounts can differ from the order amount.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_order_payments
+    properties:
+      - name: payment_sk
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: order_id
+        logicalType: string
+        required: true
+        relationships:
+          - type: foreignKey
+            to: fct_orders.order_id
+      - name: payment_sequential
+        logicalType: integer
+        required: true
+      - name: payment_type
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [credit_card, boleto, voucher, debit_card, not_defined]
+            mustBe: 0
+      - name: payment_installments
+        logicalType: integer
+      - name: customer_unique_id
+        logicalType: string
+        required: true
+        classification: restricted
+        relationships:
+          - type: foreignKey
+            to: dim_customers.customer_unique_id
+      - name: order_status
+        logicalType: string
+        required: true
+      - name: purchase_date
+        logicalType: date
+        required: true
+      - name: payment_value
+        logicalType: number
+        required: true
+        logicalTypeOptions:
+          minimum: 0
+    quality:
+      - *not_empty_rule
   - name: dim_customers
     physicalName: dim_customers
     physicalType: table

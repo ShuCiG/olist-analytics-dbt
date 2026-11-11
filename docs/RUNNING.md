@@ -154,6 +154,9 @@ uv run mf list metrics
 uv run mf query --metrics revenue,average_order_value --group-by metric_time__month --start-time 2018-01-01
 uv run mf query --saved-query late_delivery_by_state --order -delivered_orders
 uv run mf query --metrics revenue --group-by metric_time__year --explain   # show the generated SQL
+uv run mf query --metrics item_revenue --group-by product__category_name --order -item_revenue --limit 5   # order lines (D113)
+uv run mf query --metrics item_revenue --group-by seller --order -item_revenue --limit 5                   # an entity as group by: seller id
+uv run mf query --metrics paid_amount --group-by payment__payment_type                                     # payments
 uv run mf validate-configs                                                  # every metric queried on the warehouse
 DBT_TARGET=prod uv run dbt parse && DBT_TARGET=prod uv run mf query --metrics orders   # BigQuery prod
 ```
@@ -169,7 +172,7 @@ cd transform && uv run dbt parse && cd ..
 claude mcp add olist-metrics --scope local -- uv run --directory "$(pwd)" python -m metrics_mcp.server
 ```
 
-Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values`, `query_metrics` and `explain_change` (a metric's change between two periods split by dimension members, D110). The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
+Any MCP client can start the same command over stdio. The tools are `list_metrics`, `list_dimensions`, `dimension_values`, `query_metrics` and `explain_change` (a metric's change between two periods split by dimension members, D110; `revenue` also by product category, seller state or `seller` through `item_revenue`, D113). The first call takes about 10 s (MetricFlow's imports). The connection is read-only (dbt target `mcp`), but DuckDB still refuses to open the file while `dbt build` holds it for writing.
 
 ```bash
 uv run pytest metrics_mcp                                       # the server through a real client; needs built marts

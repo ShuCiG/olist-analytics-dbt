@@ -115,11 +115,26 @@
 - id: profit_margin
   question: What was our profit margin in 2018?
   refuse: true
+# Order-line grain (D113): seller and category through item_revenue, payment type through
+# paid_amount. Until D113 top_seller, revenue_by_category and revenue_rise_by_seller were refusals.
 - id: top_seller
   question: Which seller made the most revenue?
-  refuse: true
+  shape: top_key
+  gold: {metrics: [item_revenue], group_by: [seller]}
 - id: revenue_by_category
-  question: What is revenue by product category?
+  question: Which product category brings the most revenue?
+  shape: top_key
+  gold: {metrics: [item_revenue], group_by: [product__category_name]}
+- id: paid_boleto_2018
+  question: How much was paid by boleto (bank slip) for orders placed in 2018?
+  shape: scalar
+  gold:
+    metrics: [paid_amount]
+    start: 2018-01-01
+    end: 2018-12-31
+    where: "{{ Dimension('payment__payment_type') }} = 'boleto'"
+- id: seller_review_score
+  question: What is the average review score of each seller?
   refuse: true
 - id: conversion_rate
   question: What is the website conversion rate?
@@ -173,4 +188,19 @@
       after: {start: 2017-11-01, end: 2017-11-30}
 - id: revenue_rise_by_seller
   question: Which seller drove the increase in revenue from October 2017 to November 2017?
-  refuse: true
+  shape: top_key
+  gold:
+    metrics: [item_revenue]
+    group_by: [seller]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}
+- id: revenue_rise_top_category
+  question: Revenue grew from October 2017 to November 2017. Which product category contributed the most to the increase?
+  shape: top_key
+  gold:
+    metrics: [item_revenue]
+    group_by: [product__category_name]
+    change:
+      before: {start: 2017-10-01, end: 2017-10-31}
+      after: {start: 2017-11-01, end: 2017-11-30}

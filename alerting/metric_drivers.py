@@ -19,6 +19,11 @@ The total change is queried without a dimension; the top members are listed and 
 else, including people the dimension does not cover, is one "other" row, so the rows add up
 to the total change.
 
+A dimension of another grain (product category, seller: on the order lines, not the orders)
+is reached through a metric that declares `meta: {same_total_as: <metric>}` (D113): order-level
+`revenue` is split by category through line-level `item_revenue`. Both totals are queried and
+must match in both periods, so the rows still add up to the change of the metric asked about.
+
 CLI for the Airflow run email (the last stdout line is JSON):
 
     python -m alerting.metric_drivers --target dev
@@ -42,7 +47,16 @@ from . import email_html
 
 # Metrics the run email checks, and the dimensions it may explain them by
 EMAIL_METRICS = ["revenue", "orders", "average_order_value", "late_delivery_rate"]
-EMAIL_DIMENSIONS = ["customer__state", "order__order_status", "customer__is_repeat_customer"]
+EMAIL_DIMENSIONS = [
+    "customer__state",
+    "order__order_status",
+    "customer__is_repeat_customer",
+    "product__category_name",
+    "seller__state",
+]
+# Entities whose ids a change may be split by. Not `customer`: its id is a person (D94).
+SPLIT_ENTITIES = ["seller", "product"]
+SAME_TOTAL_TOLERANCE = 0.01  # BRL; money is rounded to cents per row
 BASE_METRIC = "orders"  # "base >= 100 orders": the size of the earlier period
 DEFAULT_THRESHOLD = 0.10  # |relative change|
 DEFAULT_MIN_BASE = 100
@@ -54,6 +68,8 @@ ADDITIVE_AGGS = {"sum", "count"}
 
 # (metrics, group by, first day, last day inclusive) -> one row per group, a column per name
 Runner = Callable[[list[str], list[str], datetime.date, datetime.date], list[dict[str, Any]]]
+# metric -> the names it can be split by (categorical dimensions, allowed entities)
+GroupBys = Callable[[str], set[str]]
 
 
 class NotDecomposable(ValueError):
@@ -78,6 +94,7 @@ class MetricSpec:
     kind: str  # additive | ratio
     numerator: str | None = None
     denominator: str | None = None
+    same_total: tuple[str, ...] = ()  # metrics of another grain with the same total (meta same_total_as)
 
 
 @dataclass
@@ -98,6 +115,7 @@ class Breakdown:
     other: Driver | None
     members: int  # how many members the dimension had
     explained: float  # |sum of the top deltas| / |total delta|, 0 when the total did not change
+    via: str | None = None  # the same-total metric the split was queried with, if not the metric itself
 
     @property
     def informative(self) -> float:
@@ -144,6 +162,23 @@ def specs_from_manifest(manifest: dict[str, Any]) -> dict[str, MetricSpec | str]
             result[name] = f"ratio over non-additive parts ({'; '.join(bad)})" if bad else MetricSpec(name, "ratio", numerator, denominator)
         else:
             result[name] = simple(name)
+
+    same_total: dict[str, list[str]] = {}
+    for name, metric in metrics.items():
+        target = ((metric.get("config") or {}).get("meta") or {}).get("same_total_as")
+        if not target:
+            continue
+        if target not in result:
+            raise ValueError(f"{name!r}: same_total_as names an unknown metric {target!r}")
+        for end in (name, target):
+            spec = result[end]
+            if not isinstance(spec, MetricSpec) or spec.kind != "additive":
+                raise ValueError(f"{name!r}: same_total_as needs two sums or counts, {end!r} is not one")
+        same_total.setdefault(target, []).append(name)
+    for target, names in same_total.items():
+        spec = result[target]
+        assert isinstance(spec, MetricSpec)
+        result[target] = MetricSpec(spec.name, spec.kind, same_total=tuple(sorted(names)))
     return result
 
 
@@ -157,6 +192,18 @@ def spec_for(specs: dict[str, MetricSpec | str], metric: str) -> MetricSpec:
             "because the members of a dimension must add up to the total."
         )
     return spec
+
+
+def source_metric(spec: MetricSpec, dimension: str, group_bys: GroupBys | None) -> str | None:
+    """The metric to split `spec` by `dimension` with: itself, a same-total metric, or None (unreachable)."""
+    if group_bys is None or dimension in group_bys(spec.name):
+        return spec.name
+    return next((other for other in spec.same_total if dimension in group_bys(other)), None)
+
+
+def reachable(spec: MetricSpec, group_bys: GroupBys) -> set[str]:
+    """Every name `spec` can be split by, directly or through a same-total metric."""
+    return set().union(group_bys(spec.name), *(group_bys(other) for other in spec.same_total))
 
 
 # --- maths -------------------------------------------------------------------------------------
@@ -258,9 +305,21 @@ def explain(
     after: Period,
     dimensions: list[str],
     top: int = TOP_MEMBERS,
+    group_bys: GroupBys | None = None,
 ) -> Explanation:
-    """The change of `metric` between two periods and who drove it, per dimension."""
+    """The change of `metric` between two periods and who drove it, per dimension.
+
+    With `group_bys`, a dimension the metric lacks is split through a same-total metric
+    (D113); without it every dimension is queried on the metric itself.
+    """
     spec = spec_for(specs, metric)
+    sources: dict[str, str] = {}
+    for dimension in dimensions:
+        source = source_metric(spec, dimension, group_bys)
+        if source is None:
+            assert group_bys is not None
+            raise ValueError(f"{metric!r} cannot be split by {dimension!r}. Available: {', '.join(sorted(reachable(spec, group_bys)))}")
+        sources[dimension] = source
     parts = [spec.numerator, spec.denominator] if spec.kind == "ratio" else [metric]
     names = [part for part in parts if part]
     total0, total1 = _total(runner, names, before), _total(runner, names, after)
@@ -274,7 +333,22 @@ def explain(
         value0, value1 = total0[metric], total1[metric]
     result = Explanation(metric, spec.kind, before.label, after.label, value0, value1, value1 - value0, _relative(value0, value1))
 
+    for source in sorted(set(sources.values()) - {metric}):
+        # the promise of same_total_as, checked on the periods asked about
+        for period, value in ((before, value0), (after, value1)):
+            total = _total(runner, [source], period)[source]
+            if abs(total - value) > SAME_TOTAL_TOLERANCE:
+                raise ValueError(f"{source!r} ({total:,.2f}) does not match {metric!r} ({value:,.2f}) in {period.label}; cannot split through it")
+
     for dimension in dimensions:
+        source = sources[dimension]
+        if source != metric:  # both additive (specs_from_manifest)
+            m0 = {m: v[source] for m, v in _by_member(runner([source], [dimension], before.start, before.end), dimension, [source]).items()}
+            m1 = {m: v[source] for m, v in _by_member(runner([source], [dimension], after.start, after.end), dimension, [source]).items()}
+            shown, other = additive_drivers(m0, m1, result.delta, top)
+            covered = abs(sum(d.delta for d in shown) / result.delta) if result.delta else 0.0
+            result.breakdowns.append(Breakdown(dimension, shown, other, len(m0.keys() | m1.keys()), covered, via=source))
+            continue
         rows0, rows1 = runner(names, [dimension], before.start, before.end), runner(names, [dimension], after.start, after.end)
         if spec.kind == "ratio":
             assert spec.numerator and spec.denominator
@@ -329,8 +403,13 @@ def run_check(
     min_base: float = DEFAULT_MIN_BASE,
     metrics: list[str] = EMAIL_METRICS,
     dimensions: list[str] = EMAIL_DIMENSIONS,
+    group_bys: GroupBys | None = None,
 ) -> dict[str, Any]:
-    """The latest month against the one before it: every watched metric, with drivers for those that moved."""
+    """The latest month against the one before it: every watched metric, with drivers for those that moved.
+
+    With `group_bys`, each metric is split only by the dimensions it reaches (a rate of orders
+    has no product category).
+    """
     after, before = month_period(latest_month), month_period(previous_month(latest_month))
     base = _total(runner, [BASE_METRIC], before)[BASE_METRIC]
     checked: list[dict[str, Any]] = []
@@ -350,7 +429,8 @@ def run_check(
         hit = moved_past_threshold(v0, v1, base, threshold, min_base)
         checked.append({"metric": metric, "before": v0, "after": v1, "relative": _relative(v0, v1), "moved": hit})
         if hit:
-            explanation = explain(runner, specs, metric, before, after, dimensions)
+            usable = [d for d in dimensions if source_metric(spec, d, group_bys) is not None]
+            explanation = explain(runner, specs, metric, before, after, usable, group_bys=group_bys)
             # the most telling dimensions: a few members cover much of the change
             explanation.breakdowns.sort(key=lambda b: -b.informative)
             del explanation.breakdowns[EMAIL_DIMENSION_COUNT:]
@@ -410,7 +490,8 @@ def drivers_html(drivers: dict[str, Any]) -> str:
                     cells += [_signed(driver["mix"], metric) if driver["mix"] is not None else "", _signed(driver["rate"], metric) if driver["rate"] is not None else ""]
                 cells.append(f"{driver['share']:.0%}" if driver["share"] is not None else "")
                 lines.append(cells)
-            header = ["by " + breakdown["dimension"], "change"] + (["mix", "rate"] if ratio else []) + ["share"]
+            via = f" (via {breakdown['via']})" if breakdown.get("via") else ""
+            header = ["by " + breakdown["dimension"] + via, "change"] + (["mix", "rate"] if ratio else []) + ["share"]
             parts.append(_table(header, lines))
     return "".join(parts)
 
@@ -466,6 +547,25 @@ def metricflow_runner(engine: Any) -> Runner:
     return run
 
 
+def metricflow_group_bys(engine: Any) -> GroupBys:
+    """What a metric can be split by in MetricFlow: categorical dimensions and the SPLIT_ENTITIES."""
+    cache: dict[str, set[str]] = {}
+
+    def group_bys(metric: str) -> set[str]:
+        if metric not in cache:
+            names: set[str] = set()
+            for item in engine.list_group_bys(metric_names=[metric]):
+                if hasattr(item, "dunder_name"):  # a Dimension
+                    if item.type.value == "categorical":
+                        names.add(item.dunder_name)
+                elif item.name in SPLIT_ENTITIES:
+                    names.add(item.name)
+            cache[metric] = names
+        return cache[metric]
+
+    return group_bys
+
+
 def load_engine(target: str, project_dir: Path, manifest_path: Path, profiles_dir: Path | None = None) -> Any:
     """MetricFlow's engine on a dbt target, over the semantic manifest at `manifest_path`.
 
@@ -516,7 +616,7 @@ def main(argv: list[str] | None = None) -> int:
     specs = specs_from_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
     with contextlib.redirect_stdout(sys.stderr):
         month = datetime.date.fromisoformat(args.month + "-01") if args.month else latest_month(runner)
-        result = run_check(runner, specs, month, args.threshold, args.min_base)
+        result = run_check(runner, specs, month, args.threshold, args.min_base, group_bys=metricflow_group_bys(engine))
     print(json.dumps(result, default=str, allow_nan=False))
     return 0
 
