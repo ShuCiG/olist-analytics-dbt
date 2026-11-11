@@ -12,6 +12,8 @@ renamed as (
         cast(order_delivered_carrier_date as {{ dbt.type_timestamp() }}) as delivered_to_carrier_at,
         cast(order_delivered_customer_date as {{ dbt.type_timestamp() }}) as delivered_to_customer_at,
         cast(cast(order_estimated_delivery_date as {{ dbt.type_timestamp() }}) as date) as estimated_delivery_date,
+        -- Generated after the dump ends (D112); raw tables loaded before have no column
+        {{ source_column_or(source('olist', 'orders'), '_is_synthetic', 'false') }} as is_synthetic,
         _loaded_at
     from source
 )

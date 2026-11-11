@@ -16,9 +16,11 @@ airflow/README.md.
 
 Schedule: a simulated live feed (D28). Olist is a static 2016-2018 dump, so every
 hourly run loads the next purchase month that has orders (`pipeline.py --next`,
-cursor in dlt state): the whole history arrives in ~a day, then runs find nothing
-new and skip the load (one status query, D49) and dbt. A manual run with the `until` param loads up to that month and
-always runs dbt (catch-up, recovery). See airflow/README.md.
+cursor in dlt state): the whole history arrives in ~a day. After the dump the feed
+goes on with a generated month once a day (`--synthetic-every-hours 24`, D112); the
+hourly runs in between find nothing new and skip the load (one status query, D49)
+and dbt. A manual run with the `until` param loads up to that month (generated past
+the dump) and always runs dbt (catch-up, recovery). See airflow/README.md.
 
 Alerts (olist_alerts.py): one report per run at most — failed run, fresh data, or
 stale data (no new orders for a day, repeated daily) — plus a SCHEMA email when the
@@ -74,6 +76,9 @@ EDR_FAILED = 99
 
 # Which orders to load: up to the `until` param if given, else the next month
 CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
+# After the dump: a generated month once a day (D112). Hourly runs in between find
+# nothing new and skip, as on a used-up dump; `until` past the dump generates up to it
+SYNTHETIC_FLAG = "--synthetic-every-hours 24"
 # Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders.
 # `or ''`: a missing XCom renders as the string "None", which dbt can't parse as a
 # time (seen on a run started by the previous image); empty = the wall clock.
@@ -275,7 +280,7 @@ def build_dag(wh: Warehouse) -> DAG:
             raw_tables=[f"{wh.raw_dataset}.{table}" for table in RAW_TABLES],
             bash_command=(
                 f"{VENV_BIN / 'python'} ingestion/pipeline.py {' '.join(wh.dlt_args)}"
-                f" {CHUNK_FLAG}"
+                f" {CHUNK_FLAG} {SYNTHETIC_FLAG}"
                 " {{ '--full-refresh' if params.full_refresh else '' }}"
             ),
             cwd=str(PROJECT_DIR),

@@ -133,11 +133,18 @@ state, empty months such as 2016-11 are skipped):
 |---|---|---|
 | 1st after unpausing an empty warehouse | 2016-09 (4 orders) | builds |
 | next ones | 2016-10, 2016-12, 2017-01, ... one month each | builds |
-| after 2018-10 (~25 runs, about a day) | nothing, `orders_loaded=0` | skipped by `has_new_orders` |
+| after 2018-10 (~25 runs, about a day) | a **generated** month (2018-11, 2018-12, ...) once a day | builds |
+| the hourly runs in between | nothing, `orders_loaded=0` | skipped by `has_new_orders` |
 
-Once the dump is used up the runs stay green, the dlt load and dbt are skipped
-(D49: an idle run reads only the feed status, one cached BigQuery query) and the order tables' `_loaded_at` stops moving: source
-freshness goes stale, which the `STALE` email reports (see below).
+After the dump the feed goes on with generated months (D112, `ingestion/synthetic.py`):
+each is drawn from the dump's own orders of the same calendar month, with new order,
+customer and some seller ids, and flagged `_is_synthetic` in raw (`fct_orders.is_synthetic`).
+`--synthetic-every-hours 24` loads one when the last load of orders is a day old, so a
+generated month comes about once a day and never piles up while the machine is off.
+The runs in between stay green, the dlt load and dbt are skipped (D49: an idle run
+reads only the feed status, one cached BigQuery query). Prod and CI load the dump
+alone. Should the feed stop (a failing run), `_loaded_at` stops moving and the `STALE`
+email reports it (see below).
 
 Catch up faster with a manual run that loads up to a month at once (the `until`
 param always runs dbt):

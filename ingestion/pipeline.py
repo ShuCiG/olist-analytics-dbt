@@ -39,6 +39,13 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
 - People with a deletion request (table `OLIST_DELETION_REQUESTS`, default
   `pii_keys.deletion_requests`, D105) are left out of every load: their customer
   rows, their orders and the orders' items, payments and reviews.
+- After the dump (D112): with `--synthetic-every-hours H`, `--next` on a used-up
+  dump serves a generated month (ingestion/synthetic.py) once the last load of
+  orders is at least H hours old; the runs in between skip the load as before.
+  `--synthetic-every-hours H --until YYYY-MM` generates every month up to it at once.
+  Raw orders carry `_is_synthetic` (false for the dump's rows). Once the cursor is
+  past the dump, every load keeps the generated customers and sellers of the loaded
+  months in the reference snapshots, with or without the flag.
 
 Examples:
     python ingestion/pipeline.py --until 2017-06   # first chunk: up to June 2017
@@ -68,8 +75,9 @@ import hashlib
 import json
 import os
 import re
+import sys
 import warnings
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import dlt
@@ -83,6 +91,10 @@ from dlt.common.schema import Schema
 from dlt.destinations.adapters import bigquery_adapter
 from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
+# Run as a script (Airflow, CI) or imported as ingestion.pipeline (tests)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import synthetic  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
 # Review labels (sentiment, topic, English translation): CSV batches kept in the repo,
@@ -95,6 +107,7 @@ GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
 DATABRICKS_CATALOG = os.environ.get("DATABRICKS_CATALOG", "olist")
 STATE_KEY = "orders_loaded_until"  # last loaded purchase month, "YYYY-MM"
+SYNTHETIC_VERSION_KEY = "synthetic_version"  # generator version of the loaded generated months
 # Olist purchase time, "2017-10-02 10:56:33" (optionally ISO "T", fractions)
 TIMESTAMP = r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?"
 
@@ -116,6 +129,12 @@ ORDER_TABLES = {
     "order_payments": ("olist_order_payments_dataset.csv", ["order_id", "payment_sequential"]),
     "order_reviews": ("olist_order_reviews_dataset.csv", ["review_id", "order_id"]),
 }
+# Added to raw orders by the loader, not in the source files: true on generated orders
+SYNTHETIC_FLAG = "_is_synthetic"
+LOADER_COLUMNS = {"_loaded_at", SYNTHETIC_FLAG}
+# A run this much before the interval is up still counts as due: the hourly schedule
+# starts a few minutes late or early, and a strict check would slip an hour a day
+SYNTHETIC_SLACK = timedelta(minutes=30)
 
 
 def csv_header(path: Path) -> list[str]:
@@ -163,6 +182,70 @@ def read_orders(source_dir: Path) -> pa.Table:
         examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3]))
         raise ValueError(f"{bad.num_rows} orders with a malformed order_purchase_timestamp, e.g. {examples}")
     return orders
+
+
+SOURCE_FILES = {**REFERENCE_TABLES, **{table: file for table, (file, _) in ORDER_TABLES.items()}}
+
+
+class SourceDump:
+    """The source files as tables of strings, with generated months after them (D112).
+
+    `synthetic_until` unset: the files as they are. Set: orders, their items, payments
+    and reviews, customers and sellers also get every generated month after the
+    dump up to that month. Orders always get `_is_synthetic`, false for the files' rows.
+    """
+
+    def __init__(self, source_dir: Path) -> None:
+        self.source_dir = source_dir
+        self.synthetic_until: str | None = None
+
+    def header(self, table: str) -> list[str]:
+        header = csv_header(self.source_dir / SOURCE_FILES[table])
+        return [*header, SYNTHETIC_FLAG] if table == "orders" else header
+
+    @functools.cached_property
+    def real_orders(self) -> pa.Table:
+        return read_orders(self.source_dir)
+
+    @functools.cache
+    def _real(self, table: str) -> pa.Table:
+        """A file read once per run: the generator needs it as well as the load."""
+        if table == "orders":
+            return self.real_orders
+        return read_csv_as_strings(self.source_dir / SOURCE_FILES[table])
+
+    @functools.cached_property
+    def last_real_month(self) -> str | None:
+        last = pc.max(self.real_orders["order_purchase_timestamp"]).as_py()
+        return last[:7] if last else None
+
+    @functools.cache
+    def _generate(self, until: str) -> dict[str, pa.Table]:
+        real = synthetic.Dump({table: self._real(table) for table in synthetic.TABLES})
+        generated = synthetic.generate(real, until)
+        print(
+            f"Generated months ({real.last_month}, {until}]: {generated['orders'].num_rows} orders, "
+            f"{generated['sellers'].num_rows} new sellers"
+        )
+        return generated
+
+    def table(self, name: str) -> pa.Table:
+        until = self.synthetic_until
+        if until and name in synthetic.TABLES:
+            parts = [self._real(name), self._generate(until)[name]]
+        elif name == "orders":
+            parts = [self.real_orders]
+        else:
+            return read_csv_as_strings(self.source_dir / SOURCE_FILES[name])
+        if name == "orders":
+            parts = [
+                part.append_column(SYNTHETIC_FLAG, pa.array([i > 0] * part.num_rows, pa.bool_()))
+                for i, part in enumerate(parts)
+            ]
+        return pa.concat_tables(parts)
+
+    def orders(self) -> pa.Table:
+        return self.table("orders")
 
 
 def refuse_conflicting_rows(table: pa.Table, primary_key: list[str], file_name: str) -> None:
@@ -232,7 +315,7 @@ def suppress_people(customers: pa.Table, people: frozenset[str]) -> tuple[pa.Tab
 
 @dlt.source(name="olist")
 def olist_source(
-    source_dir: Path,
+    dump: SourceDump,
     until: str | None = None,
     next_only: bool = False,
     partitioned: bool = False,
@@ -245,9 +328,7 @@ def olist_source(
     the next order month would bring them back.
     """
     loaded_at = datetime.now(UTC)
-    customers, deleted_customer_ids = suppress_people(
-        read_csv_as_strings(source_dir / REFERENCE_TABLES["customers"]), deleted_people
-    )
+    customers, deleted_customer_ids = suppress_people(dump.table("customers"), deleted_people)
     if deleted_people:
         print(
             f"Deletion requests: {len(deleted_people)} people, "
@@ -255,7 +336,7 @@ def olist_source(
         )
 
     for table_name, file_name in REFERENCE_TABLES.items():
-        table = customers if table_name == "customers" else read_csv_as_strings(source_dir / file_name)
+        table = customers if table_name == "customers" else dump.table(table_name)
         # `replace`: an empty file would wipe the table, and the sellers snapshot would
         # close every seller's history (hard_deletes: new_record)
         if not table.num_rows:
@@ -274,7 +355,7 @@ def olist_source(
         loaded_until = state.get(STATE_KEY)
         # Timestamps are ISO strings, so string order = time order
         purchased_at = pc.field("order_purchase_timestamp")
-        all_orders = read_orders(source_dir)
+        all_orders = dump.orders()
         in_chunk = pc.is_valid(purchased_at)
         if loaded_until:
             in_chunk &= purchased_at >= next_month(loaded_until)
@@ -289,6 +370,8 @@ def olist_source(
             orders = orders.filter(purchased_at < next_month(chunk_until))
         if orders.num_rows:
             state[STATE_KEY] = pc.max(orders["order_purchase_timestamp"]).as_py()[:7]
+        if dump.synthetic_until:
+            state[SYNTHETIC_VERSION_KEY] = synthetic.VERSION
         print(
             f"Order chunk ({loaded_until or 'start'}, {chunk_until or 'end'}]: "
             f"{orders.num_rows} orders, state now {state.get(STATE_KEY)}"
@@ -299,15 +382,15 @@ def olist_source(
             orders = orders.filter(~pc.field("customer_id").isin(deleted_customer_ids))
         return orders["order_id"]
 
-    def order_rows(file_name: str, primary_key: list[str]):
-        table = read_csv_as_strings(source_dir / file_name)
+    def order_rows(table_name: str, file_name: str, primary_key: list[str]):
+        table = dump.table(table_name)
         table = table.filter(pc.is_in(table["order_id"], value_set=chunk_order_ids()))
         refuse_conflicting_rows(table, primary_key, file_name)
         yield with_loaded_at(with_required(table, primary_key), loaded_at)
 
     for table_name, (file_name, primary_key) in ORDER_TABLES.items():
         resource = dlt.resource(
-            order_rows(file_name, primary_key),
+            order_rows(table_name, file_name, primary_key),
             name=table_name,
             write_disposition="merge",
             primary_key=primary_key,
@@ -429,27 +512,21 @@ def orders_status(pipeline: dlt.Pipeline) -> OrdersStatus | None:
     return total, last_order_at, last_loaded_at
 
 
-def nothing_to_load(
-    pipeline: dlt.Pipeline, source_dir: Path, until: str | None, status: OrdersStatus | None
-) -> bool:
-    """True when the dump has no order month after the cursor (up to `until`).
+def restore_cursor(pipeline: dlt.Pipeline, status: OrdersStatus | None) -> str | None:
+    """The last loaded purchase month, local state checked against the destination.
 
-    Decided before the load: a dlt run reads its state from the destination, then
-    replaces the reference tables and runs four merges even for a chunk of 0 orders,
-    and every one is a billed query (BigQuery bills at least 10 MB each). The cursor
-    comes from the local dlt state when it matches the last purchase month of raw
-    orders (`status`, the query the feed status needs anyway). Otherwise it is read
-    from the destination, the same restore a run would do, but only that: no local
-    cursor (fresh runner or volume), or one the destination doesn't have (a new,
-    deleted or replaced DuckDB file, a dropped dataset; the pipeline name is not
-    per file). Such a local state is dropped first: dlt keeps a local state that is
-    newer than the destination's, and the load would then start after its cursor.
-    Anything unclear means "load as usual": no cursor anywhere (first load) or
-    packages a failed run left behind (only a load retries them). Reference tables
-    are not reloaded on a skipped run; in the dump they never change.
+    The cursor comes from the local dlt state when it matches the last purchase month
+    of raw orders (`status`, the query the feed status needs anyway). Otherwise it is
+    read from the destination, the same restore a run would do, but only that: no
+    local cursor (fresh runner or volume), or one the destination doesn't have (a
+    new, deleted or replaced DuckDB file, a dropped dataset; the pipeline name is
+    not per file). Such a local state is dropped first: dlt keeps a local state that
+    is newer than the destination's, and the load would then start after its cursor.
+    With packages a failed run left behind the local state stays as it is: only a
+    load retries them.
     """
     if pipeline.has_pending_data:
-        return False
+        return loaded_until(pipeline)
     local_cursor = loaded_until(pipeline)
     last_order_at = status[1] if status else None
     if local_cursor != (last_order_at[:7] if last_order_at else None):
@@ -460,14 +537,77 @@ def nothing_to_load(
             )
             pipeline.drop()
         pipeline.sync_destination()
-    cursor = loaded_until(pipeline)
-    if not cursor:
+    return loaded_until(pipeline)
+
+
+def check_synthetic_version(pipeline: dlt.Pipeline, cursor: str | None, last_real_month: str | None) -> None:
+    """Refuse a load onto generated months of another generator version (D112).
+
+    The loader regenerates every loaded month for the reference snapshots: months of
+    another version would come out different, and their orders would lose their
+    customers and sellers. A full refresh reloads the dump and generates anew.
+    """
+    if not (cursor and last_real_month and cursor > last_real_month):
+        return
+    loaded = pipeline.state.get("sources", {}).get("olist", {}).get(SYNTHETIC_VERSION_KEY)
+    if loaded != synthetic.VERSION:
+        raise SystemExit(
+            f"Raw holds generated months up to {cursor} of generator version {loaded}, the generator "
+            f"is version {synthetic.VERSION}: run once with --full-refresh (Airflow: param full_refresh)"
+        )
+
+
+def synthetic_until(
+    last_real_month: str | None,
+    cursor: str | None,
+    until: str | None,
+    next_only: bool,
+    every_hours: float | None,
+    last_loaded_at: datetime | None,
+    now: datetime,
+) -> str | None:
+    """The last generated month this run's dump needs; None: the files alone (D112).
+
+    A cursor past the dump keeps its generated months, so that the reference
+    snapshots (replaced on every load) keep their generated customers and sellers.
+    With `every_hours`: `--until` past the dump generates up to it; `--next` on a
+    used-up dump adds the month after the cursor once the last load of orders is
+    `every_hours` old (minus SYNTHETIC_SLACK).
+    """
+    if not last_real_month:
+        return None
+    months = [cursor] if cursor and cursor > last_real_month else []
+    if every_hours is not None:
+        if until and until > last_real_month:
+            months.append(until)
+        elif next_only and cursor and cursor >= last_real_month:
+            if last_loaded_at and last_loaded_at.tzinfo is None:
+                last_loaded_at = last_loaded_at.replace(tzinfo=UTC)
+            due = last_loaded_at is None or now - last_loaded_at >= timedelta(hours=every_hours) - SYNTHETIC_SLACK
+            if due:
+                months.append(next_month(cursor))
+            else:
+                print(f"Next generated month due {every_hours:g} h after the last load ({last_loaded_at})")
+    return max(months) if months else None
+
+
+def nothing_to_load(pipeline: dlt.Pipeline, dump: SourceDump, until: str | None, cursor: str | None) -> bool:
+    """True when the dump has no order month after the cursor (up to `until`).
+
+    Decided before the load: a dlt run reads its state from the destination, then
+    replaces the reference tables and runs four merges even for a chunk of 0 orders,
+    and every one is a billed query (BigQuery bills at least 10 MB each). The cursor
+    is restore_cursor()'s. Anything unclear means "load as usual": no cursor anywhere
+    (first load) or packages a failed run left behind (only a load retries them).
+    Reference tables are not reloaded on a skipped run; in the dump they never change.
+    """
+    if pipeline.has_pending_data or not cursor:
         return False
     purchased_at = pc.field("order_purchase_timestamp")
     left = purchased_at >= next_month(cursor)
     if until:
         left &= purchased_at < next_month(until)
-    return read_orders(source_dir).filter(left).num_rows == 0
+    return dump.orders().filter(left).num_rows == 0
 
 
 def new_columns(load_info: LoadInfo, schema: Schema) -> dict[str, list[str]]:
@@ -483,32 +623,34 @@ def new_columns(load_info: LoadInfo, schema: Schema) -> dict[str, list[str]]:
         for table, update in package.schema_update.items():
             if table.startswith("_dlt"):
                 continue
-            columns = [c for c in update.get("columns", {}) if not c.startswith("_dlt")]
-            existing = [c for c in schema.tables[table].get("columns", {}) if not c.startswith("_dlt")]
+            # The loader's own columns are not source changes (D112: `_is_synthetic`
+            # reaches an existing raw table with its first load after the change)
+            source_columns = [c for c in schema.tables[table].get("columns", {}) if not c.startswith("_dlt")]
+            columns = [c for c in update.get("columns", {}) if c in source_columns and c not in LOADER_COLUMNS]
+            existing = [c for c in source_columns if c not in LOADER_COLUMNS]
             if columns and len(columns) < len(existing):
                 added.setdefault(table, []).extend(columns)
     return added
 
 
-def removed_columns(source_dir: Path, schema: Schema) -> dict[str, list[str]]:
+def removed_columns(dump: SourceDump, schema: Schema) -> dict[str, list[str]]:
     """Raw columns the source file no longer has: table -> names.
 
     dlt keeps such a column and loads nulls into it, so it is reported on every load
     while the file lacks it, not only on the first: no extra state, and the problem
     stays visible until it is fixed. Header names go through dlt's naming convention
-    first, as dlt does when it loads them. `_loaded_at` (added here) and dlt's own
-    columns are not in the file.
+    first, as dlt does when it loads them. The loader's columns (`_loaded_at`,
+    `_is_synthetic`) and dlt's own are not in the file.
     """
-    files = {**REFERENCE_TABLES, **{table: file for table, (file, _) in ORDER_TABLES.items()}}
     removed: dict[str, list[str]] = {}
-    for table, file_name in files.items():
+    for table in SOURCE_FILES:
         if table not in schema.tables:
             continue
-        header = {schema.naming.normalize_identifier(name) for name in csv_header(source_dir / file_name)}
+        header = {schema.naming.normalize_identifier(name) for name in dump.header(table)}
         missing = [
             column
             for column in schema.tables[table].get("columns", {})
-            if column != "_loaded_at" and not column.startswith("_dlt") and column not in header
+            if column not in LOADER_COLUMNS and not column.startswith("_dlt") and column not in header
         ]
         if missing:
             removed[table] = missing
@@ -600,9 +742,15 @@ def main() -> None:
     parser.add_argument(
         "--full-refresh", action="store_true", help="drop raw tables and dlt state first"
     )
+    parser.add_argument(
+        "--synthetic-every-hours",
+        type=float,
+        metavar="H",
+        help="after the dump: --next loads a generated month once the last load is H hours old (D112)",
+    )
     args = parser.parse_args()
 
-    source_dir = Path(kagglehub.dataset_download(KAGGLE_DATASET))
+    dump = SourceDump(Path(kagglehub.dataset_download(KAGGLE_DATASET)))
     pipeline = dlt.pipeline(
         # Separate state per destination and dataset. Not per DuckDB file: Airflow's
         # file has its own dlt state dir (container volume); a local cursor from
@@ -613,12 +761,23 @@ def main() -> None:
         dataset_name=args.dataset,
     )
     status = None if args.full_refresh else orders_status(pipeline)
-    if not args.full_refresh and nothing_to_load(pipeline, source_dir, args.until, status):
+    cursor = None if args.full_refresh else restore_cursor(pipeline, status)
+    check_synthetic_version(pipeline, cursor, dump.last_real_month)
+    dump.synthetic_until = synthetic_until(
+        dump.last_real_month,
+        cursor,
+        args.until,
+        args.next,
+        args.synthetic_every_hours,
+        status[2] if status else None,
+        datetime.now(UTC),
+    )
+    if not args.full_refresh and nothing_to_load(pipeline, dump, args.until, cursor):
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")
         orders_loaded, added_columns, dropped_columns = 0, {}, {}
     else:
         source = olist_source(
-            source_dir,
+            dump,
             until=args.until,
             next_only=args.next,
             partitioned=args.destination == "bigquery",
@@ -635,7 +794,7 @@ def main() -> None:
         added_columns = new_columns(load_info, pipeline.default_schema)
         for table, columns in added_columns.items():
             print(f"New source columns in {table}: {', '.join(columns)} (stored in raw only)")
-        dropped_columns = removed_columns(source_dir, pipeline.default_schema)
+        dropped_columns = removed_columns(dump, pipeline.default_schema)
         for table, columns in dropped_columns.items():
             print(f"Source columns missing in {table}: {', '.join(columns)} (loaded as nulls)")
         status = orders_status(pipeline)

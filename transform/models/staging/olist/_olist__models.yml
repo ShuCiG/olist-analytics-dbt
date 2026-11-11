@@ -28,6 +28,9 @@ models:
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
         data_tests: [not_null]
+      - name: is_synthetic
+        description: "{{ doc('is_synthetic') }}"
+        data_tests: [not_null]
       - name: _loaded_at
         description: "{{ doc('loaded_at') }}"
         data_tests: [not_null]
