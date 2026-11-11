@@ -128,6 +128,8 @@ models:
         description: Delivered to the customer.
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
+      - name: is_synthetic
+        description: "{{ doc('is_synthetic') }}"
       - name: _loaded_at
         description: "{{ doc('loaded_at') }} Of the order row."
 

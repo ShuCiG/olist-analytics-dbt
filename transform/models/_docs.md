@@ -59,6 +59,13 @@ prefix is missing from the geolocation dataset.
 Longitude of the zip-prefix centroid. Null when the prefix is missing from the geolocation dataset.
 {% enddocs %}
 
+{% docs is_synthetic %}
+True for an order generated after the end of the Olist dump (`ingestion/synthetic.py`,
+D112): the Airflow feed goes on with months drawn from the dump's own orders. False for
+every order of the dump; prod and CI load the dump alone. Filter on it to keep the
+real data only.
+{% enddocs %}
+
 {% docs loaded_at %}
 UTC time of the dlt run that wrote the raw row (TIMESTAMPTZ on DuckDB, TIMESTAMP on BigQuery and Databricks).
 Cursor for incremental models.

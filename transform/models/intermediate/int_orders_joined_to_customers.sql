@@ -24,6 +24,7 @@ joined as (
         orders.delivered_to_carrier_at,
         orders.delivered_to_customer_at,
         orders.estimated_delivery_date,
+        orders.is_synthetic,
         orders._loaded_at
     from orders
     inner join customers

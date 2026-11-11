@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.5.0
+version: 1.6.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -17,7 +17,8 @@ description:
     Orders, order lines, customers, sellers and products of the Olist marketplace as a star
     schema for analytics: sales, delivery performance, reviews, customer behaviour.
   limitations: >-
-    Orders 2016-09 to 2018-10 (public dump, replayed hourly). Money in BRL. A customer is a
+    Orders 2016-09 to 2018-10 (public dump, replayed hourly); the Airflow feed adds generated
+    months after it, flagged by `fct_orders.is_synthetic` (D112). Money in BRL. A customer is a
     person (`customer_unique_id`), pseudonymized by Olist; location is the zip-code prefix
     centroid. Known source defects are kept and flagged by dbt warn tests, not removed.
   usage: >-
@@ -135,6 +136,9 @@ schema:
               validValues: [purchased, approved, shipped, delivered, reviewed]
             mustBe: 0
       - name: is_order_open
+        logicalType: boolean
+        required: true
+      - name: is_synthetic
         logicalType: boolean
         required: true
       - name: purchase_date

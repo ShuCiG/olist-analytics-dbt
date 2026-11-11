@@ -33,6 +33,7 @@ final as (
         orders.order_status,
         stages.order_stage,
         stages.is_order_open,
+        orders.is_synthetic,
         cast(orders.purchased_at as date) as purchase_date,
         orders.purchased_at,
         orders.approved_at,

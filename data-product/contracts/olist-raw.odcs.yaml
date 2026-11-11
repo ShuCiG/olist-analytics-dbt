@@ -6,7 +6,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-raw
 name: Olist raw e-commerce data
-version: 1.0.2
+version: 1.1.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -16,7 +16,8 @@ description:
     geolocation of Olist, a Brazilian marketplace, as the input of the commerce data product.
   limitations: >-
     Static public dump (Kaggle olistbr/brazilian-ecommerce, 2016-09 to 2018-10), replayed one
-    month per hourly run. Every source column is a string; typing, deduplication and fixes of
+    month per hourly run; the Airflow feed goes on with a generated month a day after the dump
+    (`_is_synthetic`, D112), prod loads the dump alone. Every source column is a string; typing, deduplication and fixes of
     known defects happen in dbt staging. People are pseudonymized by Olist.
   usage: >-
     Read by dbt staging models only (transform/models/staging/olist). Nothing else may depend
@@ -111,6 +112,11 @@ schema:
         logicalType: string
       - name: order_estimated_delivery_date
         logicalType: string
+      - name: _is_synthetic
+        logicalType: boolean
+        description: >-
+          Added by the loader, not in the source: true for an order generated after the dump
+          (ingestion/synthetic.py, D112). Missing in raw tables last loaded before it existed.
       - &loaded_at
         name: _loaded_at
         logicalType: timestamp
