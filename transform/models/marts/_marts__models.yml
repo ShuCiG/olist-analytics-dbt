@@ -360,21 +360,29 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+        entity: {name: seller, type: primary}
       - name: zip_code_prefix
         description: "{{ doc('zip_code_prefix') }}"
         data_type: string
       - name: city
         description: Seller city.
         data_type: string
+        dimension: categorical
       - name: state
         description: Two-letter state code.
         data_type: string
+        dimension: categorical
       - name: latitude
         description: "{{ doc('latitude') }}"
         data_type: *float_type
       - name: longitude
         description: "{{ doc('longitude') }}"
         data_type: *float_type
+    # Dimensions only, no metrics: the item facts reach them through the `seller` entity (D113)
+    semantic_model:
+      enabled: true
+      name: sellers
+      group: parties
 
   - name: dim_sellers_history
     description: >
@@ -477,6 +485,7 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+        entity: {name: product, type: primary}
       - name: category_name_pt
         description: Original Portuguese category name (null if missing in source).
         data_type: string
@@ -484,6 +493,7 @@ models:
         description: English category name; falls back to the Portuguese name, then 'unknown'.
         data_type: string
         data_tests: [not_null]
+        dimension: categorical
       - name: name_length
         description: Length of the product name, in characters.
         data_type: integer
@@ -508,6 +518,10 @@ models:
       - name: volume_cm3
         description: length × height × width, cm³.
         data_type: integer
+    semantic_model:
+      enabled: true
+      name: products
+      group: orders
 
   - name: fct_orders
     description: >
@@ -1033,9 +1047,11 @@ models:
           - type: primary_key
             warn_unenforced: false
         data_tests: [unique, not_null]
+        entity: {name: order_item, type: primary}
       - name: order_id
         description: "{{ doc('order_id') }}"
         data_type: string
+        entity: {name: order, type: foreign}
         data_tests:
           - relationships:
               arguments:
@@ -1047,6 +1063,7 @@ models:
       - name: product_id
         description: Product of the line.
         data_type: string
+        entity: {name: product, type: foreign}
         data_tests:
           - relationships:
               arguments:
@@ -1055,6 +1072,7 @@ models:
       - name: seller_id
         description: Seller of the line.
         data_type: string
+        entity: {name: seller, type: foreign}
         data_tests:
           - relationships:
               arguments:
@@ -1064,6 +1082,7 @@ models:
         description: "{{ doc('customer_unique_id') }}"
         data_type: string
         policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
+        entity: {name: customer, type: foreign}
         data_tests:
           - relationships:
               arguments:
@@ -1075,6 +1094,8 @@ models:
       - name: purchase_date
         description: "{{ doc('purchase_date') }}"
         data_type: date
+        dimension: {type: time}
+        granularity: day
         data_tests:
           - relationships:
               arguments:
@@ -1104,6 +1125,124 @@ models:
         # An instant everywhere: dlt loads tz-aware timestamps as TIMESTAMP_LTZ on Snowflake
         data_type: "{{ 'timestamp' if target.type in ['bigquery', 'databricks'] else 'timestamp_ltz' if target.type == 'snowflake' else 'timestamp with time zone' }}"
         data_tests: [not_null]
+    semantic_model:
+      enabled: true
+      name: order_items
+      group: orders
+    agg_time_dimension: purchase_date
+    metrics:
+      - name: item_revenue
+        label: Item revenue, BRL
+        description: >-
+          Price + freight of the lines of sold orders (not canceled or unavailable). The same
+          total as `revenue`, at line grain, so it splits by seller and product category; an
+          order with lines of two categories counts in both, each with its own lines (D113).
+        agg: sum
+        expr: item_amount
+        filter: |
+          {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+        config:
+          group: orders
+          # explain_change and the run email split `revenue` by an item dimension through this metric
+          meta: {same_total_as: revenue}
+
+  - name: fct_order_payments
+    description: >
+      One row per payment of an order. An order can be paid in parts and by several methods
+      (card plus vouchers), so the payment type lives here, not on the order. `payment_value`
+      is what was paid, which can differ from the order amount (installment fees, vouchers).
+    config:
+      group: orders
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: payment_sk
+        description: Surrogate key (order_id, payment_sequential). Primary key.
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests: [unique, not_null]
+        entity: {name: payment, type: primary}
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_type: string
+        entity: {name: order, type: foreign}
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: payment_sequential
+        description: Number of the payment within the order, from 1.
+        data_type: integer
+        data_tests: [not_null]
+      - name: payment_type
+        description: "Payment method: credit_card, boleto, voucher, debit_card; `not_defined` on 3 source rows."
+        data_type: string
+        dimension: categorical
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [credit_card, boleto, voucher, debit_card, not_defined]
+      - name: payment_installments
+        description: Number of installments; 2 source rows have 0.
+        data_type: integer
+      - name: customer_unique_id
+        description: "{{ doc('customer_unique_id') }}"
+        data_type: string
+        policy_tags: ["{{ var('pii_policy_tags')['person_id'] }}"]
+        entity: {name: customer, type: foreign}
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_unique_id
+      - name: order_status
+        description: "{{ doc('order_status') }}"
+        data_type: string
+      - name: purchase_date
+        description: "{{ doc('purchase_date') }}"
+        data_type: date
+        dimension: {type: time}
+        granularity: day
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: payment_value
+        description: Amount of the payment, BRL.
+        data_type: *money_type
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+    semantic_model:
+      enabled: true
+      name: payments
+      group: orders
+    agg_time_dimension: purchase_date
+    metrics:
+      - name: paid_amount
+        label: Paid amount, BRL
+        description: >-
+          Payments on sold orders (not canceled or unavailable), by payment, so it splits by
+          payment type. Differs from `revenue`: installment fees, vouchers (D113).
+        agg: sum
+        expr: payment_value
+        filter: |
+          {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+        config: {group: orders}
 
   - name: fct_order_items_seller_as_of
     description: >

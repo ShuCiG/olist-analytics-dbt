@@ -68,7 +68,10 @@ CALLS: list[tuple[str, dict[str, Any]]] = [
     ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["customer__state"], "top": 2}),
     ("explain_change", {**CHANGE, "metric": "late_delivery_rate", "dimensions": ["customer__state"]}),
     ("explain_change", {**CHANGE, "metric": "customers"}),
-    ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["seller__state"]}),
+    ("explain_change", {**CHANGE, "metric": "average_order_value", "dimensions": ["product__category_name"]}),
+    ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["customer"]}),
+    ("explain_change", {**CHANGE, "metric": "revenue", "dimensions": ["product__category_name", "seller", "customer__state"]}),
+    ("explain_change", {**CHANGE, "metric": "paid_amount", "dimensions": ["payment__payment_type"]}),
 ]
 
 
@@ -142,10 +145,30 @@ def test_explain_change_adds_up_to_the_total(session: tuple[set[str], dict[str, 
     assert sum(row["mix"] + row["rate"] for row in by_state["drivers"]) + by_state["other"]["delta"] == pytest.approx(rate["delta"])
 
 
-@pytest.mark.parametrize(("index", "message"), [(12, "cannot be split"), (13, "seller__state")])
+@pytest.mark.parametrize(("index", "message"), [(12, "cannot be split"), (13, "product__category_name"), (14, "['customer']")])
 def test_explain_change_refuses_what_it_cannot_split(
     session: tuple[set[str], dict[str, Any], list[Any]], index: int, message: str
 ) -> None:
     result = session[2][index]
     assert result.is_error
     assert message in result.content[0].text
+
+
+def test_explain_change_splits_revenue_by_order_lines_and_payments(session: tuple[set[str], dict[str, Any], list[Any]]) -> None:
+    """Category and seller live on the order lines: the rows come from item_revenue, same total (D113)."""
+    revenue = payload(session[2][15])
+    by_dimension = {b["dimension"]: b for b in revenue["breakdowns"]}
+    assert {d: b["via"] for d, b in by_dimension.items()} == {
+        "product__category_name": "item_revenue",
+        "seller": "item_revenue",
+        "customer__state": None,
+    }
+    for breakdown in by_dimension.values():
+        rows = [*breakdown["drivers"], *([breakdown["other"]] if breakdown["other"] else [])]
+        assert sum(row["delta"] for row in rows) == pytest.approx(revenue["delta"])
+
+    paid = payload(session[2][16])
+    (by_type,) = paid["breakdowns"]
+    assert by_type["drivers"][0]["member"] == "credit_card"
+    rows = [*by_type["drivers"], *([by_type["other"]] if by_type["other"] else [])]
+    assert sum(row["delta"] for row in rows) == pytest.approx(paid["delta"])

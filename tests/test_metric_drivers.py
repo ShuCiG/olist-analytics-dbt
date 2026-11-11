@@ -208,6 +208,108 @@ def test_ratio_without_a_denominator_is_undefined() -> None:
         metric_drivers.explain(runner, SPECS, "late_rate", BEFORE, AFTER, [DIM])
 
 
+# --- a dimension of another grain, through a same-total metric (D113) ----------------------------
+
+LINE_SPECS = metric_drivers.specs_from_manifest(
+    manifest(
+        simple("revenue", "sum"),
+        simple("orders", "count"),
+        {**simple("item_revenue", "sum"), "config": {"meta": {"same_total_as": "revenue"}}},
+        ratio("aov", "revenue", "orders"),
+    )
+)
+CATEGORY = "product__category_name"
+GROUP_BYS = {"revenue": {DIM}, "orders": {DIM}, "aov": {DIM}, "item_revenue": {DIM, CATEGORY, "seller"}}
+
+
+def line_runner(lines: dict[datetime.date, list[tuple[str, float]]], order_total_offset: float = 0.0) -> metric_drivers.Runner:
+    """Order lines (category, amount) per period: revenue is their sum (+ offset), item_revenue splits by category."""
+
+    def run(metrics: list[str], group_by: list[str], start: datetime.date, end: datetime.date) -> list[dict[str, Any]]:
+        rows = lines[start]
+        if group_by:
+            assert group_by == [CATEGORY] and metrics == ["item_revenue"], (metrics, group_by)
+            totals: dict[str, float] = {}
+            for category, amount in rows:
+                totals[category] = totals.get(category, 0.0) + amount
+            return [{CATEGORY: c, "item_revenue": v} for c, v in totals.items()]
+        total = sum(amount for _, amount in rows)
+        return [{"revenue": total + order_total_offset, "item_revenue": total, "orders": len(rows)}]
+
+    return run
+
+
+def test_same_total_metric_is_recorded_on_the_metric_it_matches() -> None:
+    assert LINE_SPECS["revenue"] == MetricSpec("revenue", "additive", same_total=("item_revenue",))
+    assert LINE_SPECS["item_revenue"] == MetricSpec("item_revenue", "additive")
+
+
+@pytest.mark.parametrize(
+    ("metrics", "error"),
+    [
+        ((simple("a", "sum"), {**simple("b", "sum"), "config": {"meta": {"same_total_as": "nope"}}}), "unknown metric 'nope'"),
+        ((simple("a", "average"), {**simple("b", "sum"), "config": {"meta": {"same_total_as": "a"}}}), "'a' is not one"),
+    ],
+)
+def test_same_total_needs_two_known_sums(metrics: tuple[dict[str, Any], ...], error: str) -> None:
+    with pytest.raises(ValueError, match=error):
+        metric_drivers.specs_from_manifest(manifest(*metrics))
+
+
+def test_a_line_dimension_splits_the_order_metric_through_the_same_total_metric() -> None:
+    runner = line_runner(
+        {
+            BEFORE.start: [("toys", 100), ("toys", 50), ("books", 30)],
+            AFTER.start: [("toys", 120), ("books", 90), ("garden", 10)],
+        }
+    )
+    result = metric_drivers.explain(runner, LINE_SPECS, "revenue", BEFORE, AFTER, [CATEGORY], group_bys=GROUP_BYS.__getitem__)
+
+    assert (result.metric, result.delta) == ("revenue", 40)
+    (breakdown,) = result.breakdowns
+    assert breakdown.via == "item_revenue"
+    assert [(d.member, d.delta) for d in breakdown.drivers] == [("books", 60), ("toys", -30), ("garden", 10)]
+    assert sum(d.delta for d in breakdown.drivers) == result.delta
+
+
+def test_a_same_total_metric_that_does_not_match_is_refused() -> None:
+    runner = line_runner({BEFORE.start: [("toys", 100)], AFTER.start: [("toys", 120)]}, order_total_offset=5)
+    with pytest.raises(ValueError, match="'item_revenue' .* does not match 'revenue'"):
+        metric_drivers.explain(runner, LINE_SPECS, "revenue", BEFORE, AFTER, [CATEGORY], group_bys=GROUP_BYS.__getitem__)
+
+
+def test_an_unreachable_dimension_is_refused_with_what_is_available() -> None:
+    runner = line_runner({BEFORE.start: [("toys", 100)], AFTER.start: [("toys", 120)]})
+    with pytest.raises(ValueError, match=f"'aov' cannot be split by '{CATEGORY}'. Available: {DIM}"):
+        metric_drivers.explain(runner, LINE_SPECS, "aov", BEFORE, AFTER, [CATEGORY], group_bys=GROUP_BYS.__getitem__)
+    spec = metric_drivers.spec_for(LINE_SPECS, "revenue")
+    assert metric_drivers.reachable(spec, GROUP_BYS.__getitem__) == {DIM, CATEGORY, "seller"}
+
+
+def test_run_check_splits_each_metric_only_by_what_it_reaches() -> None:
+    lines = {
+        datetime.date(2017, 10, 1): [("toys", 100.0)] * 3,
+        datetime.date(2017, 11, 1): [("toys", 100.0)] * 3 + [("books", 100.0)] * 3,
+    }
+    seen: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    base = line_runner(lines)
+
+    def run(metrics: list[str], group_by: list[str], start: datetime.date, end: datetime.date) -> list[dict[str, Any]]:
+        seen.append((tuple(metrics), tuple(group_by)))
+        if group_by == [DIM]:
+            rows = base(metrics, [], start, end)
+            return [{DIM: "SP", **rows[0]}]
+        return base(metrics, group_by, start, end)
+
+    result = metric_drivers.run_check(
+        run, LINE_SPECS, datetime.date(2017, 11, 1), min_base=0, metrics=["revenue", "orders"], dimensions=[DIM, CATEGORY], group_bys=GROUP_BYS.__getitem__
+    )
+    by_metric = {m["metric"]: {(b["dimension"], b["via"]) for b in m["breakdowns"]} for m in result["moved"]}
+    assert by_metric == {"revenue": {(CATEGORY, "item_revenue"), (DIM, None)}, "orders": {(DIM, None)}}
+    assert (("orders",), (CATEGORY,)) not in seen
+    assert "by product__category_name (via item_revenue)" in metric_drivers.drivers_html(result)
+
+
 # --- threshold -----------------------------------------------------------------------------------
 
 

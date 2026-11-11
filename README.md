@@ -54,10 +54,10 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   generated month a day, bootstrapped from the dump's own orders and flagged `is_synthetic`; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
-- **Semantic layer.** 32 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
-  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 32 of 35
-  evaluation questions right, 0 wrong numbers; alerts and the agent say which states and segments drove a metric's
-  change. → [Semantic layer](#semantic-layer)
+- **Semantic layer.** 34 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
+  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 35 of 38
+  evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
+  categories drove a metric's change. → [Semantic layer](#semantic-layer)
 - **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 500 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
@@ -99,7 +99,7 @@ flowchart LR
 
     subgraph product[Data product olist-commerce · Product Owner]
         raw[raw<br/>9 tables] --> staging[staging<br/>9 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
-        marts --> metrics[semantic layer<br/>32 metrics]
+        marts --> metrics[semantic layer<br/>34 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end
 
@@ -136,7 +136,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 |---|---|---|---|
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
 | Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
-| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 8 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
+| Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 9 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
 | Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 54 columns and 13 metrics it relies on |
 
@@ -175,6 +175,7 @@ erDiagram
 | Model | Grain | Notes |
 |---|---|---|
 | `fct_orders` | order | item, payment, delivery and review measures. Accumulating snapshot: one timestamp per milestone (purchase → approval → carrier → delivery → review survey → answer), the lag between each pair and `order_stage`, the furthest reached. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
+| `fct_order_payments` | payment | one row per payment of an order (an order can mix card, boleto and vouchers): payment type, installments, paid value; semantic model `payments` ([D113](docs/DECISIONS.md)) |
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
 | `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
 | `dim_products` | product | category translated to English; untranslated ones keep the Portuguese name, missing ones `unknown` |
@@ -475,8 +476,9 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
 
 ## Semantic layer
 
-32 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
-(MetricFlow, dbt's inline spec): semantic models on `fct_orders`, `dim_customers` and `fct_customer_cohorts`, entities
+34 metrics are defined once, next to their marts in [`_marts__models.yml`](transform/models/marts/_marts__models.yml)
+(MetricFlow, dbt's inline spec): semantic models on `fct_orders`, `fct_order_items`, `fct_order_payments`, `dim_customers`, `dim_products`, `dim_sellers` and
+`fct_customer_cohorts`, entities
 and dimensions on the columns, simple metrics with filters, percentile (median) and ratio metrics, 4
 [saved queries](transform/models/marts/_marts__semantic_models.yml), `dim_date` as time spine. MetricFlow writes the SQL for the
 current warehouse, joins included.
@@ -485,6 +487,8 @@ current warehouse, joins included.
 |---|---|
 | `orders`, `sold_orders` | orders placed; of them, not canceled or unavailable |
 | `revenue`, `average_order_value` | items + freight of sold orders, BRL; revenue / sold orders |
+| `item_revenue` | the same revenue at order-line grain (same total), so it splits by seller and product category |
+| `paid_amount` | payments on sold orders, by payment type; differs from revenue (installment fees, vouchers) |
 | `customers`, `revenue_per_customer` | people who ordered in the period; revenue / them |
 | `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
 | `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |
@@ -511,24 +515,26 @@ A filter is a dimension, an operator and values, because MetricFlow's own `where
 connection is read-only.
 
 A fifth tool, `explain_change`, answers *why* a metric moved: for two periods it splits the change by the members
-of a dimension (customer state, order status, repeat customer) and ranks them. The members add up to the total
+of a dimension (customer state, order status, repeat customer, product category, seller state or seller) and ranks
+them. Category and seller sit on the order lines, so those rows come from `item_revenue`, whose total equals `revenue`
+and is checked to ([D113](docs/DECISIONS.md)). The members add up to the total
 change; for a ratio such as the late delivery rate each member's part is split into **mix** (it became a bigger or
 smaller share of the orders) and **rate** (its own rate moved). The same module drives the Airflow run email: when
 revenue, orders, average order value or the late delivery rate moves by 10 % or more against the month before, the
 email shows who drove it ([D110](docs/DECISIONS.md)). On November 2017 against October, revenue rose by 407,436 BRL
 (+53 %): São Paulo 37 %, Rio de Janeiro 16 %, Minas Gerais 15 %.
 
-An [evaluation](metrics_mcp/eval/questions.yml) sends 35 business questions to Claude Haiku 5.5 limited to these tools,
+An [evaluation](metrics_mcp/eval/questions.yml) sends 38 business questions to Claude Haiku 5.5 limited to these tools,
 each in a fresh session, and grades the final answers against `mf query`:
 
 | Questions | Result |
 |---|---|
-| 27 answerable (numbers, filters, periods, rankings, cohorts, why a metric changed) | 24 right; 2 with the right numbers under keys of their own, 1 with no parseable answer |
-| 8 to refuse (no such metric or dimension, a raw SQL request, a delete) | 8 refused |
+| 32 answerable (numbers, filters, periods, rankings, cohorts, sellers, categories, payment types, why a metric changed) | 30 right; 2 with the right numbers under keys of their own |
+| 6 to refuse (no such metric or dimension, a raw SQL request, a delete) | 5 refused; 1 gave up before the server had connected |
 
 The questions come from someone who knows the catalog, on one model and one run, so this shows the server works
 for an agent, not how it does on any question. Details and the grader changes are in
-[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation) and D110.
+[D104](docs/DECISIONS.md#d104--2026-11-07--mcp-server-over-the-semantic-layer-with-an-accuracy-evaluation), D110 and D113.
 
 ## Orchestration and alerts
 

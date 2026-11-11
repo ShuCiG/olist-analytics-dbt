@@ -185,7 +185,13 @@ def explain_change(
     after_start: Annotated[datetime.date, Field(description="First day of the later period, inclusive")],
     after_end: Annotated[datetime.date, Field(description="Last day of the later period, inclusive")],
     dimensions: Annotated[
-        list[str] | None, Field(description="Categorical dimensions to split the change by; default: the usual ones the metric has")
+        list[str] | None,
+        Field(
+            description=(
+                "Categorical dimensions to split the change by, or the entity `seller` / `product` (split by id); "
+                "default: the usual ones the metric has"
+            )
+        ),
     ] = None,
     top: Annotated[int, Field(description="Members to list per dimension; the rest are summed as 'other'")] = metric_drivers.TOP_MEMBERS,
 ) -> dict[str, Any]:
@@ -194,6 +200,8 @@ def explain_change(
     Per dimension the rows (top members plus 'other') add up to the total change. For a ratio
     metric each member also has `mix` (it got bigger or smaller) and `rate` (its own ratio moved).
     Only sums, counts and ratios of those can be split; distinct counts and averages are refused.
+    `revenue` also splits by order-line dimensions (product__category_name, seller__state, seller):
+    those rows come from `item_revenue`, which has the same total (`via` names it).
     """
     top_limit = 10
     with _guarded():
@@ -205,12 +213,13 @@ def explain_change(
             raise ValueError(f"top must be between 1 and {top_limit}")
         manifest = json.loads((TRANSFORM / "target" / "semantic_manifest.json").read_text(encoding="utf-8"))
         specs = metric_drivers.specs_from_manifest(manifest)
-        metric_drivers.spec_for(specs, metric)  # refuses what cannot be split, with the reason
-        categorical = {d.dunder_name for d in _dimensions([metric]) if d.type.value == "categorical"}
-        chosen = dimensions or [d for d in metric_drivers.EMAIL_DIMENSIONS if d in categorical]
-        unknown = [d for d in chosen if d not in categorical]
+        spec = metric_drivers.spec_for(specs, metric)  # refuses what cannot be split, with the reason
+        group_bys = metric_drivers.metricflow_group_bys(_engine())
+        available = metric_drivers.reachable(spec, group_bys)
+        chosen = dimensions or [d for d in metric_drivers.EMAIL_DIMENSIONS if d in available]
+        unknown = [d for d in chosen if d not in available]
         if unknown or not chosen:
-            raise ValueError(f"Unknown or non-categorical dimension(s) {unknown}. Available: {', '.join(sorted(categorical))}")
+            raise ValueError(f"Unknown or non-categorical dimension(s) {unknown}. Available: {', '.join(sorted(available))}")
         explanation = metric_drivers.explain(
             metric_drivers.metricflow_runner(_engine()),
             specs,
@@ -219,6 +228,7 @@ def explain_change(
             metric_drivers.Period(after_start, after_end),
             chosen,
             top,
+            group_bys,
         )
         return metric_drivers.to_dict(explanation)
 

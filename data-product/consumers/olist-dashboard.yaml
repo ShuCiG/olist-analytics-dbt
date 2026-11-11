@@ -31,7 +31,7 @@ provider:
   # Compatible versions: same major. A breaking contract change bumps the major
   # version (data-product/check_compatibility.py) and fails this agreement until
   # the dashboard is updated and the agreement renewed.
-  contractVersion: 1.6.0
+  contractVersion: 1.7.0
   server: live
   role: dashboard-reader
 
