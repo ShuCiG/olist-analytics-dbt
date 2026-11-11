@@ -50,6 +50,18 @@ cd transform && uv run dbt source freshness                          # checks ra
 uv run dbt build        # after each chunk: fct_order_items merges only the new rows
 ```
 
+After the dump (D112), generated months (`ingestion/synthetic.py`, flagged `_is_synthetic` in raw,
+`fct_orders.is_synthetic`):
+
+```bash
+uv run python ingestion/pipeline.py --until 2019-03 --synthetic-every-hours 24   # 2018-11 .. 2019-03 at once
+uv run python ingestion/pipeline.py --next --synthetic-every-hours 24            # one more, if the last load is a day old
+uv run python ingestion/pipeline.py --next --synthetic-every-hours 0             # one more, now
+```
+
+A month comes out the same on every run. After a change to the generator (`synthetic.VERSION` bumped) the loader
+refuses to add to a warehouse holding older generated months: reload once with `--full-refresh`.
+
 ## SCD2 snapshot demo
 
 `snap_sellers` keeps the history of seller location (`check` strategy on zip / city / state,

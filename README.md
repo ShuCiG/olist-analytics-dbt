@@ -50,14 +50,15 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   (`state:modified+ --defer` to prod) in throwaway datasets, with PR comments on what the change does to the marts
   (data diff vs prod) and what it bills. Every merge: prod deploy, docs, Airflow image to GHCR.
   No GCP keys in GitHub (Workload Identity Federation); any failure is emailed. → [CI/CD](#cicd)
-- **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour; watcher mode and a kept
+- **Live feed with alerts.** Airflow 3 + Astronomer Cosmos replays the dump one month per hour, then goes on with a
+  generated month a day, bootstrapped from the dump's own orders and flagged `is_synthetic`; watcher mode and a kept
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 32 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 32 of 35
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states and segments drove a metric's
   change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 218 data tests, 13 unit tests, enforced model contracts, 476 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 500 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -355,14 +356,14 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **218 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
+| **220 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 540 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **476 Python tests** | dlt pipeline end to end on a fake dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **500 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -537,8 +538,14 @@ load and dbt when nothing new arrived (an idle run costs one cached BigQuery que
 every node, but dbt starts once per run instead of once per task: **~29 → ~6 min per month on DuckDB, ~19 → ~6–9 min
 on BigQuery**. The replay clock reaches dbt as an env var, not `--vars`, so dbt keeps its partial parse between
 runs: a warm DuckDB run **3.4 → 2.75 min**; with the caches on a volume, the first run after an image upgrade too (**6.4 → 3.8 min**). Two DAGs from one factory: DuckDB and BigQuery (own `airflow_*` datasets; prod belongs to CD).
-The replay reached the end of the dump (2018-10) on 2026-10-15: the hourly runs now find nothing new, skip dbt and
-report `STALE` about once a day; a manual run with `full_refresh` starts the feed over ([airflow/README.md](airflow/README.md)).
+The replay reached the end of the dump (2018-10) on 2026-10-15. Since then the feed goes on with **generated months**,
+one a day ([D112](docs/DECISIONS.md#d112--2026-11-11--generated-months-after-the-dump-keep-the-live-feed-going)):
+each is a bootstrap of the dump's same calendar month (orders copied whole with their items, payments and reviews,
+timestamps moved into the new month, new order / customer / some seller ids, scaled to the dump's latest year), so
+volumes, seasonality, delays and review scores stay within a few percent of the dump's, every dbt test passes and the
+Elementary anomaly tests have new days to judge. Generated orders carry `is_synthetic` from raw to `fct_orders`;
+prod and CI load the dump alone. The hourly runs in between skip dbt; a manual run with `full_refresh` starts the
+feed over ([airflow/README.md](airflow/README.md)).
 
 ```mermaid
 flowchart LR
