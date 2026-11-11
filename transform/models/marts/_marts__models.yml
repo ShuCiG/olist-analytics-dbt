@@ -1051,7 +1051,6 @@ models:
       - name: order_id
         description: "{{ doc('order_id') }}"
         data_type: string
-        entity: {name: order, type: foreign}
         data_tests:
           - relationships:
               arguments:
@@ -1091,6 +1090,7 @@ models:
       - name: order_status
         description: "{{ doc('order_status') }}"
         data_type: string
+        dimension: categorical
       - name: purchase_date
         description: "{{ doc('purchase_date') }}"
         data_type: date
@@ -1125,6 +1125,9 @@ models:
         # An instant everywhere: dlt loads tz-aware timestamps as TIMESTAMP_LTZ on Snowflake
         data_type: "{{ 'timestamp' if target.type in ['bigquery', 'databricks'] else 'timestamp_ltz' if target.type == 'snowflake' else 'timestamp with time zone' }}"
         data_tests: [not_null]
+    # No `order` entity on the order lines or payments: MetricFlow selects a foreign entity
+    # under its bare name (`order_id AS order`), a reserved word on BigQuery (#282). The
+    # order's status is a column of the line, customer dims come through `customer`.
     semantic_model:
       enabled: true
       name: order_items
@@ -1140,7 +1143,7 @@ models:
         agg: sum
         expr: item_amount
         filter: |
-          {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+          {{ Dimension('order_item__order_status') }} not in ('canceled', 'unavailable')
         config:
           group: orders
           # explain_change and the run email split `revenue` by an item dimension through this metric
@@ -1172,7 +1175,6 @@ models:
       - name: order_id
         description: "{{ doc('order_id') }}"
         data_type: string
-        entity: {name: order, type: foreign}
         data_tests:
           - not_null
           - relationships:
@@ -1208,6 +1210,7 @@ models:
       - name: order_status
         description: "{{ doc('order_status') }}"
         data_type: string
+        dimension: categorical
       - name: purchase_date
         description: "{{ doc('purchase_date') }}"
         data_type: date
@@ -1241,7 +1244,7 @@ models:
         agg: sum
         expr: payment_value
         filter: |
-          {{ Dimension('order__order_status') }} not in ('canceled', 'unavailable')
+          {{ Dimension('payment__order_status') }} not in ('canceled', 'unavailable')
         config: {group: orders}
 
   - name: fct_order_items_seller_as_of
