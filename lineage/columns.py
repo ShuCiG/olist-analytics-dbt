@@ -119,14 +119,21 @@ def _source_columns(scope: Scope, table: str, name: str, seen: set[tuple[int, st
         yield from _output_columns(source, name, seen)
 
 
+def _set_operation_scopes(scope: Scope) -> list[Scope]:
+    """Branches of a UNION / INTERSECT / EXCEPT scope. sqlglot renamed `union_scopes` to
+    `set_operation_scopes` after 30.18; the Airflow image gets 30.18 from Airflow's
+    constraint file, the project venv a newer one (#284), and this runs in both."""
+    return getattr(scope, "set_operation_scopes", None) or getattr(scope, "union_scopes", None) or []
+
+
 def _output_columns(scope: Scope, name: str, seen: set[tuple[int, str]]) -> Iterator[tuple[str, str]]:
     """Input columns behind an output column of a CTE, derived table or union."""
     key = (id(scope), name.lower())
     if key in seen:
         return
     seen.add(key)
-    if scope.set_operation_scopes:
-        for branch in scope.set_operation_scopes:
+    if branches := _set_operation_scopes(scope):
+        for branch in branches:
             yield from _output_columns(branch, name, seen)
         return
     if not isinstance(scope.expression, exp.Select):
