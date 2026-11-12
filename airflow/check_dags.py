@@ -20,6 +20,10 @@ when the DuckDB pool holds anything but the file users (dlt, Elementary's tables
 producer, edr_report, metric_drivers): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
+
+Also runs the column lineage (lineage/) on a small model, on the image's own sqlglot:
+Airflow's constraint file pins it, older than uv.lock's, and pytest only sees the
+lock's version. An API gap failed only in the producer's callback, as a warning (#284).
 """
 
 import sys
@@ -44,8 +48,30 @@ RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 DASHBOARD = {"olist_elt_bigquery": ["olist_dashboard"]}
 
 
+# A union in a CTE filtered by the outer query: the row inputs walk the union's branches
+LINEAGE_SMOKE_SQL = "with u as (select a, b from x union all select a, c as b from y) select a from u where b > 1"
+LINEAGE_SMOKE_ROWS = [("x", "b"), ("y", "c")]
 
 
+def lineage_smoke() -> bool:
+    sys.path.insert(0, "/opt/project")
+    import sqlglot
+
+    from lineage.columns import trace_models
+
+    try:
+        rows = trace_models({"m": LINEAGE_SMOKE_SQL}, "duckdb")["m"].row_inputs
+    except Exception as error:  # the callback only warns: fail here instead
+        print(f"Column lineage fails on sqlglot {sqlglot.__version__}: {error!r}", file=sys.stderr)
+        return False
+    if rows != LINEAGE_SMOKE_ROWS:
+        print(f"Column lineage on sqlglot {sqlglot.__version__}: row inputs {rows} != {LINEAGE_SMOKE_ROWS}", file=sys.stderr)
+        return False
+    print(f"column lineage ok on sqlglot {sqlglot.__version__}")
+    return True
+
+
+lineage_ok = lineage_smoke()
 bag = DagBag(dag_folder=DAG_FOLDER)
 
 for path, error in bag.import_errors.items():
@@ -153,4 +179,4 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
             )
             missing.add(dag_id)
 
-sys.exit(1 if bag.import_errors or missing else 0)
+sys.exit(1 if bag.import_errors or missing or not lineage_ok else 0)

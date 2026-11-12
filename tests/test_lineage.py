@@ -1,6 +1,12 @@
 """lineage/columns.py: column lineage of dbt models from compiled SQL, in the dbt style
 (import CTEs and a final `select *`), on DuckDB and BigQuery naming."""
 
+import types
+from typing import Any
+
+import pytest
+
+from lineage import columns
 from lineage.columns import column_lineage
 from lineage.exposures import exposure_inputs, exposures
 
@@ -204,3 +210,16 @@ def test_exposure_without_model_events_reads_nothing() -> None:
     dashboard = {"name": "d", "type": "dashboard", "depends_on": {"nodes": ["model.olist.dim_customers"]}}
 
     assert exposure_inputs(dashboard, [_model_event("model.olist.stg_orders", "x")]) == []
+
+
+def test_row_inputs_walk_union_branches() -> None:
+    # A filter on a union CTE reaches each branch's column (airflow/check_dags.py runs the same in the image)
+    sql = "with u as (select a, b from x union all select a, c as b from y) select a from u where b > 1"
+    assert columns.trace_models({"m": sql}, "duckdb")["m"].row_inputs == [("x", "b"), ("y", "c")]
+
+
+@pytest.mark.parametrize("attribute", ["set_operation_scopes", "union_scopes"])
+def test_set_operation_scopes_on_both_sqlglot_names(attribute: str) -> None:
+    # sqlglot <= 30.18 (Airflow's constraint) calls it union_scopes (#284)
+    scope: Any = types.SimpleNamespace(**{attribute: ["left", "right"]})
+    assert columns._set_operation_scopes(scope) == ["left", "right"]
