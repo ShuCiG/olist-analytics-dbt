@@ -206,6 +206,8 @@ def explain_change(
     top_limit = 10
     with _guarded():
         query.check_metrics([metric], _known_metrics())
+        for name in dimensions or []:
+            query.check_not_person(name)
         for first, last in ((before_start, before_end), (after_start, after_end)):
             if first > last:
                 raise ValueError(f"Period {first} to {last} ends before it starts")
