@@ -145,7 +145,7 @@ def test_explain_change_adds_up_to_the_total(session: tuple[set[str], dict[str, 
     assert sum(row["mix"] + row["rate"] for row in by_state["drivers"]) + by_state["other"]["delta"] == pytest.approx(rate["delta"])
 
 
-@pytest.mark.parametrize(("index", "message"), [(12, "cannot be split"), (13, "product__category_name"), (14, "['customer']")])
+@pytest.mark.parametrize(("index", "message"), [(12, "cannot be split"), (13, "product__category_name"), (14, "is a person id")])
 def test_explain_change_refuses_what_it_cannot_split(
     session: tuple[set[str], dict[str, Any], list[Any]], index: int, message: str
 ) -> None:

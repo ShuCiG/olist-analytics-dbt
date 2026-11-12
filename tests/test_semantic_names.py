@@ -59,3 +59,24 @@ def test_the_check_catches_a_reserved_entity(name: str, bad: bool) -> None:
     models = [{"name": "m", "semantic_model": {"enabled": True}, "columns": [{"name": "c", "entity": {"name": name, "type": "foreign"}}]}]
     flagged = [n for n in unquoted_names(models).values() if n.lower() in BIGQUERY_RESERVED]
     assert bool(flagged) == bad
+
+
+def person_entities(models: list[dict[str, Any]]) -> set[str]:
+    """Entities on a column tagged person_id (D94), in any inline semantic model."""
+    found = set()
+    for model in models:
+        if not (model.get("semantic_model") or {}).get("enabled"):
+            continue
+        for column in model.get("columns", []):
+            if column.get("entity") and any("person_id" in tag for tag in column.get("policy_tags", [])):
+                found.add(column["entity"]["name"])
+    return found
+
+
+def test_mcp_refuses_every_person_entity() -> None:
+    # A new entity on a person id must be refused by the MCP server too (#281)
+    from metrics_mcp.query import PERSON_ENTITIES
+
+    found = person_entities(yaml.safe_load(MODELS.read_text(encoding="utf-8"))["models"])
+    assert found, "no person entity found: the check would pass vacuously"
+    assert found <= PERSON_ENTITIES, f"add to metrics_mcp.query.PERSON_ENTITIES: {sorted(found - PERSON_ENTITIES)}"

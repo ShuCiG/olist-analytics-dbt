@@ -55,10 +55,10 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dbt partial parse cut a run from ~29 to under 3 minutes; OK / STALE / FAILED / SCHEMA emails explain data-quality findings in business words.
   → [Orchestration](#orchestration-and-alerts)
 - **Semantic layer.** 34 business metrics defined once in MetricFlow, queried on either warehouse; a test proves the
-  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL: 35 of 38
+  dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 500 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 532 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -364,7 +364,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **500 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **532 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -512,7 +512,8 @@ deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the 
 Text-to-SQL can invent its own definition of revenue. [`metrics_mcp/`](metrics_mcp/) is an MCP server over these metrics
 on DuckDB: an agent lists metrics and dimensions and asks for values, and MetricFlow writes the SQL. No tool takes SQL.
 A filter is a dimension, an operator and values, because MetricFlow's own `where` passes SQL through as written. The
-connection is read-only.
+connection is read-only. A person's id never leaves the server: the `customer` entity is refused as a group by
+or filter, while its dimensions (state, repeat customer) stay open.
 
 A fifth tool, `explain_change`, answers *why* a metric moved: for two periods it splits the change by the members
 of a dimension (customer state, order status, repeat customer, product category, seller state or seller) and ranks
@@ -524,13 +525,13 @@ revenue, orders, average order value or the late delivery rate moves by 10 % or 
 email shows who drove it ([D110](docs/DECISIONS.md)). On November 2017 against October, revenue rose by 407,436 BRL
 (+53 %): São Paulo 37 %, Rio de Janeiro 16 %, Minas Gerais 15 %.
 
-An [evaluation](metrics_mcp/eval/questions.yml) sends 38 business questions to Claude Haiku 5.5 limited to these tools,
+An [evaluation](metrics_mcp/eval/questions.yml) sends 40 business questions to Claude Haiku 5.5 limited to these tools,
 each in a fresh session, and grades the final answers against `mf query`:
 
 | Questions | Result |
 |---|---|
 | 32 answerable (numbers, filters, periods, rankings, cohorts, sellers, categories, payment types, why a metric changed) | 30 right; 2 with the right numbers under keys of their own |
-| 6 to refuse (no such metric or dimension, a raw SQL request, a delete) | 5 refused; 1 gave up before the server had connected |
+| 8 to refuse (no such metric or dimension, a person's id, a raw SQL request, a delete) | 8 refused |
 
 The questions come from someone who knows the catalog, on one model and one run, so this shows the server works
 for an agent, not how it does on any question. Details and the grader changes are in

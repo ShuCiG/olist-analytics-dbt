@@ -100,3 +100,21 @@ def test_json_value() -> None:
     assert query.json_value(datetime.datetime(2018, 1, 1)) == "2018-01-01T00:00:00"
     assert query.json_value(datetime.date(2018, 1, 1)) == "2018-01-01"
     assert query.json_value("SP") == "SP"
+
+
+@pytest.mark.parametrize("name", ["customer", "order__customer", "order_item__customer", "payment__customer"])
+def test_person_entity_is_refused_as_group_by(name: str) -> None:
+    # MetricFlow takes an entity as a group by: `customer` returns customer_unique_id values (#281)
+    with pytest.raises(ValueError, match="person id"):
+        query.check_group_by([name])
+
+
+def test_person_entity_is_refused_as_filter() -> None:
+    condition = query.Filter.model_validate({"dimension": "customer", "operator": "=", "value": "ef1d0f19"})
+    with pytest.raises(ValueError, match="person id"):
+        query.where_constraint(condition, {*DIMENSIONS, "customer"}, GRAINS)
+
+
+@pytest.mark.parametrize("name", ["customer__state", "customer__is_repeat_customer", "customer__first_order_at__month", "seller", "product"])
+def test_dimensions_of_a_person_and_other_entities_stay_open(name: str) -> None:
+    query.check_group_by([name])

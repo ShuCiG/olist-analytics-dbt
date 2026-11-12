@@ -17,6 +17,10 @@ Value = bool | int | float | str
 MAX_ROWS = 1000
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _LIST_OPERATORS = {"in", "not in"}
+# Entities whose values are person ids (policy tag person_id, D94). MetricFlow takes an entity
+# as a group by, and a group by `customer` would hand `customer_unique_id` values to the agent
+# (#281). tests/test_semantic_names.py keeps this in step with the semantic YAML.
+PERSON_ENTITIES = frozenset({"customer"})
 
 
 class Filter(BaseModel):
@@ -39,9 +43,23 @@ def _literal(value: Value) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def check_not_person(name: str) -> None:
+    """Refuse a person entity, alone or through a join path (`customer`, `order_item__customer`).
+
+    Its dimensions stay open: `customer__state` names the state, not the person.
+    """
+    entity = name.rsplit("__", 1)[-1]
+    if entity in PERSON_ENTITIES:
+        raise ValueError(
+            f"{name!r} is a person id: the server never returns or filters by one. "
+            f"Group by the person's dimensions instead (e.g. {entity}__state), or count people with a metric."
+        )
+
+
 def where_constraint(condition: Filter, dimensions: Collection[str], time_grains: dict[str, str]) -> str:
     """The where string for one filter; the dimension must belong to the queried metrics."""
     name = condition.dimension
+    check_not_person(name)
     if name not in dimensions:
         raise ValueError(f"Unknown dimension {name!r} for these metrics. Available: {', '.join(sorted(dimensions))}")
     if name in time_grains:
@@ -67,10 +85,11 @@ def check_metrics(requested: list[str], known: Collection[str]) -> None:
 
 
 def check_group_by(names: list[str]) -> None:
-    """MetricFlow resolves the names and reports unknown ones; this keeps anything else out."""
+    """MetricFlow resolves the names and reports unknown ones; this keeps anything else and person ids out."""
     for name in names:
         if not _NAME.match(name):
             raise ValueError(f"Invalid group by name {name!r}")
+        check_not_person(name)
 
 
 def check_order_by(names: list[str], metrics: list[str], group_by: list[str]) -> None:
