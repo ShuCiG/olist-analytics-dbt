@@ -287,10 +287,14 @@ one.
   in `/opt/dbt-cache/elementary_<warehouse>`, both on the `dbt-cache` volume: the
   first run after a recreated container (new image) no longer parses in full
   (6.4 → 3.8 min). Only a new stack's very first run does.
+- `airflow-init` drops those caches when the dbt project's files changed (hash in
+  `/opt/dbt-cache/project_hash`, `airflow/reset_dbt_cache.py`, D114): dbt 1.12's
+  partial parse duplicates the v2 metrics of an edited YAML file. Such an upgrade pays
+  one full parse per cache; a code-only image keeps them.
 - The producer's `dbt source freshness` call skips Elementary's artifacts upload
   (`dbt_project.yml`, per command: the build right after uploads them): 37.5 → 13.3 s.
 - The DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
   `LoadMode.DBT_MANIFEST`, no `dbt ls` per parse), built into the image; in dev
   mode `airflow-init` rebuilds it from the mounted repo.
 - `airflow-init` migrates the metadata DB, creates the `duckdb` pool and the alert
-  Variables (dev mode: also `dbt deps` and `dbt parse`).
+  Variables, resets stale dbt caches (dev mode: also `dbt deps` and `dbt parse`).
