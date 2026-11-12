@@ -9,6 +9,7 @@
 !airflow/dags/
 !airflow/check_dags.py
 !airflow/reset_dbt_cache.py
+!airflow/patches/
 !airflow/plugins/
 # Elementary CLI lock (edr venv)
 !.github/edr-requirements.txt

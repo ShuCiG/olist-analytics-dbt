@@ -291,6 +291,10 @@ one.
   `/opt/dbt-cache/project_hash`, `airflow/reset_dbt_cache.py`, D114): dbt 1.12's
   partial parse duplicates the v2 metrics of an edited YAML file. Such an upgrade pays
   one full parse per cache; a code-only image keeps them.
+- The image patches one condition in Airflow's scheduler (`airflow/patches/scheduler_resume.py`,
+  D115): a deferred watcher task whose trigger fires within seconds was failed by the stale executor
+  success of its pre-deferral exit (`state mismatch` in the audit log, apache/airflow#71580). The build
+  fails when the patched code changes; drop the patch once an Airflow release covers `RUNNING`.
 - The producer's `dbt source freshness` call skips Elementary's artifacts upload
   (`dbt_project.yml`, per command: the build right after uploads them): 37.5 → 13.3 s.
 - The DAG *graph* comes from `transform/target_airflow/manifest.json` (Cosmos
