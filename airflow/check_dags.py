@@ -24,6 +24,7 @@ rendered too; parsing never authenticates.
 Also runs the column lineage (lineage/) on a small model, on the image's own sqlglot:
 Airflow's constraint file pins it, older than uv.lock's, and pytest only sees the
 lock's version. An API gap failed only in the producer's callback, as a warning (#284).
+And checks that the image's Airflow scheduler carries the patch in airflow/patches (#285).
 """
 
 import sys
@@ -72,6 +73,22 @@ def lineage_smoke() -> bool:
 
 
 lineage_ok = lineage_smoke()
+
+
+def scheduler_patched() -> bool:
+    """The image's scheduler carries the resume-after-defer fix (#285, airflow/patches)."""
+    import inspect
+
+    import airflow.jobs.scheduler_job_runner as scheduler
+
+    if "olist patch #285" not in inspect.getsource(scheduler):
+        print("Airflow scheduler not patched (airflow/patches/scheduler_resume.py, #285)", file=sys.stderr)
+        return False
+    print("scheduler patch #285 present")
+    return True
+
+
+scheduler_ok = scheduler_patched()
 bag = DagBag(dag_folder=DAG_FOLDER)
 
 for path, error in bag.import_errors.items():
@@ -179,4 +196,4 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
             )
             missing.add(dag_id)
 
-sys.exit(1 if bag.import_errors or missing or not lineage_ok else 0)
+sys.exit(1 if bag.import_errors or missing or not lineage_ok or not scheduler_ok else 0)

@@ -14,6 +14,12 @@ RUN pip install --no-cache-dir \
     sqlglot \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
 
+# Scheduler fix: a deferred task whose trigger fires within seconds is not failed by
+# the stale executor success of its pre-deferral exit (#285, D115, apache/airflow#71580).
+# The build fails when the code to patch changed: review it on every Airflow upgrade.
+COPY --chown=airflow: airflow/patches/scheduler_resume.py /tmp/scheduler_resume.py
+RUN python /tmp/scheduler_resume.py && rm /tmp/scheduler_resume.py
+
 # Project side: dbt + dlt from the lock file (dev tools excluded), and MetricFlow for
 # the metric_drivers task (D110)
 ENV UV_PROJECT_ENVIRONMENT=/opt/project-venv \
