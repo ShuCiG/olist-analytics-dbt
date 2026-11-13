@@ -625,7 +625,10 @@ jobs:
           grep -E ' rows$' <<< "$out"
           uv run dbt run-operation apply_deletion_requests --target ci
 
+      # The request table exists by now: required, as in prod after its first request
       - name: Load the rest (dlt → BigQuery)
+        env:
+          OLIST_DELETION_REQUESTS_REQUIRED: bigquery
         run: uv run python ingestion/pipeline.py --destination bigquery --dataset "$DBT_RAW_SCHEMA"
 
       - name: dbt run (after the deletion)
@@ -741,9 +744,14 @@ jobs:
           service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
       # Last output line = feed status JSON; new_columns / removed_columns go to
-      # notify-schema, orders_loaded to the build scope
+      # notify-schema, orders_loaded to the build scope. Repository variable
+      # OLIST_DELETION_REQUESTS_REQUIRED=bigquery (set after prod's first deletion
+      # request, D105): the load fails when the request table is missing
+      # (`shell: bash` runs with pipefail, so `tee` doesn't hide it).
       - name: Ingest raw data (dlt → BigQuery)
         id: ingest
+        env:
+          OLIST_DELETION_REQUESTS_REQUIRED: ${{ vars.OLIST_DELETION_REQUESTS_REQUIRED }}
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
           echo "orders_loaded=$(tail -n 1 ingest.log | jq '.orders_loaded')" >> "$GITHUB_OUTPUT"

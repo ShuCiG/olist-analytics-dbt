@@ -509,6 +509,46 @@ def test_without_a_request_table_everyone_loads(run, dump: Path) -> None:
     assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p2", "p3", "p5"]
 
 
+def test_required_request_table_missing_stops_the_load(run, dump: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    request_deletion(run.db, "p1")
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS_REQUIRED", "bigquery, duckdb")
+    run("--until", "2016-10")  # the table is there: as without the requirement
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p2", "p3", "p5"]
+    reloaded = loaded_at(run.db, "customers")
+    # A mistyped name (or a dropped table): p1 would come back with the customers
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS", "pii_keys.deletion_request")
+    with pytest.raises(RuntimeError, match="pii_keys.deletion_request not found"):
+        run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p2", "p3", "p5"]
+    assert loaded_at(run.db, "customers") == reloaded
+    assert raw_ids(run.db, "orders", "order_id") == ["o1", "o2", "o3"]
+
+
+def test_required_request_table_is_per_destination(run, dump: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_people(dump)
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS_REQUIRED", "bigquery")
+    run()  # DuckDB is not named: no table, everyone loads
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p2", "p3", "p5"]
+
+
+@pytest.mark.parametrize(
+    ("value", "destination", "required"),
+    [("", "bigquery", False), ("bigquery", "bigquery", True), ("bigquery", "duckdb", False), (" duckdb ,bigquery,", "duckdb", True)],
+)
+def test_deletion_requests_required(monkeypatch: pytest.MonkeyPatch, value: str, destination: str, required: bool) -> None:
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS_REQUIRED", value)
+    assert pipeline.deletion_requests_required(destination) is required
+
+
+@pytest.mark.parametrize("value", ["true", "1", "bigquery,prod", "big query"])
+def test_deletion_requests_required_refuses_an_unknown_destination(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS_REQUIRED", value)
+    with pytest.raises(ValueError, match="must list destinations"):
+        pipeline.deletion_requests_required("bigquery")
+
+
 @pytest.mark.parametrize("name", ["pii_keys", "a.b.c", "x.y; drop table raw.orders", "a.b`"])
 def test_deletion_request_table_name_is_checked(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
     monkeypatch.setenv("OLIST_DELETION_REQUESTS", name)

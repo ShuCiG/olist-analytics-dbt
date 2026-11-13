@@ -275,6 +275,18 @@ def test_deletion_job_deletes_only_from_its_own_datasets() -> None:
     assert step["with"]["service_account"].startswith(CI_SA)
 
 
+def test_loads_after_a_deletion_request_require_the_request_table() -> None:
+    jobs = _jobs()
+    steps = {s.get("name"): s for s in jobs["gdpr-deletion-bigquery"]["steps"]}
+    assert steps["Load the rest (dlt → BigQuery)"]["env"]["OLIST_DELETION_REQUESTS_REQUIRED"] == "bigquery"
+    # Before the request the job has no table yet
+    assert "env" not in steps["Load raw up to 2018-06 (dlt → BigQuery)"]
+    ingest = {s.get("id"): s for s in jobs["deploy-prod"]["steps"]}["ingest"]
+    assert ingest["env"]["OLIST_DELETION_REQUESTS_REQUIRED"] == "${{ vars.OLIST_DELETION_REQUESTS_REQUIRED }}"
+    # The loader's failure must fail the step, not be swallowed by `| tee`: explicit bash = pipefail
+    assert jobs["deploy-prod"]["defaults"]["run"]["shell"] == "bash"
+
+
 def test_required_checks_are_not_path_filtered() -> None:
     # A workflow-level paths filter never starts the run: required checks hang on "Expected"
     on = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]  # YAML 1.1 reads `on` as True
