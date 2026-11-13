@@ -142,6 +142,12 @@ uv run dbt run-operation check_deletion_requests                                
   `DBT_RAW_SCHEMA=airflow_raw` and `--target airflow` on apply, build and check.
 - Local / Airflow DuckDB: each DuckDB file has its own `pii_keys.deletion_requests` (`DBT_DUCKDB_PATH` picks the file).
 - Another request table: `OLIST_DELETION_REQUESTS=<schema>.<table>`, read by the loader and dbt alike.
+- After the first request in a warehouse, make its table required: `OLIST_DELETION_REQUESTS_REQUIRED=<destinations>`
+  (comma-separated: `bigquery`, `duckdb`). A load to a named destination then fails before writing when the table is
+  missing (dropped, renamed, mistyped `OLIST_DELETION_REQUESTS`); without it such a load brings everyone back.
+  For BigQuery: repository variable `OLIST_DELETION_REQUESTS_REQUIRED=bigquery` (prod deploy,
+  `gh variable set OLIST_DELETION_REQUESTS_REQUIRED --body bigquery`) and the same line in `airflow/.env`
+  (then `docker compose -f airflow/docker-compose.yml up -d`).
 - Deleted rows stay readable through BigQuery time travel for 48 h on the person datasets (`infra/datasets.tf`),
   then 7 days of fail-safe.
 

@@ -145,6 +145,7 @@
     ) %}
     {% do deletion_commit() %}
     {% do log("Deletion request " ~ ("added" if added else "already there") ~ " in " ~ requests, info=true) %}
+    {% do log("The loads into this warehouse must now find the table: OLIST_DELETION_REQUESTS_REQUIRED=" ~ target.type ~ " where they run (docs/RUNNING.md)", info=true) %}
 {% endmacro %}
 
 

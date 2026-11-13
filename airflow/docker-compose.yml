@@ -56,6 +56,9 @@ x-airflow-common: &airflow-common
     # Mounted key; dlt and dbt-bigquery read it as ADC. Empty placeholder = no
     # key, and the BigQuery DAG is not created.
     GOOGLE_APPLICATION_CREDENTIALS: /opt/gcp/key.json
+    # Destinations whose load must find the deletion request table (D105):
+    # `bigquery` in airflow/.env after prod's first request. Empty = none.
+    OLIST_DELETION_REQUESTS_REQUIRED: ${OLIST_DELETION_REQUESTS_REQUIRED:-}
     # Alert emails (airflow/dags/olist_alerts.py). Default: local Mailpit, catches
     # everything. Real SMTP: set SMTP_CONN in airflow/.env (see .env.example).
     # Extras are truthy strings: leave a flag out rather than setting it to false.

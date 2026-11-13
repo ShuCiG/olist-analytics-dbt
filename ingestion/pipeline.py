@@ -38,7 +38,9 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   partitioning only when it creates a table; existing tables are migrated by hand.
 - People with a deletion request (table `OLIST_DELETION_REQUESTS`, default
   `pii_keys.deletion_requests`, D105) are left out of every load: their customer
-  rows, their orders and the orders' items, payments and reviews.
+  rows, their orders and the orders' items, payments and reviews. Without the
+  table everyone loads, except on the destinations `OLIST_DELETION_REQUESTS_REQUIRED`
+  names (comma-separated): there the load fails before writing anything.
 - After the dump (D112): with `--synthetic-every-hours H`, `--next` on a used-up
   dump serves a generated month (ingestion/synthetic.py) once the last load of
   orders is at least H hours old; the runs in between skip the load as before.
@@ -105,6 +107,7 @@ LABEL_MAX_TEXTS = int(os.environ.get("OLIST_LABEL_MAX_TEXTS", "500"))
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
+DESTINATIONS = ("duckdb", "bigquery", "databricks", "snowflake")
 DATABRICKS_CATALOG = os.environ.get("DATABRICKS_CATALOG", "olist")
 STATE_KEY = "orders_loaded_until"  # last loaded purchase month, "YYYY-MM"
 SYNTHETIC_VERSION_KEY = "synthetic_version"  # generator version of the loaded generated months
@@ -284,18 +287,43 @@ def deletion_requests_table(destination: str) -> str:
     return f"`{GCP_PROJECT_ID}.{name}`" if destination == "bigquery" else name
 
 
+def deletion_requests_required(destination: str) -> bool:
+    """Whether a load to `destination` must find the request table (D105).
+
+    `OLIST_DELETION_REQUESTS_REQUIRED` = destinations, comma-separated (`bigquery`);
+    unset = none. Set where a request exists: there a missing table means a dropped
+    or misnamed one, and loading everyone would bring the deleted people back. An
+    unknown name is an error, not "not required": a typo must not switch the check off.
+    """
+    names = {n.strip() for n in os.environ.get("OLIST_DELETION_REQUESTS_REQUIRED", "").split(",")} - {""}
+    if unknown := names - set(DESTINATIONS):
+        raise ValueError(
+            f"OLIST_DELETION_REQUESTS_REQUIRED must list destinations ({', '.join(DESTINATIONS)}), "
+            f"got {', '.join(sorted(unknown))!r}"
+        )
+    return destination in names
+
+
 def read_deletion_requests(pipeline: dlt.Pipeline, destination: str) -> frozenset[str]:
-    """The `customer_unique_id`s of every deletion request; none without the table.
+    """The `customer_unique_id`s of every deletion request.
 
     Only DuckDB (local, Airflow's DuckDB DAG, tests) and BigQuery (prod, Airflow's
     BigQuery DAG, the BigQuery CI deletion job) have the table; a destination
-    without it loads everyone.
+    without it loads everyone, unless `deletion_requests_required` says the table
+    must be there: then the load stops before anything is written.
     """
     table = deletion_requests_table(destination)
+    required = deletion_requests_required(destination)
     try:
         with pipeline.sql_client() as client:
             rows = client.execute_sql(f"select distinct customer_unique_id from {table}")
     except DatabaseUndefinedRelation:
+        if required:
+            raise RuntimeError(
+                f"Deletion request table {table} not found, and OLIST_DELETION_REQUESTS_REQUIRED "
+                f"names {destination}: nothing loaded, since a load without the table would bring "
+                "the deleted people back. Restore the table or fix OLIST_DELETION_REQUESTS."
+            ) from None
         return frozenset()
     return frozenset(row[0] for row in rows or [])
 
@@ -725,7 +753,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--destination", choices=["duckdb", "bigquery", "databricks", "snowflake"], default="duckdb")
+    parser.add_argument("--destination", choices=DESTINATIONS, default="duckdb")
     chunk = parser.add_mutually_exclusive_group()
     chunk.add_argument(
         "--until", type=month_key, help="load order months up to this one, YYYY-MM (default: all)"
