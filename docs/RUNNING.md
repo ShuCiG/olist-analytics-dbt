@@ -30,10 +30,10 @@ uv run python ingestion/pipeline.py   # download Olist (Kaggle, no token needed)
 
 cd transform
 uv run dbt deps
-uv run dbt build                      # seed + 25 models + snapshot + 150 data tests + 13 Elementary tests + 8 unit tests
+uv run dbt build                      # seed + 31 models + snapshot + 220 data tests + 13 Elementary tests + 13 unit tests
 uv run dbt docs generate && uv run dbt docs serve
 cd ..
-uv run pytest                         # Python tests: pipeline, dbt summary parser, alert decisions (no data needed)
+uv run pytest                         # Python tests in tests/: pipeline, dbt summary parser, alert decisions (no data needed)
 uv run pytest data-product dashboard  # data product checks, dashboard tests (need the built marts)
 ```
 
