@@ -446,7 +446,7 @@ dbt-bigquery==1.12.1 \
     --hash=sha256:71787ff4495999a26058dffe4da46558acf57bdc409cdb46565d9afb0391c75e \
     --hash=sha256:8f7e0eff7f4a5f8a9fea4db4fca65eef885df2f8c75b41699e061ad9b0efd745
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
+    #   -r edr.in
     #   elementary-data
 dbt-common==1.39.0 \
     --hash=sha256:30d63490b9ef2aad6f469ec841fb758430fcb1d997b79ff3df36fcb7b79a241f \
@@ -460,7 +460,7 @@ dbt-core==1.12.6 \
     --hash=sha256:a14fb6724a557dea781afa19171869a1b0b286a396d5dc012e74b8bd3596325e \
     --hash=sha256:e4378ecde4740d6b6a5b706ad25162272e28dc20ee8390c42c1ebd637752574f
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
+    #   -r edr.in
     #   dbt-bigquery
     #   dbt-duckdb
     #   elementary-data
@@ -471,7 +471,7 @@ dbt-duckdb==1.11.1 \
     --hash=sha256:4fe54c1aea840ccf4725a01851049be2bbe2d4c023faaad044c616505c780b45 \
     --hash=sha256:81340c41a1bd0f8189109d3a61c394c08a636e482af0124a06765e9a41f44bcd
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
+    #   -r edr.in
     #   elementary-data
 dbt-extractor==0.6.0 \
     --hash=sha256:05bcfab7ebd70296ceb31742e8333ba66a2c939de44e61a7088bebafa939aaf6 \
@@ -547,12 +547,12 @@ duckdb==1.5.6 \
     --hash=sha256:ebcbd09cd8578ab1093393e9b16289cda0e8f1791ac595bf00eb5bad75c3cf00 \
     --hash=sha256:f14551eef9180fc72869e2d9a2896410a8826169e22495e98a825abaa0eac1a7
     # via
-    #   -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
+    #   -r edr.in
     #   dbt-duckdb
 elementary-data==0.26.1 \
     --hash=sha256:cff88a9001d18fefc065e920a56ae6b2d21661f0298ae3fd6b7911063c56fdf4 \
     --hash=sha256:dbcd640eb9db8a25dbb30aa0e97b72e551daa1f0104212ae6a270d03e74b32b8
-    # via -r C:/TEMP/claude/d--Coding-python-dbt-pet-project/19724a3a-a519-4e1e-9022-a9be58ad8ae8/scratchpad/edr.in
+    # via -r edr.in
 fastjsonschema==2.22.2 \
     --hash=sha256:0fb3915616adac85ccfdd737d26be1089845d2019819505b42d39888458f74d4 \
     --hash=sha256:72064e12356a7d6ef02165be2946b9abadbdf238536e07eb587e3dbaa33099cf
@@ -2142,9 +2142,9 @@ snowplow-tracker==1.1.0 \
     --hash=sha256:24ea32ddac9cca547421bf9ab162f5f33c00711c6ef118ad5f78093cee962224 \
     --hash=sha256:95d8fdc8bd542fd12a0b9a076852239cbaf0599eda8721deaf5f93f7138fe755
     # via dbt-core
-soupsieve==3.0.3 \
-    --hash=sha256:7dcf6022eed0399eb9934a75e020148f7a2024c37b7dfcd3cf2c5505d69c364e \
-    --hash=sha256:fa30e3ba4809cb81ce1f3209f2fbe3e779fc445f0439bc147a0d7c4601743f21
+soupsieve==4.1 \
+    --hash=sha256:ca9abf7126667010d8f6e9b39bfc1bc3b23c8aed9bcb0f54a754dde969bb8aab \
+    --hash=sha256:e4d667b3974ce6e038e7390486b8093369854a1d345ffdd4c121dfc4a782e809
     # via beautifulsoup4
 sqlglot==30.23.0 \
     --hash=sha256:34b5b62fa4cbf042ee6b9e829236577b2f8db4538dd20007de2aa5383c92e845 \
