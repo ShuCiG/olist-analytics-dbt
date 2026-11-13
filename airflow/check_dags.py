@@ -8,7 +8,9 @@ feed is used up, Elementary's tables exist before the build),
 when the alerts are not wired (`report` after dbt with `none_failed`, a DAG-level
 failure callback), when `edr_report` (Elementary's report) is not between the
 dbt group and `report` with `none_skipped` and a skip exit code (a broken report
-must not fail the run), when the dbt model lineage is not prepared by the producer
+must not fail the run), when deletion requests are not applied before the load and
+checked after the build (`apply_deletions` -> dlt_ingest, dbt -> `check_deletions`
+-> report, D105), when the dbt model lineage is not prepared by the producer
 and sent by `openlineage` behind it, after a failed build too (D87, #196), when the dashboard exposure job is
 not in exactly the BigQuery DAG (D88), when a dbt-running task gets Elementary's clock as `--vars`
 instead of env OLIST_AS_OF (a changed `--vars` makes dbt drop its partial parse:
@@ -17,7 +19,7 @@ task retries once, transient GCP errors, D53, with the producer retrying at once
 and every node task waiting for it; DuckDB: none, a retried node task runs dbt
 outside the pool), or
 when the DuckDB pool holds anything but the file users (dlt, Elementary's tables,
-producer, edr_report, metric_drivers): a sensor in
+producer, edr_report, metric_drivers, the two deletion tasks): a sensor in
 the 1-slot pool waits for the producer it watches. A non-empty dummy key must be mounted so the BigQuery DAG is
 rendered too; parsing never authenticates.
 
@@ -42,7 +44,9 @@ ELEMENTARY = "elementary_tables"
 EDR_REPORT = "edr_report"
 METRIC_DRIVERS = "metric_drivers"  # opens the DuckDB file read-only; a writer holds the lock
 LINEAGE = "openlineage"
-DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT, METRIC_DRIVERS}
+APPLY_DELETIONS = "apply_deletions"
+CHECK_DELETIONS = "check_deletions"
+DUCKDB_WRITERS = {"dlt_ingest", ELEMENTARY, PRODUCER, EDR_REPORT, METRIC_DRIVERS, APPLY_DELETIONS, CHECK_DELETIONS}
 RETRIES = {"olist_elt_duckdb": 0, "olist_elt_bigquery": 1}
 
 # Exposures sent as lineage jobs, per DAG (#197)
@@ -136,6 +140,20 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
         and EDR_REPORT in dag.get_task("report").upstream_task_ids
     ):
         print(f"{dag_id}: {EDR_REPORT} not wired (dbt -> {EDR_REPORT} -> report)", file=sys.stderr)
+        missing.add(dag_id)
+    # Deletion requests (D105, #296): applied before the load, so the loader never
+    # drops a person's customer rows ahead of their orders; checked after the build,
+    # skipped (not failed) when the run applied nothing
+    if not {APPLY_DELETIONS, CHECK_DELETIONS} <= set(dag.task_ids) or not (
+        not dag.get_task(APPLY_DELETIONS).upstream_task_ids
+        and dag.get_task("dlt_ingest").upstream_task_ids == {APPLY_DELETIONS}
+        and dag.get_task(CHECK_DELETIONS).upstream_task_ids
+        and all(t.startswith("dbt.") for t in dag.get_task(CHECK_DELETIONS).upstream_task_ids)
+        and dag.get_task(CHECK_DELETIONS).skip_on_exit_code
+        and "applied_only" in dag.get_task(CHECK_DELETIONS).bash_command
+        and CHECK_DELETIONS in dag.get_task("report").upstream_task_ids
+    ):
+        print(f"{dag_id}: deletion requests not wired ({APPLY_DELETIONS} -> dlt_ingest, dbt -> {CHECK_DELETIONS} -> report)", file=sys.stderr)
         missing.add(dag_id)
     # Lineage (D87): the producer prepares the per-model events, `openlineage` sends
     # them behind it, outside the run's main line

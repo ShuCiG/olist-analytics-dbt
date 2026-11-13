@@ -58,7 +58,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 613 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 618 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -364,7 +364,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **613 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **618 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -469,7 +469,8 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   ([D94](docs/DECISIONS.md#d94--2026-11-02--column-level-security-for-person-related-columns-policy-tags-customer_key)).
 - **Deletion requests (GDPR erasure):** a request in a restricted table removes the person's customer rows, orders,
   items, payments and reviews from raw and dlt's staging, patches the incremental models, and the loader leaves the
-  person out of every later load. A check then scans every table of every layer for the id, its `customer_key`, and
+  person out of every later load. The pipelines do it themselves: the prod deploy and the Airflow DAGs apply pending
+  requests before their load, rebuild and check, so a request is one command and one run. A check then scans every table of every layer for the id, its `customer_key`, and
   any order or customer id raw no longer has, so a stale copy fails it too. Time travel on the person datasets is
   cut to BigQuery's 48 h minimum. Tested end to end on DuckDB on every PR and on BigQuery when the deletion code
   changes ([D105](docs/DECISIONS.md#d105--2026-11-08--deletion-requests-a-person-removed-from-every-layer-verified)).

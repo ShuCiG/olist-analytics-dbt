@@ -162,6 +162,19 @@ def wait_for_producer(context) -> None:
         time.sleep(15)
 
 
+APPLY_DELETIONS = "apply_deletions"
+# Last line of dbt's apply_deletion_requests, the task's XCom: people deleted by this run
+DELETIONS_MARKER = "DELETIONS_APPLIED="
+NO_DELETIONS = 98  # exit code of check_deletions when the run applied nothing: a skip
+
+
+def deletions_applied(xcom: str | None) -> int:
+    """People whose deletion request `apply_deletions` applied in this run."""
+    if not xcom or not re.fullmatch(rf"{DELETIONS_MARKER}\d+", xcom):
+        raise ValueError(f"{APPLY_DELETIONS} must end with {DELETIONS_MARKER}<n>, got {xcom!r}")
+    return int(xcom.removeprefix(DELETIONS_MARKER))
+
+
 def has_new_orders(ti, params) -> bool:
     """Skip dbt when the feed brought nothing (dump used up): no rebuild for no data.
 
@@ -182,6 +195,10 @@ def has_new_orders(ti, params) -> bool:
         raise ValueError(f"last_order_at is not a timestamp: {as_of!r}")
     ti.xcom_push(key="as_of", value=as_of)
     if params["until"] or params["full_refresh"]:
+        return True
+    # A deletion request applied by this run (D105) changed raw without new orders
+    if deletions_applied(ti.xcom_pull(task_ids=APPLY_DELETIONS)):
+        print("Deletion requests applied: building")
         return True
     previous = ti.get_previous_dagrun()
     if previous is not None and previous.state == "failed":
@@ -274,6 +291,30 @@ def build_dag(wh: Warehouse) -> DAG:
         },
         tags=["olist", "dlt", "dbt", wh.name],
     ) as dag:
+        # Deletion requests (D105) not yet applied to this warehouse, before the load:
+        # the loader leaves a person out only once their rows are deleted here. One
+        # small query when nothing is pending. Last stdout line (XCom):
+        # DELETIONS_APPLIED=<people>; above 0 the run rebuilds (has_new_orders) and
+        # checks (check_deletions). Own target path, as elementary_tables. No clock
+        # (OLIST_AS_OF): it comes from has_new_orders, after this task, and a value
+        # that differs between the two deletion tasks would cost a full parse each.
+        deletion_env = {**wh.env, "DBT_PROFILES_DIR": str(DBT_PROJECT_DIR)}
+        deletion_dbt = (
+            f"{DBT_EXECUTABLE} run-operation {{}} --target {wh.dbt_target}"
+            f" --target-path {DBT_CACHE_DIR / f'deletions_{wh.name}'}"
+        )
+        apply_deletions = BashOperator(
+            task_id=APPLY_DELETIONS,
+            bash_command=(
+                f"out=$({deletion_dbt.format('apply_deletion_requests')}) || {{ echo \"$out\"; exit 1; }}"
+                f"; echo \"$out\"; echo \"$out\" | grep -o '{DELETIONS_MARKER}[0-9]*' | tail -n 1"
+            ),
+            cwd=str(DBT_PROJECT_DIR),
+            env=deletion_env,
+            append_env=True,
+            **({"pool": wh.pool} if wh.pool else {}),
+        )
+
         ingest = RawLoadOperator(
             task_id="dlt_ingest",
             lineage_namespace=wh.lineage_namespace,
@@ -483,6 +524,25 @@ def build_dag(wh: Warehouse) -> DAG:
             trigger_rule=TriggerRule.NONE_SKIPPED,
         )
 
+        # After a build that followed an apply: no table of this warehouse may still
+        # hold the people (skipped when the run applied nothing, or dbt was skipped).
+        # A failure fails the run: the failure email goes out instead of the report.
+        check_deletions = BashOperator(
+            task_id="check_deletions",
+            bash_command=(
+                f"[ \"{{{{ ti.xcom_pull(task_ids='{APPLY_DELETIONS}') }}}}\" != '{DELETIONS_MARKER}0' ] || exit {NO_DELETIONS}; "
+                + deletion_dbt.format("check_deletion_requests")
+                + " --args '{applied_only: true}'"
+            ),
+            cwd=str(DBT_PROJECT_DIR),
+            env=deletion_env,
+            append_env=True,
+            skip_on_exit_code=NO_DELETIONS,
+            **({"pool": wh.pool} if wh.pool else {}),
+        )
+
+        apply_deletions >> ingest
+        dbt >> check_deletions >> email_report
         ingest >> new_orders >> elementary_tables >> dbt >> edr_report >> email_report
         # Directly too: a failed dbt must hold back the email even if edr_report ran
         dbt >> email_report

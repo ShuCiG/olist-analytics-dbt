@@ -4,11 +4,21 @@
     A request is a row (customer_unique_id, requested_at) in the table named by env
     OLIST_DELETION_REQUESTS (`schema.table`, default `pii_keys.deletion_requests`; on
     BigQuery a dataset only the accounts that build and the owner can read; the
-    owner's first request_deletion makes the table). The loader reads the same table and leaves those people out of every
-    later load (ingestion/pipeline.py), so a deletion survives the next `replace` of
-    customers and the next order month.
+    owner's first request_deletion makes the table).
 
-    One request, in this order (docs/RUNNING.md, "Deletion requests"):
+    A request is applied once per warehouse. Each raw schema has a log,
+    `<raw>.deletion_log` (applied_at, requests_until, people, rows_deleted; no ids):
+    a request newer than the log's last applied `requests_until` is pending there.
+    The loader leaves the people of the applied requests out of every later load
+    (ingestion/pipeline.py), so a deletion survives the next `replace` of customers
+    and the next order month. A pending request's person still loads: a load that
+    dropped their customer rows before apply ran would leave their orders with no
+    way to find them.
+
+    The pipelines do it themselves (#296): the prod deploy and both Airflow DAGs run
+    apply_deletion_requests before every load (one small query when nothing is
+    pending), and after an apply rebuild everything and run the check. By hand
+    (docs/RUNNING.md, "Deletion requests"):
       dbt run-operation request_deletion --args "{customer_unique_id: <id>}"
       dbt run-operation apply_deletion_requests
       dbt build --select source:olist+ --exclude config.materialized:bqml_model
@@ -43,15 +53,50 @@
 {% endmacro %}
 
 
-{# The person-linked values of the requests, as subqueries over raw (before it is cleaned) #}
-{% macro deletion_subqueries(requests) %}
+{# The log of applied requests of this target's raw schema (see the header) #}
+{% macro deletion_log_relation() %}
+    {% set customers = source('olist', 'customers') %}
+    {{ return(api.Relation.create(database=customers.database, schema=customers.schema, identifier='deletion_log', type='table')) }}
+{% endmacro %}
+
+
+{% macro relation_exists(relation) %}
+    {{ return(adapter.get_relation(database=relation.database, schema=relation.schema, identifier=relation.identifier) is not none) }}
+{% endmacro %}
+
+
+{# `requested_at <= the last applied requests_until`: the requests this raw schema has applied #}
+{% macro deletion_applied_filter(log) %}
+    {% if not relation_exists(log) %}
+        {{ return('1 = 0') }}
+    {% endif %}
+    {{ return('requested_at <= (select max(requests_until) from ' ~ log ~ ' where applied_at is not null)') }}
+{% endmacro %}
+
+
+{# People with a request this raw schema has not applied yet #}
+{% macro deletion_requests_pending(requests, log) %}
+    {% set sql = 'select count(distinct customer_unique_id) from ' ~ requests %}
+    {% if relation_exists(log) %}
+        {# coalesce on the comparison, not on the timestamp: no date literal across engines #}
+        {% set sql = sql ~ ' where coalesce(requested_at > (select max(requests_until) from ' ~ log ~ ' where applied_at is not null), true)' %}
+    {% endif %}
+    {{ return(run_query(sql).columns[0].values()[0]) }}
+{% endmacro %}
+
+
+{#
+    The person-linked values of the requests, as subqueries over raw (before it is
+    cleaned). `where`: which requests (default: all).
+#}
+{% macro deletion_subqueries(requests, where=none) %}
     {% set customers = source('olist', 'customers') %}
     {% set orders = source('olist', 'orders') %}
-    {% set people = 'select customer_unique_id from ' ~ requests %}
+    {% set people = 'select customer_unique_id from ' ~ requests ~ (' where ' ~ where if where else '') %}
     {% set customer_ids = 'select customer_id from ' ~ customers ~ ' where customer_unique_id in (' ~ people ~ ')' %}
     {{ return({
         'people': people,
-        'keys': 'select ' ~ customer_key('customer_unique_id') ~ ' from ' ~ requests,
+        'keys': 'select ' ~ customer_key('customer_unique_id') ~ ' from ' ~ requests ~ (' where ' ~ where if where else ''),
         'customer_ids': customer_ids,
         'order_ids': 'select order_id from ' ~ orders ~ ' where customer_id in (' ~ customer_ids ~ ')',
     }) }}
@@ -145,24 +190,37 @@
     ) %}
     {% do deletion_commit() %}
     {% do log("Deletion request " ~ ("added" if added else "already there") ~ " in " ~ requests, info=true) %}
-    {% do log("The loads into this warehouse must now find the table: OLIST_DELETION_REQUESTS_REQUIRED=" ~ target.type ~ " where they run (docs/RUNNING.md)", info=true) %}
+    {% do log("Pending until applied: the next deploy / Airflow run applies it, or dbt run-operation apply_deletion_requests (docs/RUNNING.md)", info=true) %}
 {% endmacro %}
 
 
 {#
-    Deletes the requested people from the relations a rebuild doesn't clean: the
-    incremental models and snapshots of this project, dlt's merge staging (its data
-    tables emptied, dlt refills them on the next merge; dlt's own `_dlt_*` tables
-    kept) and raw. Downstream first, raw last, since the downstream deletes find the
-    person's orders through raw; a rerun after a failure
-    starts over and finds nothing more. No load may run meanwhile (Airflow DAG
-    paused, no deploy). Then rebuild everything built from raw and check.
+    Applies the pending requests to this target: deletes their people from the
+    relations a rebuild doesn't clean: the incremental models and snapshots of this
+    project, dlt's merge staging (its data tables emptied, dlt refills them on the
+    next merge; dlt's own `_dlt_*` tables kept) and raw. Downstream first, raw last,
+    since the downstream deletes find the person's orders through raw.
+
+    Nothing pending: one query, nothing else. Otherwise a log row is opened with the
+    newest request's time (`applied_at` null), every delete reads the requests up to
+    it, so a request added meanwhile waits for the next apply as a whole, and the
+    row is closed at the end. A failed apply leaves it open (BigQuery, Databricks:
+    every statement commits) or rolls everything back (DuckDB, Snowflake: one
+    transaction, committed at the end): either way the requests stay pending, and
+    the next apply drops an open row and starts over. A raw schema with no
+    tables yet has nothing to delete and still gets the row, so its first load
+    leaves the people out.
+
+    Not while a load runs on the same raw schema: the pipelines call it before their
+    load, in the same run. Then rebuild everything built from raw and check.
+    The last line, DELETIONS_APPLIED=<people>, is read by the callers.
     Usage: dbt run-operation apply_deletion_requests
 #}
 {% macro apply_deletion_requests() %}
     {% set requests = deletion_requests_relation() %}
     {% if not deletion_requests_exist(requests) %}
         {% do log("No deletion request table " ~ requests ~ ": nothing to delete", info=true) %}
+        {% do log("DELETIONS_APPLIED=0", info=true) %}
         {{ return(none) }}
     {% endif %}
     {% set customers = source('olist', 'customers') %}
@@ -170,46 +228,75 @@
     {% if target.name == 'ci' and not customers.schema.startswith(target.schema ~ '_') %}
         {{ exceptions.raise_compiler_error("apply_deletion_requests on target ci deletes only from its own raw (" ~ target.schema ~ "_raw), not '" ~ customers.schema ~ "': set DBT_RAW_SCHEMA") }}
     {% endif %}
-    {% set q = deletion_subqueries(requests) %}
+    {% set applied_log = deletion_log_relation() %}
+    {% set people = deletion_requests_pending(requests, applied_log) %}
+    {% if people == 0 %}
+        {% do log("No pending deletion request in " ~ requests ~ " for " ~ customers.schema, info=true) %}
+        {% do log("DELETIONS_APPLIED=0", info=true) %}
+        {{ return(none) }}
+    {% endif %}
+
+    {% if not relation_exists(applied_log) %}
+        {% do adapter.create_schema(applied_log) %}
+        {% do run_query('create table ' ~ applied_log ~ ' (applied_at ' ~ dbt.type_timestamp() ~ ', requests_until ' ~ dbt.type_timestamp() ~ ' not null, people ' ~ dbt.type_int() ~ ' not null, rows_deleted ' ~ dbt.type_int() ~ ')') %}
+    {% endif %}
+    {% do run_query('delete from ' ~ applied_log ~ ' where applied_at is null') %}
+    {% do run_query('insert into ' ~ applied_log ~ ' (applied_at, requests_until, people, rows_deleted) select cast(null as ' ~ dbt.type_timestamp() ~ '), max(requested_at), ' ~ people ~ ', cast(null as ' ~ dbt.type_int() ~ ') from ' ~ requests) %}
+
+    {% set q = deletion_subqueries(requests, 'requested_at <= (select max(requests_until) from ' ~ applied_log ~ ')') %}
     {% set conditions = {
         'customer_unique_id': 'customer_unique_id in (' ~ q.people ~ ')',
         'customer_key': 'customer_key in (' ~ q['keys'] ~ ')',
         'customer_id': 'customer_id in (' ~ q.customer_ids ~ ')',
         'order_id': 'order_id in (' ~ q.order_ids ~ ')',
     } %}
+    {% set total = namespace(rows=0) %}
+    {% set raw_loaded = relation_exists(customers) and relation_exists(source('olist', 'orders')) %}
 
-    {% for node in graph.nodes.values()
-        if node.resource_type in ['model', 'snapshot']
-        and node.package_name == project_name
-        and node.config.materialized in ['incremental', 'snapshot'] %}
-        {% set relation = adapter.get_relation(database=node.database, schema=node.schema, identifier=node.alias) %}
-        {% if relation is not none %}
-            {% set columns = column_names(relation) %}
-            {% set where = conditions.items() | selectattr(0, 'in', columns) | map(attribute=1) | list %}
-            {% if where %}
-                {% set deleted = execute_counting('delete from ' ~ relation ~ ' where ' ~ where | join(' or ')) %}
-                {% do log("Deleted " ~ deleted ~ " rows from " ~ relation ~ " (" ~ node.config.materialized ~ ")", info=true) %}
+    {% if raw_loaded %}
+        {% for node in graph.nodes.values()
+            if node.resource_type in ['model', 'snapshot']
+            and node.package_name == project_name
+            and node.config.materialized in ['incremental', 'snapshot'] %}
+            {% set relation = adapter.get_relation(database=node.database, schema=node.schema, identifier=node.alias) %}
+            {% if relation is not none %}
+                {% set columns = column_names(relation) %}
+                {% set where = conditions.items() | selectattr(0, 'in', columns) | map(attribute=1) | list %}
+                {% if where %}
+                    {% set deleted = execute_counting('delete from ' ~ relation ~ ' where ' ~ where | join(' or ')) %}
+                    {% set total.rows = total.rows + (deleted or 0) %}
+                    {% do log("Deleted " ~ deleted ~ " rows from " ~ relation ~ " (" ~ node.config.materialized ~ ")", info=true) %}
+                {% endif %}
             {% endif %}
-        {% endif %}
-    {% endfor %}
+        {% endfor %}
 
-    {% for relation in schema_relations(customers.database, customers.schema ~ '_staging')
-        if not (relation.identifier | lower).startswith('_dlt') %}
-        {# Statement, not adapter.truncate_relation: dbt-bigquery doesn't implement it #}
-        {% do run_query('truncate table ' ~ relation) %}
-        {% do log("Emptied " ~ relation ~ " (dlt merge staging)", info=true) %}
-    {% endfor %}
+        {% for relation in schema_relations(customers.database, customers.schema ~ '_staging')
+            if not (relation.identifier | lower).startswith('_dlt') %}
+            {# Statement, not adapter.truncate_relation: dbt-bigquery doesn't implement it #}
+            {% do run_query('truncate table ' ~ relation) %}
+            {% do log("Emptied " ~ relation ~ " (dlt merge staging)", info=true) %}
+        {% endfor %}
 
-    {% for table in ['order_items', 'order_payments', 'order_reviews'] %}
-        {% set deleted = execute_counting('delete from ' ~ source('olist', table) ~ ' where ' ~ conditions.order_id) %}
-        {% do log("Deleted " ~ deleted ~ " rows from " ~ source('olist', table), info=true) %}
-    {% endfor %}
-    {% set deleted = execute_counting('delete from ' ~ source('olist', 'orders') ~ ' where ' ~ conditions.customer_id) %}
-    {% do log("Deleted " ~ deleted ~ " rows from " ~ source('olist', 'orders'), info=true) %}
-    {% set deleted = execute_counting('delete from ' ~ customers ~ ' where ' ~ conditions.customer_unique_id) %}
-    {% do log("Deleted " ~ deleted ~ " rows from " ~ customers, info=true) %}
+        {% for table in ['order_items', 'order_payments', 'order_reviews'] if relation_exists(source('olist', table)) %}
+            {% set deleted = execute_counting('delete from ' ~ source('olist', table) ~ ' where ' ~ conditions.order_id) %}
+            {% set total.rows = total.rows + (deleted or 0) %}
+            {% do log("Deleted " ~ deleted ~ " rows from " ~ source('olist', table), info=true) %}
+        {% endfor %}
+        {% set deleted = execute_counting('delete from ' ~ source('olist', 'orders') ~ ' where ' ~ conditions.customer_id) %}
+        {% set total.rows = total.rows + (deleted or 0) %}
+        {% do log("Deleted " ~ deleted ~ " rows from " ~ source('olist', 'orders'), info=true) %}
+        {% set deleted = execute_counting('delete from ' ~ customers ~ ' where ' ~ conditions.customer_unique_id) %}
+        {% set total.rows = total.rows + (deleted or 0) %}
+        {% do log("Deleted " ~ deleted ~ " rows from " ~ customers, info=true) %}
+    {% else %}
+        {% do log("No raw tables in " ~ customers.schema ~ " yet: nothing to delete, the first load leaves the people out", info=true) %}
+    {% endif %}
+
+    {% do run_query('update ' ~ applied_log ~ ' set applied_at = ' ~ dbt.current_timestamp() ~ ', rows_deleted = ' ~ total.rows ~ ' where applied_at is null') %}
     {% do deletion_commit() %}
+    {% do log("Deletion requests applied: " ~ people ~ " people, " ~ total.rows ~ " rows deleted (" ~ applied_log ~ ")", info=true) %}
     {% do log("Next: dbt build --select source:olist+ --exclude config.materialized:bqml_model, then dbt run-operation check_deletion_requests", info=true) %}
+    {% do log("DELETIONS_APPLIED=" ~ people, info=true) %}
 {% endmacro %}
 
 
@@ -221,9 +308,11 @@
     - customer_id / order_id missing from raw customers / orders: raw holds no
       orphans (checked on the full dump: 0), so after the deletion any such value
       is a deleted person's, wherever it is copied (incremental, stale table).
-    Usage: dbt run-operation check_deletion_requests
+    `applied_only` (the pipelines): only the people of the requests this raw schema
+    has applied, so a request added after the run's apply doesn't fail it.
+    Usage: dbt run-operation check_deletion_requests [--args "{applied_only: true}"]
 #}
-{% macro check_deletion_requests() %}
+{% macro check_deletion_requests(applied_only=false) %}
     {% set requests = deletion_requests_relation() %}
     {% if not deletion_requests_exist(requests) %}
         {% do log("No deletion request table " ~ requests ~ ": nothing to check", info=true) %}
@@ -231,7 +320,8 @@
     {% endif %}
     {% set customers = source('olist', 'customers') %}
     {% set orders = source('olist', 'orders') %}
-    {% set q = deletion_subqueries(requests) %}
+    {% set applied_log = deletion_log_relation() %}
+    {% set q = deletion_subqueries(requests, deletion_applied_filter(applied_log) if applied_only else none) %}
 
     {% set schemas = [] %}
     {% for node in graph.nodes.values() if node.resource_type in ['model', 'seed', 'snapshot'] %}
@@ -243,7 +333,7 @@
     {% set checked = [] %}
     {% for database, schema in schemas | unique | sort %}
         {% for relation in schema_relations(database, schema)
-            if relation.type == 'table' and not same_table(relation, requests) %}
+            if relation.type == 'table' and not same_table(relation, requests) and not same_table(relation, applied_log) %}
             {% set columns = column_names(relation) %}
             {% set where = [] %}
             {% if 'customer_unique_id' in columns %}
