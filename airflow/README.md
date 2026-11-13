@@ -1,7 +1,8 @@
 # Airflow + Cosmos
 
 Local Airflow 3 (Docker Compose, LocalExecutor) that runs the ELT as an hourly
-simulated feed: `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
+simulated feed: `apply_deletions` (pending deletion requests, D105: one small query when there
+are none) → `dlt_ingest` (the next purchase month) → `has_new_orders` (skip dbt
 when nothing arrived) → `elementary_tables` (Elementary's history tables, D38) →
 `dbt` task group → `edr_report` (Elementary's report, see below) → `report`
 (email, see below), plus `openlineage` (lineage to Marquez, see below), where the

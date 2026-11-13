@@ -38,9 +38,12 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   partitioning only when it creates a table; existing tables are migrated by hand.
 - People with a deletion request (table `OLIST_DELETION_REQUESTS`, default
   `pii_keys.deletion_requests`, D105) are left out of every load: their customer
-  rows, their orders and the orders' items, payments and reviews. Without the
-  table everyone loads, except on the destinations `OLIST_DELETION_REQUESTS_REQUIRED`
-  names (comma-separated): there the load fails before writing anything.
+  rows, their orders and the orders' items, payments and reviews: once dbt's
+  `apply_deletion_requests` has applied the request to this raw dataset (its
+  `deletion_log`); a pending request's person still loads. Without the request
+  table everyone loads, except where the log holds an applied request or on the
+  destinations `OLIST_DELETION_REQUESTS_REQUIRED` names (comma-separated): there
+  the load fails before writing anything.
 - After the dump (D112): with `--synthetic-every-hours H`, `--next` on a used-up
   dump serves a generated month (ingestion/synthetic.py) once the last load of
   orders is at least H hours old; the runs in between skip the load as before.
@@ -291,9 +294,10 @@ def deletion_requests_required(destination: str) -> bool:
     """Whether a load to `destination` must find the request table (D105).
 
     `OLIST_DELETION_REQUESTS_REQUIRED` = destinations, comma-separated (`bigquery`);
-    unset = none. Set where a request exists: there a missing table means a dropped
-    or misnamed one, and loading everyone would bring the deleted people back. An
-    unknown name is an error, not "not required": a typo must not switch the check off.
+    unset = none. A dataset with an applied request requires the table by itself
+    (`read_deletion_requests`); the variable adds the case its log can't see: the
+    raw dataset dropped together with the log. An unknown name is an error, not
+    "not required": a typo must not switch the check off.
     """
     names = {n.strip() for n in os.environ.get("OLIST_DELETION_REQUESTS_REQUIRED", "").split(",")} - {""}
     if unknown := names - set(DESTINATIONS):
@@ -304,25 +308,51 @@ def deletion_requests_required(destination: str) -> bool:
     return destination in names
 
 
+def deletion_log_table(destination: str, dataset: str) -> str:
+    """The log of applied deletion requests of a raw dataset (dbt's `deletion_log_relation`)."""
+    if not re.fullmatch(r"[A-Za-z0-9_]+", dataset):
+        raise ValueError(f"dataset must be letters, digits and '_', got {dataset!r}")
+    name = f"{dataset}.deletion_log"
+    return f"`{GCP_PROJECT_ID}.{name}`" if destination == "bigquery" else name
+
+
 def read_deletion_requests(pipeline: dlt.Pipeline, destination: str) -> frozenset[str]:
-    """The `customer_unique_id`s of every deletion request.
+    """The `customer_unique_id`s of the deletion requests applied to this raw dataset.
+
+    Applied = not newer than the last `requests_until` of the dataset's
+    `deletion_log`, which dbt's `apply_deletion_requests` writes after it deleted
+    the people. A pending request's person still loads: left out before apply ran,
+    their customer rows would be gone from raw and their orders could no longer be
+    found. No log: nothing applied, everyone loads.
 
     Only DuckDB (local, Airflow's DuckDB DAG, tests) and BigQuery (prod, Airflow's
-    BigQuery DAG, the BigQuery CI deletion job) have the table; a destination
-    without it loads everyone, unless `deletion_requests_required` says the table
-    must be there: then the load stops before anything is written.
+    BigQuery DAG, the BigQuery CI deletion job) have the request table; a
+    destination without it loads everyone. Unless the table must be there: the log
+    holds an applied request (people were deleted from this dataset, so a missing
+    table is a dropped or misnamed one), or `deletion_requests_required` names the
+    destination. Then the load stops before anything is written.
     """
     table = deletion_requests_table(destination)
     required = deletion_requests_required(destination)
+    log = deletion_log_table(destination, pipeline.dataset_name)
+    reason = f"OLIST_DELETION_REQUESTS_REQUIRED names {destination}"
     try:
         with pipeline.sql_client() as client:
-            rows = client.execute_sql(f"select distinct customer_unique_id from {table}")
+            counted = client.execute_sql(f"select count(*) from {log} where applied_at is not null")
+        applied = f"requested_at <= (select max(requests_until) from {log} where applied_at is not null)"
+        if counted and counted[0][0]:
+            required, reason = True, f"{log} holds applied requests"
+    except DatabaseUndefinedRelation:
+        applied = "1 = 0"
+    try:
+        with pipeline.sql_client() as client:
+            rows = client.execute_sql(f"select distinct customer_unique_id from {table} where {applied}")
     except DatabaseUndefinedRelation:
         if required:
             raise RuntimeError(
-                f"Deletion request table {table} not found, and OLIST_DELETION_REQUESTS_REQUIRED "
-                f"names {destination}: nothing loaded, since a load without the table would bring "
-                "the deleted people back. Restore the table or fix OLIST_DELETION_REQUESTS."
+                f"Deletion request table {table} not found, and {reason}: nothing loaded, "
+                "since a load without the table would bring the deleted people back. "
+                "Restore the table or fix OLIST_DELETION_REQUESTS."
             ) from None
         return frozenset()
     return frozenset(row[0] for row in rows or [])
@@ -352,7 +382,7 @@ def olist_source(
     """The dump as dlt resources, without the people of `deleted_people` (D105).
 
     A deletion request removes a person from raw once (dbt's `apply_deletion_requests`);
-    every later load must leave them out too, or the next `replace` of customers and
+    every load after that must leave them out too, or the next `replace` of customers and
     the next order month would bring them back.
     """
     loaded_at = datetime.now(UTC)

@@ -448,13 +448,23 @@ def test_full_refresh_keeps_review_labels(run) -> None:
     assert len(raw_labels(run.db)) == 2
 
 
-def request_deletion(db: Path, *people: str) -> None:
-    """A deletion request table as dbt's request_deletion makes it (D105)."""
+def request_deletion(db: Path, *people: str, applied: bool = True) -> None:
+    """Deletion requests as dbt's request_deletion makes them (D105), and by default
+    the log row apply_deletion_requests writes: the loader leaves out applied requests."""
     with duckdb.connect(str(db)) as con:
         con.execute("create schema if not exists pii_keys")
         con.execute("create table if not exists pii_keys.deletion_requests (customer_unique_id varchar, requested_at timestamp)")
         for person in people:
-            con.execute("insert into pii_keys.deletion_requests values (?, now())", [person])
+            con.execute("insert into pii_keys.deletion_requests values (?, now()::timestamp)", [person])
+        if applied:
+            con.execute("create schema if not exists raw")
+            con.execute(
+                "create table if not exists raw.deletion_log"
+                " (applied_at timestamp, requests_until timestamp, people integer, rows_deleted integer)"
+            )
+            con.execute(
+                "insert into raw.deletion_log select now()::timestamp, max(requested_at), 0, 0 from pii_keys.deletion_requests"
+            )
 
 
 def with_people(dump: Path) -> None:
@@ -503,6 +513,37 @@ def test_full_refresh_with_a_deletion_request_loads_everyone_else(run, dump: Pat
         assert "o1" not in raw_ids(run.db, table, "order_id") and "o4" not in raw_ids(run.db, table, "order_id")
 
 
+def test_pending_deletion_request_still_loads_the_person(run, dump: Path) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    # Applied: p2. Then p1 asks, and no apply ran yet: leaving p1's customer rows out
+    # now would hide the orders of p1 from the apply to come
+    request_deletion(run.db, "p2")
+    request_deletion(run.db, "p1", applied=False)
+    run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p3", "p5"]
+    assert "o4" in raw_ids(run.db, "orders", "order_id")
+
+
+def test_deletion_request_with_an_unfinished_apply_is_pending(run, dump: Path) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    request_deletion(run.db, "p1", applied=False)
+    with duckdb.connect(str(run.db)) as con:
+        # The row apply opens and closes only at its end
+        con.execute("create table raw.deletion_log (applied_at timestamp, requests_until timestamp, people integer, rows_deleted integer)")
+        con.execute("insert into raw.deletion_log select null, max(requested_at), 1, null from pii_keys.deletion_requests")
+    run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p2", "p3", "p5"]
+
+
+def test_deletion_log_table_name() -> None:
+    assert pipeline.deletion_log_table("duckdb", "raw") == "raw.deletion_log"
+    assert pipeline.deletion_log_table("bigquery", "airflow_raw") == f"`{pipeline.GCP_PROJECT_ID}.airflow_raw.deletion_log`"
+    with pytest.raises(ValueError, match="dataset"):
+        pipeline.deletion_log_table("duckdb", "raw; drop")
+
+
 def test_without_a_request_table_everyone_loads(run, dump: Path) -> None:
     with_people(dump)
     run()
@@ -524,6 +565,33 @@ def test_required_request_table_missing_stops_the_load(run, dump: Path, monkeypa
     assert raw_ids(run.db, "customers", "customer_unique_id") == ["p2", "p3", "p5"]
     assert loaded_at(run.db, "customers") == reloaded
     assert raw_ids(run.db, "orders", "order_id") == ["o1", "o2", "o3"]
+
+
+def test_request_table_missing_after_an_applied_request_stops_the_load(
+    run, dump: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    request_deletion(run.db, "p1")
+    monkeypatch.delenv("OLIST_DELETION_REQUESTS_REQUIRED", raising=False)
+    # No variable needed: the log says people were deleted here, so the table must exist
+    monkeypatch.setenv("OLIST_DELETION_REQUESTS", "pii_keys.deletion_request")
+    with pytest.raises(RuntimeError, match="raw.deletion_log holds applied requests"):
+        run()
+    assert raw_ids(run.db, "orders", "order_id") == ["o1", "o2"]
+
+
+def test_request_table_missing_with_only_an_unfinished_apply_loads_everyone(
+    run, dump: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_people(dump)
+    run("--until", "2016-09")
+    with duckdb.connect(str(run.db)) as con:
+        con.execute("create table raw.deletion_log (applied_at timestamp, requests_until timestamp, people integer, rows_deleted integer)")
+        con.execute("insert into raw.deletion_log values (null, now()::timestamp, 1, null)")
+    monkeypatch.delenv("OLIST_DELETION_REQUESTS_REQUIRED", raising=False)
+    run()
+    assert raw_ids(run.db, "customers", "customer_unique_id") == ["p1", "p1", "p2", "p3", "p5"]
 
 
 def test_required_request_table_is_per_destination(run, dump: Path, monkeypatch: pytest.MonkeyPatch) -> None:

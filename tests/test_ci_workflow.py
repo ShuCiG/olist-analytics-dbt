@@ -281,10 +281,40 @@ def test_loads_after_a_deletion_request_require_the_request_table() -> None:
     assert steps["Load the rest (dlt → BigQuery)"]["env"]["OLIST_DELETION_REQUESTS_REQUIRED"] == "bigquery"
     # Before the request the job has no table yet
     assert "env" not in steps["Load raw up to 2018-06 (dlt → BigQuery)"]
-    ingest = {s.get("id"): s for s in jobs["deploy-prod"]["steps"]}["ingest"]
-    assert ingest["env"]["OLIST_DELETION_REQUESTS_REQUIRED"] == "${{ vars.OLIST_DELETION_REQUESTS_REQUIRED }}"
+    # Prod needs no variable: its deletion_log makes the table required after the first apply.
     # The loader's failure must fail the step, not be swallowed by `| tee`: explicit bash = pipefail
+    ingest = {s.get("id"): s for s in jobs["deploy-prod"]["steps"]}["ingest"]
+    assert "| tee ingest.log" in ingest["run"]
     assert jobs["deploy-prod"]["defaults"]["run"]["shell"] == "bash"
+
+
+def test_deploy_applies_deletion_requests_before_the_load_and_checks_after_the_build() -> None:
+    steps = _jobs()["deploy-prod"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    apply = steps[names.index("Apply pending deletion requests (target prod)")]
+    check = steps[names.index("Check the applied deletion requests (target prod)")]
+    # Before the load: the loader leaves out only people whose rows apply has deleted
+    assert names.index("dbt deps") < names.index(apply["name"]) < names.index("Ingest raw data (dlt → BigQuery)")
+    assert "apply_deletion_requests --target prod" in apply["run"]
+    # No marker line must fail the step, not read as "nothing applied"
+    assert 'echo "applied=$applied"' in apply["run"] and "exit 1" in apply["run"]
+    # An apply forces the full build (a slim one would leave the tables built from raw stale)
+    scope = steps[names.index("Build scope")]
+    assert scope["env"]["DELETIONS_APPLIED"] == "${{ steps.deletions.outputs.applied }}"
+    assert '"$DELETIONS_APPLIED" != 0' in scope["run"]
+    assert names.index("dbt build (target prod)") < names.index(check["name"])
+    assert check["if"] == "steps.deletions.outputs.applied != '0'"
+    assert "check_deletion_requests --target prod --args '{applied_only: true}'" in check["run"]
+    # No person id may reach the workflow: the request is made outside it
+    inputs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"full_refresh"}
+
+
+def test_deletion_job_applies_once() -> None:
+    steps = {s.get("name"): s for s in _jobs()["gdpr-deletion-bigquery"]["steps"]}
+    run = steps["Request, check fails, apply"]["run"]
+    assert "DELETIONS_APPLIED=1$" in run and "DELETIONS_APPLIED=0$" in run
+    assert "applied_only: true" in steps["Check the deletion"]["run"]
 
 
 def test_required_checks_are_not_path_filtered() -> None:

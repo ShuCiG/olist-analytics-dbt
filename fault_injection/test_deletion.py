@@ -80,10 +80,13 @@ def deleted(baseline: Path, tmp_path_factory: pytest.TempPathFactory) -> tuple[P
     outputs.append(dbt(work, AS_OF_NEW, "run-operation", "check_deletion_requests"))
     applied = dbt(work, AS_OF_NEW, "run-operation", "apply_deletion_requests")
     assert applied.returncode == 0, applied.stdout[-4000:]
+    again = dbt(work, AS_OF_NEW, "run-operation", "apply_deletion_requests")
     loaded = ingest(work, write_dump(clean_rows(), work / "kaggle"), AS_OF_NEW, "--next")
     assert loaded.returncode == 0, loaded.stdout + loaded.stderr
     dbt(work, AS_OF_NEW, "build", "--exclude", "package:elementary")
     outputs.append(dbt(work, AS_OF_NEW, "run-operation", "check_deletion_requests"))
+    outputs += [applied, again]
+    outputs.append(dbt(work, AS_OF_NEW, "run-operation", "check_deletion_requests", "--args", "{applied_only: true}"))
     return work, values, [f"{o.returncode}\n{o.stdout}" for o in outputs]
 
 
@@ -97,6 +100,19 @@ def test_check_passes_after_the_deletion(deleted: tuple[Path, set[str], list[str
     after = deleted[2][1]
     assert after.startswith("0\n"), after[-2000:]
     assert "none of the people in" in after
+
+
+def test_apply_reports_the_people_and_a_second_apply_finds_nothing_pending(
+    deleted: tuple[Path, set[str], list[str]],
+) -> None:
+    applied, again, applied_only = deleted[2][2:5]
+    assert f"DELETIONS_APPLIED={len(person_values()[0])}" in applied, applied[-2000:]
+    assert again.startswith("0\n") and "DELETIONS_APPLIED=0" in again, again[-2000:]
+    assert "Deleted" not in again
+    assert applied_only.startswith("0\n") and "none of the people in" in applied_only, applied_only[-2000:]
+    with duckdb.connect(str(db_path(deleted[0])), read_only=True) as con:
+        rows = con.execute("select applied_at is not null, people, rows_deleted > 0 from raw.deletion_log").fetchall()
+    assert rows == [(True, len(person_values()[0]), True)]
 
 
 def test_the_scan_finds_the_loaded_person_before(baseline: Path) -> None:

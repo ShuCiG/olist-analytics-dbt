@@ -127,27 +127,37 @@ end to end, D105) shares the baseline: `uv run pytest fault_injection/test_delet
 
 ## Deletion requests (GDPR)
 
-A person's erasure request (D105): request, apply, rebuild, check. No load may run meanwhile (pause the Airflow
-DAG, no deploy running). The request table stays: the loader leaves its people out of every later load.
+A person's erasure request (D105). In prod it is two actions:
 
 ```bash
 cd transform
-uv run dbt run-operation request_deletion --args "{customer_unique_id: <id>}"   # --target prod: as the owner
-uv run dbt run-operation apply_deletion_requests
+uv run dbt run-operation request_deletion --target prod --args "{customer_unique_id: <id>}"   # as the owner
+gh workflow run ci-cd.yml --ref main                                                          # or wait for the next deploy
+```
+
+The deploy applies the pending requests before its load, builds prod in full and runs the check; its summary lists
+the rows deleted per table (no id). The Airflow BigQuery replay reads the same request table and does the same in
+its next hourly run (`apply_deletions` before `dlt_ingest`, `check_deletions` after the build), with no manual step.
+A warehouse's applied requests are in `<raw>.deletion_log` (when, how many people and rows; no ids); the loader
+leaves the people of applied requests out of every later load.
+
+By hand, on any target (local DuckDB: each file has its own `pii_keys.deletion_requests`, `DBT_DUCKDB_PATH` picks
+the file):
+
+```bash
+cd transform
+uv run dbt run-operation request_deletion --args "{customer_unique_id: <id>}"
+uv run dbt run-operation apply_deletion_requests                                 # not while a load runs on this raw
 uv run dbt build --select source:olist+ --exclude config.materialized:bqml_model
 uv run dbt run-operation check_deletion_requests                                 # fails while anyone is left
 ```
 
-- Prod: `--target prod` on each command. Then the Airflow BigQuery replay with the same request table:
-  `DBT_RAW_SCHEMA=airflow_raw` and `--target airflow` on apply, build and check.
-- Local / Airflow DuckDB: each DuckDB file has its own `pii_keys.deletion_requests` (`DBT_DUCKDB_PATH` picks the file).
 - Another request table: `OLIST_DELETION_REQUESTS=<schema>.<table>`, read by the loader and dbt alike.
-- After the first request in a warehouse, make its table required: `OLIST_DELETION_REQUESTS_REQUIRED=<destinations>`
-  (comma-separated: `bigquery`, `duckdb`). A load to a named destination then fails before writing when the table is
-  missing (dropped, renamed, mistyped `OLIST_DELETION_REQUESTS`); without it such a load brings everyone back.
-  For BigQuery: repository variable `OLIST_DELETION_REQUESTS_REQUIRED=bigquery` (prod deploy,
-  `gh variable set OLIST_DELETION_REQUESTS_REQUIRED --body bigquery`) and the same line in `airflow/.env`
-  (then `docker compose -f airflow/docker-compose.yml up -d`).
+- After a warehouse's first applied request its loads require the request table: a load fails before writing when
+  the table is missing (dropped, renamed, mistyped `OLIST_DELETION_REQUESTS`) instead of bringing everyone back.
+  Nothing to set: the loader sees the applied request in `<raw>.deletion_log`. Optional, stricter:
+  `OLIST_DELETION_REQUESTS_REQUIRED=<destinations>` (comma-separated: `bigquery`, `duckdb`; for Airflow in
+  `airflow/.env`) also covers a raw dataset dropped together with its log.
 - Deleted rows stay readable through BigQuery time travel for 48 h on the person datasets (`infra/datasets.tf`),
   then 7 days of fail-safe.
 

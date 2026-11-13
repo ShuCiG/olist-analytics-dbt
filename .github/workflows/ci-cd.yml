@@ -623,7 +623,12 @@ jobs:
           grep -q "still in" <<< "$out" || { echo "$out"; exit 1; }
           # The tables holding the person before the deletion (BigQuery quotes with backticks)
           grep -E ' rows$' <<< "$out"
-          uv run dbt run-operation apply_deletion_requests --target ci
+          uv run dbt run-operation apply_deletion_requests --target ci | tee apply.log
+          grep -q 'DELETIONS_APPLIED=1$' apply.log
+          # Applied once: a second apply finds nothing pending and deletes nothing
+          uv run dbt run-operation apply_deletion_requests --target ci | tee apply-again.log
+          grep -q 'DELETIONS_APPLIED=0$' apply-again.log
+          ! grep -q ' Deleted ' apply-again.log
 
       # The request table exists by now: required, as in prod after its first request
       - name: Load the rest (dlt → BigQuery)
@@ -635,9 +640,12 @@ jobs:
         working-directory: transform
         run: uv run dbt run --target ci --exclude package:elementary config.materialized:bqml_model --defer --state ../prod-state
 
+      # Both forms: every request (by hand), and the applied ones (the pipelines' check)
       - name: Check the deletion
         working-directory: transform
-        run: uv run dbt run-operation check_deletion_requests --target ci
+        run: |
+          uv run dbt run-operation check_deletion_requests --target ci
+          uv run dbt run-operation check_deletion_requests --target ci --args '{applied_only: true}'
 
       - name: BigQuery cost of this job
         if: ${{ !cancelled() }}
@@ -743,25 +751,39 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
           service_account: dbt-runner@olist-analytics-dbt-472315.iam.gserviceaccount.com
 
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      # Deletion requests (D105) prod has not applied yet, before the load: the loader
+      # leaves a person out only once their rows are deleted. Nothing pending (or no
+      # request table): one small query at most. Applied: the build below is full
+      # and the check runs after it. A manual run of this workflow is the way to
+      # apply a new request at once. The summary names tables and row counts, no id.
+      - name: Apply pending deletion requests (target prod)
+        id: deletions
+        working-directory: transform
+        run: |
+          uv run dbt run-operation apply_deletion_requests --target prod | tee "$RUNNER_TEMP/deletions.log"
+          applied=$(grep -o 'DELETIONS_APPLIED=[0-9]*' "$RUNNER_TEMP/deletions.log" | tail -n 1 | cut -d= -f2)
+          [ -n "$applied" ] || { echo "::error::apply_deletion_requests printed no DELETIONS_APPLIED line"; exit 1; }
+          echo "applied=$applied" >> "$GITHUB_OUTPUT"
+          if [ "$applied" != 0 ]; then
+            { echo "### Deletion requests applied: $applied people"; grep -E '  (Deleted|Emptied) ' "$RUNNER_TEMP/deletions.log" | sed -E 's/^.*  (Deleted|Emptied)/- \1/'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       # Last output line = feed status JSON; new_columns / removed_columns go to
-      # notify-schema, orders_loaded to the build scope. Repository variable
-      # OLIST_DELETION_REQUESTS_REQUIRED=bigquery (set after prod's first deletion
-      # request, D105): the load fails when the request table is missing
+      # notify-schema, orders_loaded to the build scope. After prod's first applied
+      # deletion request (D105) the load fails when the request table is missing
       # (`shell: bash` runs with pipefail, so `tee` doesn't hide it).
       - name: Ingest raw data (dlt → BigQuery)
         id: ingest
-        env:
-          OLIST_DELETION_REQUESTS_REQUIRED: ${{ vars.OLIST_DELETION_REQUESTS_REQUIRED }}
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
           echo "orders_loaded=$(tail -n 1 ingest.log | jq '.orders_loaded')" >> "$GITHUB_OUTPUT"
           echo "labels_loaded=$(tail -n 1 ingest.log | jq '.labels_loaded')" >> "$GITHUB_OUTPUT"
           echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
           echo "removed_columns=$(tail -n 1 ingest.log | jq -c '.removed_columns // {}')" >> "$GITHUB_OUTPUT"
-
-      - name: dbt deps
-        working-directory: transform
-        run: uv run dbt deps
 
       # Warns once order tables stop receiving new months (static dump, D18)
       - name: dbt source freshness (target prod)
@@ -788,7 +810,8 @@ jobs:
       # state:modified+ against its manifest (changed models, seeds, snapshots, tests,
       # the macros they call, configs, and everything downstream). Full build when
       # that baseline isn't enough: no manifest, a manual run (the way to rebuild
-      # prod), orders or review labels loaded by this run (new data is no project change), or a changed
+      # prod), orders or review labels loaded by this run (new data is no project change),
+      # deletion requests applied by this run (rows left raw: everything built from it is stale), or a changed
       # uv.lock (a dbt or adapter upgrade changes materialization SQL, which the
       # state comparison doesn't see).
       - name: Build scope
@@ -798,9 +821,11 @@ jobs:
           ORDERS_LOADED: ${{ steps.ingest.outputs.orders_loaded }}
           LABELS_LOADED: ${{ steps.ingest.outputs.labels_loaded }}
           BASELINE_SHA: ${{ steps.baseline.outputs.sha }}
+          DELETIONS_APPLIED: ${{ steps.deletions.outputs.applied }}
         run: |
           if [ ! -f prod-state/manifest.json ]; then reason="no prod manifest"
           elif [ "$MANUAL" = true ]; then reason="manual run"
+          elif [ "$DELETIONS_APPLIED" != 0 ]; then reason="deletion requests of ${DELETIONS_APPLIED:-an unknown number of} people applied"
           elif [ "$ORDERS_LOADED" != 0 ]; then reason="the load brought ${ORDERS_LOADED:-an unknown number of} orders"
           elif [ "$LABELS_LOADED" != 0 ]; then reason="the load brought ${LABELS_LOADED:-an unknown number of} review labels"
           elif ! git diff --quiet "$BASELINE_SHA" HEAD -- uv.lock; then reason="uv.lock changed since ${BASELINE_SHA:0:7} (or that commit is unknown)"
@@ -869,6 +894,15 @@ jobs:
         run: |
           uv run dbt build --target prod --select +fct_dbt_job_costs fct_slo_daily --exclude-resource-type unit_test \
             --vars '{disable_dbt_artifacts_autoupload: true, disable_run_results: true, disable_tests_results: true, disable_dbt_invocation_autoupload: true}'
+
+      # After the full build that followed an apply: no table prod builds may still
+      # hold the people (D105). One count per table with a person column, so only then.
+      - name: Check the applied deletion requests (target prod)
+        if: steps.deletions.outputs.applied != '0'
+        working-directory: transform
+        run: |
+          uv run dbt run-operation check_deletion_requests --target prod --args '{applied_only: true}' | tee "$RUNNER_TEMP/deletions-check.log"
+          grep -o 'Deletion requests checked.*' "$RUNNER_TEMP/deletions-check.log" >> "$GITHUB_STEP_SUMMARY"
 
       # The catalog checks every schema of the project's relations; the job-history
       # source's schema is `region-eu` (INFORMATION_SCHEMA), whose tables BigQuery
