@@ -27,10 +27,15 @@ with expected as (
     select
         '2018-01-07' as date_day,
         1 as week_of_year
-    -- last day of the dimension (Monday)
+    -- a Monday in the last days of a year
     union all
     select
         '2019-12-30' as date_day,
+        52 as week_of_year
+    -- last day of the dimension (Thursday)
+    union all
+    select
+        '2099-12-31' as date_day,
         52 as week_of_year
 )
 
