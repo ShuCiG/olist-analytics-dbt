@@ -48,6 +48,8 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   dump serves a generated month (ingestion/synthetic.py) once the last load of
   orders is at least H hours old; the runs in between skip the load as before.
   `--synthetic-every-hours H --until YYYY-MM` generates every month up to it at once.
+  `--synthetic-max-months N` ends the feed N months after the dump (D116): `--next`
+  at the end loads nothing more, `--until` past it is refused.
   Raw orders carry `_is_synthetic` (false for the dump's rows). Once the cursor is
   past the dump, every load keeps the generated customers and sellers of the loaded
   months in the reference snapshots, with or without the flag.
@@ -623,6 +625,7 @@ def synthetic_until(
     every_hours: float | None,
     last_loaded_at: datetime | None,
     now: datetime,
+    max_months: int | None = None,
 ) -> str | None:
     """The last generated month this run's dump needs; None: the files alone (D112).
 
@@ -631,14 +634,29 @@ def synthetic_until(
     With `every_hours`: `--until` past the dump generates up to it; `--next` on a
     used-up dump adds the month after the cursor once the last load of orders is
     `every_hours` old (minus SYNTHETIC_SLACK).
+
+    `max_months` (D116) ends the feed that many months after the dump: `--next` at
+    the end generates nothing more (the loaded months stay), `--until` past it is
+    refused.
     """
     if not last_real_month:
         return None
+    feed_end = last_real_month
+    for _ in range(max_months or 0):
+        feed_end = next_month(feed_end)
+    if max_months is not None and until and until > feed_end:
+        raise SystemExit(
+            f"--until {until} is past the end of the generated feed, {feed_end} "
+            f"({max_months} months after the dump, --synthetic-max-months)"
+        )
     months = [cursor] if cursor and cursor > last_real_month else []
     if every_hours is not None:
         if until and until > last_real_month:
             months.append(until)
         elif next_only and cursor and cursor >= last_real_month:
+            if max_months is not None and cursor >= feed_end:
+                print(f"Generated feed ended: {max_months} months after the dump, last month {feed_end}")
+                return max(months) if months else None
             if last_loaded_at and last_loaded_at.tzinfo is None:
                 last_loaded_at = last_loaded_at.replace(tzinfo=UTC)
             due = last_loaded_at is None or now - last_loaded_at >= timedelta(hours=every_hours) - SYNTHETIC_SLACK
@@ -806,6 +824,12 @@ def main() -> None:
         metavar="H",
         help="after the dump: --next loads a generated month once the last load is H hours old (D112)",
     )
+    parser.add_argument(
+        "--synthetic-max-months",
+        type=int,
+        metavar="N",
+        help="the generated feed ends N months after the dump: --next adds nothing past it, --until past it is refused (D116)",
+    )
     args = parser.parse_args()
 
     dump = SourceDump(Path(kagglehub.dataset_download(KAGGLE_DATASET)))
@@ -829,6 +853,7 @@ def main() -> None:
         args.synthetic_every_hours,
         status[2] if status else None,
         datetime.now(UTC),
+        args.synthetic_max_months,
     )
     if not args.full_refresh and nothing_to_load(pipeline, dump, args.until, cursor):
         print(f"No new order months after {loaded_until(pipeline)}: load skipped")

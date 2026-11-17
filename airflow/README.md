@@ -144,8 +144,10 @@ customer and some seller ids, and flagged `_is_synthetic` in raw (`fct_orders.is
 generated month comes about once a day and never piles up while the machine is off.
 The runs in between stay green, the dlt load and dbt are skipped (D49: an idle run
 reads only the feed status, one cached BigQuery query). Prod and CI load the dump
-alone. Should the feed stop (a failing run), `_loaded_at` stops moving and the `STALE`
-email reports it (see below).
+alone. The feed ends 12 months after the dump (`--synthetic-max-months 12`, D116: the last
+generated month is 2019-10); after it every run skips and, once the last load is a day old,
+the `STALE` email reports it (see below). Should the feed stop earlier (a failing run),
+`_loaded_at` stops moving and the same email reports it.
 
 Catch up faster with a manual run that loads up to a month at once (the `until`
 param always runs dbt):
