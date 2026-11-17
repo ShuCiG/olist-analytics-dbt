@@ -57,6 +57,7 @@ After the dump (D112), generated months (`ingestion/synthetic.py`, flagged `_is_
 uv run python ingestion/pipeline.py --until 2019-03 --synthetic-every-hours 24   # 2018-11 .. 2019-03 at once
 uv run python ingestion/pipeline.py --next --synthetic-every-hours 24            # one more, if the last load is a day old
 uv run python ingestion/pipeline.py --next --synthetic-every-hours 0             # one more, now
+uv run python ingestion/pipeline.py --next --synthetic-every-hours 0 --synthetic-max-months 12  # ... not past 2019-10 (what Airflow runs)
 ```
 
 A month comes out the same on every run. After a change to the generator (`synthetic.VERSION` bumped) the loader

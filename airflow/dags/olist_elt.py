@@ -76,9 +76,11 @@ EDR_FAILED = 99
 
 # Which orders to load: up to the `until` param if given, else the next month
 CHUNK_FLAG = "{{ '--until ' ~ params.until if params.until else '--next' }}"
-# After the dump: a generated month once a day (D112). Hourly runs in between find
-# nothing new and skip, as on a used-up dump; `until` past the dump generates up to it
-SYNTHETIC_FLAG = "--synthetic-every-hours 24"
+# After the dump: a generated month once a day (D112), 12 months in all (D116). Hourly
+# runs in between, and every run after the last month, find nothing new and skip, as on
+# a used-up dump; `until` past the dump generates up to it (not past the 12 months)
+SYNTHETIC_MONTHS = 12
+SYNTHETIC_FLAG = f"--synthetic-every-hours 24 --synthetic-max-months {SYNTHETIC_MONTHS}"
 # Elementary's clock (D38): the last order loaded so far, pushed by has_new_orders.
 # `or ''`: a missing XCom renders as the string "None", which dbt can't parse as a
 # time (seen on a run started by the previous image); empty = the wall clock.

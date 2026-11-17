@@ -166,6 +166,27 @@ def test_synthetic_until(
     assert pipeline.synthetic_until("2018-06", cursor, until, next_only, every, last_loaded_at, NOW) == expected
 
 
+@pytest.mark.parametrize(
+    ("cursor", "until", "next_only", "expected"),
+    [
+        ("2018-06", None, True, "2018-07"),  # first generated month
+        ("2018-08", None, True, "2018-09"),  # the last one the limit allows
+        ("2018-09", None, True, "2018-09"),  # at the end: nothing more, loaded months kept
+        ("2018-03", "2018-09", False, "2018-09"),  # --until up to the end
+    ],
+)
+def test_synthetic_until_stops_at_the_feed_end(
+    cursor: str, until: str | None, next_only: bool, expected: str
+) -> None:
+    old = NOW - timedelta(hours=48)
+    assert pipeline.synthetic_until("2018-06", cursor, until, next_only, 24, old, NOW, max_months=3) == expected
+
+
+def test_until_past_the_feed_end_is_refused() -> None:
+    with pytest.raises(SystemExit, match="2018-09"):
+        pipeline.synthetic_until("2018-06", "2018-06", "2018-10", False, 24, None, NOW, max_months=3)
+
+
 def test_naive_load_time_counts_as_utc() -> None:
     naive = (NOW - timedelta(hours=30)).replace(tzinfo=None)
     assert pipeline.synthetic_until("2018-06", "2018-06", None, True, 24, naive, NOW) == "2018-07"
@@ -253,3 +274,17 @@ def test_months_of_another_generator_version_stop_the_load(run, monkeypatch: pyt
     run("--full-refresh")
     assert query(run.db, "select count(*) from raw.orders where _is_synthetic") == [(0,)]
     assert run("--next", "--synthetic-every-hours", "0")["last_order_at"][:7] == "2018-07"
+
+
+def test_feed_ends_after_max_months(run) -> None:
+    run()
+    flags = ("--synthetic-every-hours", "0", "--synthetic-max-months", "2")
+    assert run("--next", *flags)["last_order_at"][:7] == "2018-07"
+    assert run("--next", *flags)["last_order_at"][:7] == "2018-08"
+    ended = run("--next", *flags)  # the limit: nothing loaded, the 2 months stay
+    assert ended["orders_loaded"] == 0 and ended["last_order_at"][:7] == "2018-08"
+    assert query(run.db, "select count(distinct left(order_purchase_timestamp, 7)) from raw.orders where _is_synthetic") == [(2,)]
+    orphans = "select count(*) from raw.orders where customer_id not in (select customer_id from raw.customers)"
+    assert query(run.db, orphans) == [(0,)]
+    with pytest.raises(SystemExit, match="end of the generated feed"):
+        run("--until", "2018-09", *flags)
