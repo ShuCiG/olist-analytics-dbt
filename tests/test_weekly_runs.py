@@ -32,3 +32,15 @@ def test_missed_monday_fails_on_tuesday() -> None:
 
 def test_no_success_at_all_fails() -> None:
     assert weekly_runs.stale({"snowflake.yml": None}, NOW) == ["snowflake.yml: no successful run on main"]
+
+
+def test_newest_success_skips_failed_and_running_runs() -> None:
+    runs = [
+        {"created_at": "2026-11-17T06:37:03Z", "conclusion": None},  # still running
+        {"created_at": "2026-11-16T06:37:03Z", "conclusion": "success"},
+        {"created_at": "2026-11-12T06:37:03Z", "conclusion": "failure"},
+        {"created_at": "2026-11-09T10:05:31Z", "conclusion": "success"},
+    ]
+    assert weekly_runs.newest_success(runs) == datetime(2026, 11, 16, 6, 37, 3, tzinfo=UTC)
+    assert weekly_runs.newest_success(runs[2:3]) is None
+    assert weekly_runs.newest_success([]) is None
