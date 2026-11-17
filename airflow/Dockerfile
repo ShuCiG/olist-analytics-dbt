@@ -2,7 +2,7 @@
 # built from uv.lock: same versions as local dev and CI, and no dependency clash
 # with Airflow's own packages. Cosmos calls dbt from there as a subprocess.
 # Base images by digest (a tag can be re-pushed); Dependabot proposes updates
-FROM apache/airflow:3.3.2-python3.12@sha256:9df9c8be4096b9cc626bd7cb1f2b8c712eef66c59c615f8c7e6200871ca10bd1
+FROM apache/airflow:3.4.0-python3.12@sha256:818f94affc5bd7ce0be0cc04f2ace09aa8382e65190a73a08881229ff32700cb
 
 COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
