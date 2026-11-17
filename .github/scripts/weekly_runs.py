@@ -24,16 +24,26 @@ WORKFLOWS = ["databricks.yml", "snowflake.yml"]
 MAX_AGE = timedelta(days=7, hours=12)
 
 
+def newest_success(runs: list[dict]) -> datetime | None:
+    """Creation time of the newest run with conclusion `success`, None if there is none."""
+    times = [r["created_at"] for r in runs if r.get("conclusion") == "success"]
+    return datetime.fromisoformat(max(times).replace("Z", "+00:00")) if times else None
+
+
 def last_success(repo: str, workflow: str, token: str) -> datetime | None:
-    """Start time of the latest successful run on main, None if there is none."""
-    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?branch=main&status=success&per_page=1"
+    """Start time of the latest successful run on main, None if there is none.
+
+    The runs are filtered here, not by the API's `status=success`: that filter did not
+    return a successful run of 2026-11-16 (#309) and raised a false alarm.
+    """
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?branch=main&per_page=30"
     req = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         runs = json.load(resp)["workflow_runs"]
-    return datetime.fromisoformat(runs[0]["created_at"].replace("Z", "+00:00")) if runs else None
+    return newest_success(runs)
 
 
 def stale(last: dict[str, datetime | None], now: datetime, max_age: timedelta = MAX_AGE) -> list[str]:
