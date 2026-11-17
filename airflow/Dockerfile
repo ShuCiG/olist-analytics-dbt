@@ -14,6 +14,15 @@ RUN pip install --no-cache-dir \
     sqlglot \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
 
+# soupsieve below 4.0.0 (CVE-2026-126190, DoS in the descendant combinator) comes with
+# the constraint file via beautifulsoup4 <- redshift_connector, in no repo lock file, so
+# Dependabot misses it (#300). Same version and hashes as the edr venv (kept in step by
+# hand); bs4 accepts it.
+COPY --chown=airflow: airflow/soupsieve-requirements.txt /tmp/soupsieve-requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/soupsieve-requirements.txt \
+    && python -c "import bs4; from soupsieve import select; print('bs4', bs4.__version__)" \
+    && rm /tmp/soupsieve-requirements.txt
+
 # Scheduler fix: a deferred task whose trigger fires within seconds is not failed by
 # the stale executor success of its pre-deferral exit (#285, D115, apache/airflow#71580).
 # The build fails when the code to patch changed: review it on every Airflow upgrade.
