@@ -505,8 +505,10 @@ uv run mf query --metrics revenue,average_order_value --group-by metric_time__mo
 ```
 
 The dashboard keeps its own SQL (it runs without dbt), and a test compares every KPI tile with `mf query` on the
-same data and period. Same numbers on DuckDB and BigQuery: 99,441 orders, R$ 15,735,527.03 revenue, 6.77 % late
-deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the month after their first.
+same data and period. Same numbers on DuckDB and BigQuery for the full dump: 99,441 orders, R$ 15,735,527.03 revenue,
+6.77 % late deliveries, 3.12 % repeat customers; 0.48 % of new customers order again in the month after their first.
+BigQuery prod has one person less since the first deletion request ([D105](docs/DECISIONS.md)): 99,439 orders,
+R$ 15,735,491.09, the rates unchanged to two decimals.
 
 ### Agents query metrics, not tables
 
