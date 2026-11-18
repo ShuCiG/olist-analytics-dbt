@@ -84,6 +84,7 @@ import os
 import re
 import sys
 import warnings
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -154,11 +155,34 @@ def read_csv_as_strings(path: Path) -> pa.Table:
     header = csv_header(path)
     return pacsv.read_csv(
         path,
+        # Review texts hold line breaks: without this a quoted field that spans two read
+        # blocks (a dump over ~1 MB per block, e.g. the scaled one of #250) fails to parse
+        parse_options=pacsv.ParseOptions(newlines_in_values=True),
         convert_options=pacsv.ConvertOptions(
             column_types={name: pa.string() for name in header},
             strings_can_be_null=True,
         ),
     )
+
+
+def csv_blocks(path: Path, columns: list[str] | None = None) -> Iterator[pa.Table]:
+    """The file as tables of strings, one per read block (64 MB), only `columns` if given.
+
+    The loader filters every block down to the chunk's rows, so a dump never sits in
+    memory whole: at 100x (10M orders, #250) `read_csv_as_strings` ran out of memory.
+    """
+    reader = pacsv.open_csv(
+        path,
+        read_options=pacsv.ReadOptions(block_size=64 << 20),
+        parse_options=pacsv.ParseOptions(newlines_in_values=True),
+        convert_options=pacsv.ConvertOptions(
+            column_types={name: pa.string() for name in csv_header(path)},
+            strings_can_be_null=True,
+            include_columns=columns or [],
+        ),
+    )
+    for batch in reader:
+        yield pa.Table.from_batches([batch])
 
 
 def with_loaded_at(table: pa.Table, loaded_at: datetime) -> pa.Table:
@@ -181,7 +205,10 @@ def read_orders(source_dir: Path) -> pa.Table:
     The chunk and the cursor come from string order and the "YYYY-MM" prefix: one
     malformed value would pick the wrong month or poison the cursor.
     """
-    orders = read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0])
+    return check_purchase_times(read_csv_as_strings(source_dir / ORDER_TABLES["orders"][0]))
+
+
+def check_purchase_times(orders: pa.Table) -> pa.Table:
     purchased_at = pc.field("order_purchase_timestamp")
     bad = orders.filter(
         pc.is_valid(purchased_at) & ~pc.match_substring_regex(purchased_at, f"^{TIMESTAMP}$")
@@ -192,6 +219,7 @@ def read_orders(source_dir: Path) -> pa.Table:
     return orders
 
 
+ORDER_KEY_COLUMNS = ["order_id", "customer_id", "order_purchase_timestamp"]
 SOURCE_FILES = {**REFERENCE_TABLES, **{table: file for table, (file, _) in ORDER_TABLES.items()}}
 
 
@@ -223,9 +251,40 @@ class SourceDump:
         return read_csv_as_strings(self.source_dir / SOURCE_FILES[table])
 
     @functools.cached_property
+    def real_order_keys(self) -> pa.Table:
+        """`order_id`, `customer_id` and purchase time of the file's orders, read in blocks."""
+        path = self.source_dir / ORDER_TABLES["orders"][0]
+        # Test dumps may lack customer_id: the key columns the file has
+        columns = [name for name in ORDER_KEY_COLUMNS if name in csv_header(path)]
+        blocks = list(csv_blocks(path, columns))
+        keys = pa.concat_tables(blocks) if blocks else read_csv_as_strings(path).select(columns)
+        return check_purchase_times(keys)
+
+    @property
+    def order_keys(self) -> pa.Table:
+        """The same for every order the load can see: with generated months when set (D112)."""
+        if self.synthetic_until:
+            orders = self.table("orders")
+            return orders.select([name for name in ORDER_KEY_COLUMNS if name in orders.column_names])
+        return self.real_order_keys
+
+    @functools.cached_property
     def last_real_month(self) -> str | None:
-        last = pc.max(self.real_orders["order_purchase_timestamp"]).as_py()
+        last = pc.max(self.real_order_keys["order_purchase_timestamp"]).as_py()
         return last[:7] if last else None
+
+    def order_rows(self, name: str, order_ids: pa.ChunkedArray) -> pa.Table:
+        """The rows of an order table that belong to `order_ids`, filtered block by block."""
+        if self.synthetic_until:
+            table = self.table(name)
+            return table.filter(pc.is_in(table["order_id"], value_set=order_ids))
+        path = self.source_dir / SOURCE_FILES[name]
+        parts = []
+        for block in csv_blocks(path):
+            if name == "orders":
+                block = block.append_column(SYNTHETIC_FLAG, pa.array([False] * block.num_rows, pa.bool_()))
+            parts.append(block.filter(pc.is_in(block["order_id"], value_set=order_ids)))
+        return pa.concat_tables(parts) if parts else self.table(name)
 
     @functools.cache
     def _generate(self, until: str) -> dict[str, pa.Table]:
@@ -415,7 +474,7 @@ def olist_source(
         loaded_until = state.get(STATE_KEY)
         # Timestamps are ISO strings, so string order = time order
         purchased_at = pc.field("order_purchase_timestamp")
-        all_orders = dump.orders()
+        all_orders = dump.order_keys
         in_chunk = pc.is_valid(purchased_at)
         if loaded_until:
             in_chunk &= purchased_at >= next_month(loaded_until)
@@ -443,8 +502,7 @@ def olist_source(
         return orders["order_id"]
 
     def order_rows(table_name: str, file_name: str, primary_key: list[str]):
-        table = dump.table(table_name)
-        table = table.filter(pc.is_in(table["order_id"], value_set=chunk_order_ids()))
+        table = dump.order_rows(table_name, chunk_order_ids())
         refuse_conflicting_rows(table, primary_key, file_name)
         yield with_loaded_at(with_required(table, primary_key), loaded_at)
 
@@ -683,7 +741,7 @@ def nothing_to_load(pipeline: dlt.Pipeline, dump: SourceDump, until: str | None,
     left = purchased_at >= next_month(cursor)
     if until:
         left &= purchased_at < next_month(until)
-    return dump.orders().filter(left).num_rows == 0
+    return dump.order_keys.filter(left).num_rows == 0
 
 
 def new_columns(load_info: LoadInfo, schema: Schema) -> dict[str, list[str]]:
@@ -832,7 +890,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    dump = SourceDump(Path(kagglehub.dataset_download(KAGGLE_DATASET)))
+    # OLIST_DUMP_DIR: a scaled dump for the scale test (ingestion/scale_dump.py, #250)
+    dump_dir = os.environ.get("OLIST_DUMP_DIR")
+    dump = SourceDump(Path(dump_dir) if dump_dir else Path(kagglehub.dataset_download(KAGGLE_DATASET)))
     pipeline = dlt.pipeline(
         # Separate state per destination and dataset. Not per DuckDB file: Airflow's
         # file has its own dlt state dir (container volume); a local cursor from
