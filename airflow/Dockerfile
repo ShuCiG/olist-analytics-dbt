@@ -7,12 +7,16 @@ FROM apache/airflow:3.4.0-python3.12@sha256:818f94affc5bd7ce0be0cc04f2ace09aa838
 COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
 # Airflow side: Cosmos, and sqlglot for the column lineage the producer's callback
-# sends (lineage/columns.py, D87); pinned against Airflow's constraint file
+# sends (lineage/columns.py, D87); pinned against Airflow's constraint file.
+# The version is the base image's own ENV AIRFLOW_VERSION (= the FROM tag), so pin and
+# constraint file cannot drift from the base (#311: Dependabot edited only the FROM line
+# once). tests/test_airflow_version.py bans literal versions here; check_dags.py compares
+# the installed airflow with the same variable.
 RUN pip install --no-cache-dir \
-    "apache-airflow==3.3.2" \
+    "apache-airflow==${AIRFLOW_VERSION}" \
     "astronomer-cosmos==1.16.0" \
     sqlglot \
-    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt"
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.12.txt"
 
 # soupsieve below 4.0.0 (CVE-2026-126190, DoS in the descendant combinator) comes with
 # the constraint file via beautifulsoup4 <- redshift_connector, in no repo lock file, so

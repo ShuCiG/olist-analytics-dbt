@@ -2,9 +2,9 @@
 
 A deferred task's worker exits with an executor SUCCESS for its try. When the trigger
 fires within seconds, the resumed attempt can be RUNNING (same try_number,
-`next_method` set) before the scheduler processes that stale event. Airflow 3.3.2
-ignores it only while the TI is SCHEDULED (3.4.0: also QUEUED), so the scheduler logs
-"state mismatch" and fails a task that is fine. Upstream: apache/airflow#71580 (open),
+`next_method` set) before the scheduler processes that stale event. Airflow 3.4.0
+ignores it only while the TI is SCHEDULED or QUEUED (3.3.2: SCHEDULED only), so the
+scheduler logs "state mismatch" and fails a task that is fine. Upstream: apache/airflow#71580 (open),
 fix proposals #71579 and #72767 (closed unmerged) make exactly this change.
 
 Run once in the image build (airflow/Dockerfile). Fails the build when the code to
@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 MARKER = "# olist patch #285: resumed attempt may already be running"
-OLD = """                    ti.state == TaskInstanceState.SCHEDULED
+OLD = """                    ti.state in (TaskInstanceState.SCHEDULED, TaskInstanceState.QUEUED)
                     and state == TaskInstanceState.SUCCESS
                     and ti.next_method is not None
 """

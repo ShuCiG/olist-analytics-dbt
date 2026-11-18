@@ -26,7 +26,8 @@ rendered too; parsing never authenticates.
 Also runs the column lineage (lineage/) on a small model, on the image's own sqlglot:
 Airflow's constraint file pins it, older than uv.lock's, and pytest only sees the
 lock's version. An API gap failed only in the producer's callback, as a warning (#284).
-And checks that the image's Airflow scheduler carries the patch in airflow/patches (#285).
+And checks that the image's Airflow scheduler carries the patch in airflow/patches (#285),
+and that the installed core is the base image's version (#311).
 """
 
 import sys
@@ -92,7 +93,22 @@ def scheduler_patched() -> bool:
     return True
 
 
+def core_matches_base() -> bool:
+    """The installed Airflow core is the base image's version (#311: a pin once downgraded it)."""
+    import os
+
+    import airflow
+
+    base = os.environ.get("AIRFLOW_VERSION")
+    if airflow.__version__ != base:
+        print(f"Airflow core {airflow.__version__} != base image AIRFLOW_VERSION {base} (#311)", file=sys.stderr)
+        return False
+    print(f"airflow core {airflow.__version__} = base image")
+    return True
+
+
 scheduler_ok = scheduler_patched()
+core_ok = core_matches_base()
 bag = DagBag(dag_folder=DAG_FOLDER)
 
 for path, error in bag.import_errors.items():
@@ -214,4 +230,4 @@ for dag_id in sorted(EXPECTED & set(bag.dag_ids)):
             )
             missing.add(dag_id)
 
-sys.exit(1 if bag.import_errors or missing or not lineage_ok or not scheduler_ok else 0)
+sys.exit(1 if bag.import_errors or missing or not lineage_ok or not scheduler_ok or not core_ok else 0)

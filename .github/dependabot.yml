@@ -13,6 +13,11 @@ updates:
     directory: /airflow
     schedule:
       interval: weekly
+    ignore:
+      # An Airflow minor/major upgrade is a deliberate PR (pin, constraint file, scheduler
+      # patch review, D115); Dependabot edits only the FROM line (#311)
+      - dependency-name: apache/airflow
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: terraform
     directory: /infra
     schedule:
