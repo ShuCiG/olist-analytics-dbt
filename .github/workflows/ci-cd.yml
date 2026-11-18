@@ -458,7 +458,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
-            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .workflow_run.id // empty')
           if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
             echo "slim=true" >> "$GITHUB_OUTPUT"
           else
@@ -596,7 +596,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
-            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .workflow_run.id // empty')
           gh run download "$run_id" --name prod-manifest --dir prod-state
 
       - name: Load raw up to 2018-06 (dlt → BigQuery)
@@ -798,7 +798,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           read -r run_id sha < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-manifest&per_page=30" \
-            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0] // empty | "\(.workflow_run.id) \(.workflow_run.head_sha)"') || true
+            --jq '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")] | sort_by(.created_at) | last // empty | "\(.workflow_run.id) \(.workflow_run.head_sha)"') || true
           if [ -n "$run_id" ] && gh run download "$run_id" --name prod-manifest --dir prod-state; then
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           else
