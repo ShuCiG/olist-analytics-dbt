@@ -7,8 +7,7 @@ engines hand dbt.ref() back as their own dataframe type, so the scoring runs in
 pandas and works the same everywhere.
 """
 
-import math
-
+import numpy as np
 import pandas as pd
 
 
@@ -22,18 +21,29 @@ def to_pandas(relation) -> pd.DataFrame:
 def quintile_score(values: pd.Series) -> pd.Series:
     """1-5 by percentile rank; ties share the higher score, so equal values never split."""
     pct = values.rank(method="max", pct=True)
-    return pct.map(lambda p: max(1, math.ceil(p * 5))).astype("int64")
+    # vectorized: a per-row Python map ran out of memory at 9.6M customers (#317)
+    return np.ceil(pct * 5).clip(lower=1).astype("int64")
 
 
-def segment(row) -> str:
-    r, f, m = row.recency_score, row.frequency_score, row.monetary_score
-    if f >= 2:
-        return "champions" if r >= 4 else "loyal_at_risk"
-    if r >= 4:
-        return "new_big_spenders" if m >= 4 else "new_customers"
-    if r >= 2:
-        return "big_spenders_at_risk" if m >= 4 else "hibernating"
-    return "lost"
+def segment(rfm: pd.DataFrame) -> pd.Series:
+    r, f, m = rfm["recency_score"], rfm["frequency_score"], rfm["monetary_score"]
+    conditions = [
+        (f >= 2) & (r >= 4),
+        f >= 2,
+        (r >= 4) & (m >= 4),
+        r >= 4,
+        (r >= 2) & (m >= 4),
+        r >= 2,
+    ]
+    choices = [
+        "champions",
+        "loyal_at_risk",
+        "new_big_spenders",
+        "new_customers",
+        "big_spenders_at_risk",
+        "hibernating",
+    ]
+    return pd.Series(np.select(conditions, choices, default="lost"), index=rfm.index)
 
 
 def model(dbt, session):
@@ -70,7 +80,7 @@ def model(dbt, session):
         + rfm["frequency_score"].astype(str)
         + rfm["monetary_score"].astype(str)
     )
-    rfm["segment"] = rfm.apply(segment, axis=1).astype(str)
+    rfm["segment"] = segment(rfm)
     rfm["as_of_date"] = as_of.date()
 
     return rfm
