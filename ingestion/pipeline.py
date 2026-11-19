@@ -165,7 +165,9 @@ def read_csv_as_strings(path: Path) -> pa.Table:
     )
 
 
-def csv_blocks(path: Path, columns: list[str] | None = None) -> Iterator[pa.Table]:
+def csv_blocks(
+    path: Path, columns: list[str] | None = None, block_size: int = 64 << 20
+) -> Iterator[pa.Table]:
     """The file as tables of strings, one per read block (64 MB), only `columns` if given.
 
     The loader filters every block down to the chunk's rows, so a dump never sits in
@@ -173,7 +175,7 @@ def csv_blocks(path: Path, columns: list[str] | None = None) -> Iterator[pa.Tabl
     """
     reader = pacsv.open_csv(
         path,
-        read_options=pacsv.ReadOptions(block_size=64 << 20),
+        read_options=pacsv.ReadOptions(block_size=block_size),
         parse_options=pacsv.ParseOptions(newlines_in_values=True),
         convert_options=pacsv.ConvertOptions(
             column_types={name: pa.string() for name in csv_header(path)},
