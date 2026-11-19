@@ -19,10 +19,18 @@ if warehouse.BACKEND == "bigquery":
     pages.append(st.Page("views/costs.py", title="dbt cost on BigQuery", icon=":material/savings:"))
 page = st.navigation(pages)
 
-lo, hi = warehouse.date_bounds()
-default = warehouse.default_period(lo, hi)
-loaded = warehouse.last_load()
 with st.sidebar:
+    # Generated months (D112) exist only in the Airflow feed: no toggle where there are none
+    generated = warehouse.has_generated() and st.toggle(
+        "Include generated months",
+        value=False,
+        key="include_generated",
+        help="After the end of the Olist dump the feed goes on with generated orders "
+        "(`is_synthetic`). Off: the dump's real orders only.",
+    )
+    lo, hi = warehouse.date_bounds(generated)
+    default = warehouse.default_period(lo, hi, generated)
+    loaded = warehouse.last_load()
     picked = st.date_input(
         "Purchase date",
         value=default,
@@ -35,6 +43,12 @@ with st.sidebar:
     if isinstance(picked, tuple) and len(picked) == 2:
         st.session_state["period"] = picked
     st.session_state.setdefault("period", default)
+    if generated:
+        st.warning(
+            "Orders after the end of the Olist dump are **generated**: drawn from the dump's own "
+            "orders to keep the live feed going. Not real sales. "
+            "[Why](https://github.com/ShuCiG/olist-analytics-dbt/blob/main/docs/DECISIONS.md)"
+        )
     st.caption(
         f"Data as of **{hi}** (latest order)"
         + (f", loaded {loaded} UTC" if loaded else "")
