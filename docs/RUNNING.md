@@ -401,7 +401,7 @@ dataset (`raw`, `marts`, `airflow_raw`, ...).
 | Raw, past 48 h | reload from the dump (below) | none from the dump; generated months come out the same (seeded) |
 | dlt state (`_dlt_pipeline_state`) | restore the table, as above | none |
 | dbt state (the `prod-manifest` artifact) | a manual deploy | none |
-| A mart or any derived dataset | undelete, or rebuild by a manual deploy | none (derived from raw) |
+| A mart or any derived dataset | undelete (0.7 s), or rebuild: `dbt build --select path:models/marts` (2 min), or a manual deploy | none (derived from raw) |
 
 ```bash
 P=olist-analytics-dbt-472315
