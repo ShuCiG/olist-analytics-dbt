@@ -12,6 +12,15 @@ data_tests:
     config:
       meta: {alert_unit: orders}
 
+  - name: assert_revenue_reconciles_with_payments
+    description: >-
+      Revenue (items + freight of sold orders) and the payments received for the same
+      orders differ by more than 0.5%. Installment fees, vouchers and orders without
+      items explain about 0.02% in the full data; more means payments or prices are
+      missing or wrong. The check passes or fails once per build, so it counts one failure.
+    config:
+      meta: {alert_unit: totals}
+
   - name: assert_order_items_sum_to_order_amount
     description: >-
       Orders whose line items don't add up to the order total in fct_orders. This

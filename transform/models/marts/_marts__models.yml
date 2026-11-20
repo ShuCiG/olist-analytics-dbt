@@ -39,7 +39,7 @@ models:
   - name: dim_customers
     description: >
       One row per person (`customer_unique_id`). Location from the latest order.
-      `lifetime_value` = payments on orders not canceled/unavailable.
+      `lifetime_value` = `order_amount` (items + freight) of orders not canceled/unavailable, the same "revenue" as the metrics.
     config:
       group: parties
       contract:
@@ -103,7 +103,7 @@ models:
         data_type: boolean
         dimension: categorical
       - name: lifetime_value
-        description: Sum of payments on orders that are not canceled/unavailable, in BRL.
+        description: Revenue of the person, in BRL - sum of `order_amount` (items + freight) of orders that are not canceled/unavailable.
         data_type: &money_type "{{ 'numeric' if target.type == 'bigquery' else 'numeric(18, 2)' }}"
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
@@ -221,7 +221,7 @@ models:
       person's first order) and month since that first order, from month 0 up to
       the latest month with orders; months nobody ordered in are rows with zeros.
       Active = placed any order that month (all statuses, as `orders_count` in
-      `dim_customers`); revenue = payments on orders not canceled/unavailable (as
+      `dim_customers`); revenue = `order_amount` of orders not canceled/unavailable (as
       `lifetime_value`). The latest month is partial while the feed runs.
     config:
       group: parties
@@ -286,7 +286,7 @@ models:
         description: Orders of the cohort in `activity_month`, all statuses.
         data_type: bigint
       - name: revenue
-        description: Payments of the cohort in `activity_month` on orders not canceled/unavailable, in BRL.
+        description: Revenue of the cohort in `activity_month`, in BRL - `order_amount` (items + freight) of orders not canceled/unavailable.
         data_type: *money_type
       - name: cumulative_revenue
         description: "`revenue` from month 0 up to this month, in BRL."
@@ -526,7 +526,7 @@ models:
   - name: fct_orders
     description: >
       One row per order with item, payment, delivery and review measures.
-      `order_amount` = items + freight; `paid_amount` = what was paid (can differ: installment fees, vouchers).
+      `order_amount` = items + freight, the "revenue" of every metric and mart; `paid_amount` = what was paid (can differ: installment fees, vouchers, orders without items).
 
 
       Accumulating snapshot fact: the row carries one timestamp per milestone of the
