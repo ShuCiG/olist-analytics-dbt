@@ -58,7 +58,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 618 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 633 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -144,7 +144,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 170 + 28 + 342 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 172 + 28 + 377 checks on the data;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -361,11 +361,11 @@ flowchart LR
 | **220 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 540 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 577 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **618 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **633 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -584,8 +584,8 @@ them out ..."). Failed GitHub Actions jobs are emailed too, with the failed step
 one graph per warehouse from the dlt load through the raw tables and one job per dbt model to the marts, with
 column-level lineage (`fct_orders.order_amount` ← `int_order_items_aggregated_to_orders` ← `stg_olist__order_items.price`,
 `freight_value` ← raw). Cosmos' events lump the whole build into one job, and OpenLineage's SQL parser stops at dbt's
-`select *` import CTEs (2 of 25 models traced); the DAG re-sends Cosmos' per-model events and traces columns with
-sqlglot, parents first (25 of 25 SQL models, [D87](docs/DECISIONS.md)). The graph ends at the dashboard: the dbt
+`select *` import CTEs (2 of 25 models traced when measured); the DAG re-sends Cosmos' per-model events and traces columns with
+sqlglot, parents first (30 of 30 SQL models, [D87](docs/DECISIONS.md)). The graph ends at the dashboard: the dbt
 exposure becomes a job reading the marts it depends on ([D88](docs/DECISIONS.md)). A failed build shows the failed model
 as FAILED next to the ones built before it ([D89](docs/DECISIONS.md)).
 
