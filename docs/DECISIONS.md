@@ -1083,3 +1083,24 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - Fix: the official base image sets `ENV AIRFLOW_VERSION` to its own version. The pip pin and the constraint URL now read `${AIRFLOW_VERSION}`, so the base tag is the only place. An `ARG` of the same name would not work: an `ENV` of the base overrides it in `RUN`.
 - Guards: `tests/test_airflow_version.py` (literal version, `ARG` or a foreign base image in the Dockerfile fail it); `airflow/check_dags.py` fails when the installed `airflow.__version__` differs from the base's `AIRFLOW_VERSION`; Dependabot ignores minor and major bumps of `apache/airflow`, so an Airflow upgrade is a deliberate PR (patch releases still arrive).
 - Upgrade to 3.4.0 (the other option was to hold 3.3.2): the scheduler patch of D115 failed the image build on 3.4.0 as designed (the block now reads `SCHEDULED, QUEUED`), and was adapted to that form; it still widens the condition to `RUNNING`. Cosmos 1.16.0 was already pinned. Image checked: core 3.4.0, `pip check` clean, `check_dags.py` passes (94 tasks per DAG, patch present, lineage smoke ok).
+
+## D118 · 2026-11-19 · Scale test: the dump at 1x, 10x and 100x on DuckDB and BigQuery (#250)
+- Method: `ingestion/scale_dump.py` writes the Olist dump N times. Copy k of an order gets new `order_id`, `customer_id` and `customer_unique_id` (md5 of the original and k); everything else, so the months, order sizes, prices and delays, is the real data, only the volume per month grows. 10x = 994,410 orders, 100x = 9,944,100. The loader reads the result with `OLIST_DUMP_DIR`. Tests: `tests/test_scale_dump.py`.
+- Loader finding: the loader read every order table whole into memory and ran out of it at 100x (`orders`, a 1 GiB reallocation, after 3 min 46 s). It now reads the three order tables and the key columns in 64 MB blocks (`csv_blocks`) and filters each block to the chunk. Review texts contain line breaks, so the CSV reader needs `newlines_in_values`: without it a text that spans two blocks fails to parse. The 1x raw tables are identical between the old and the new loader (hash compare).
+
+| | 1x | 10x | 100x |
+|---|---|---|---|
+| Orders | 99,441 | 994,410 | 9,944,100 |
+| DuckDB file | 204 MB | 1.6 GB | 12.8 GB |
+| DuckDB load | 1 min 8 s | 3 min 58 s | 47 min 30 s (8 chunks) |
+| DuckDB `dbt build` | 2 min 3 s | 2 min 57 s | 38 min (1 failure, fixed: see below) |
+| Sum of model times (27 models) | 71 s | 276 s | 4,128 s |
+| BigQuery load (free load jobs) | ~2 min | TODO | projection only |
+| BigQuery `dbt build` | 2 min 37 s | TODO | projection only |
+| BigQuery bytes billed (one pass, build + tests) | 4.74 GiB | TODO | TODO (projection) |
+| Largest BigQuery query | 80 MiB | TODO | TODO (projection) |
+
+- DuckDB (16 GB machine, one run each): model time grows less than linearly from 1x to 10x (x3.9 for x10 data: fixed costs dominate at 1x) and more than linearly from 10x to 100x (x15), where the large marts spill: `fct_orders` 34 s -> 1,083 s, `dim_customers` 31 s -> 548 s. The 100x build passed 257 tests (9 warnings, the same ones as at 1x); the one failure was the Python model `dim_customer_rfm`, which ran out of memory in a pandas `map` over 9.6M customers after 223 s, so its 14 dependents were skipped. #317 vectorized the scoring; rerun on the same 100x file: the model builds in 133 s and its 14 tests pass. A Python model in the warehouse-neutral stack is the part that stops scaling first: it holds the whole table in the memory of one machine, while the SQL models spill to disk.
+- BigQuery: on 1x the tests and Elementary make most of the bill (about 3.9 of 4.7 GiB); the models themselves are about 0.9 GiB. The per-query cap of 1 GB (D48) is the limit that breaks first when the data grows: the largest query at 10x is TODO, so the cap breaks at about TODO x. The daily quota of 34,952 MiB breaks one build at about TODO x.
+- BigQuery order of steps in a scratch dataset: seed, `dbt run -s package:elementary`, then one `dbt build --exclude package:elementary`. Building layer by layer fails on the ML marts (they read `fct_orders`) and on `snap_sellers` (needs `dbt snapshot`). A dry-run guard (`scale_test/bq_guard.py`) sums what a layer would bill before it runs.
+- 100x on BigQuery is a projection only (bytes per model at 10x times ten): a real run would exceed the daily quota and the per-query cap.
