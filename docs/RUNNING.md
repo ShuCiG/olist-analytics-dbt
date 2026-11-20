@@ -19,6 +19,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Development hooks](#development-hooks)
 - [Security review (`/audit`)](#security-review-audit)
 - [Terraform drift alert](#terraform-drift-alert)
+- [BigQuery sharing listing](#bigquery-sharing-listing)
 - [Service account keys](#service-account-keys)
 - [SCHEMA email (source column changes)](#schema-email-source-column-changes)
 
@@ -589,6 +590,16 @@ uv run python .claude/skills/audit/audit_tools.py check                 # .audit
 uv run python .claude/skills/audit/audit_tools.py prepare .audit/<dir>  # context pack for the agents
 uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask secrets in the reports
 ```
+
+## BigQuery sharing listing
+
+The prod marts are a private Analytics Hub listing (D122, `infra/analytics_hub.tf`). Grant access: add the subscriber to
+`listing_subscribers` in `infra/terraform.tfvars` (`["user:x@example.com"]`), `terraform plan`, then apply (prod change).
+The subscriber opens BigQuery > Sharing (Analytics Hub) > the exchange *Olist commerce analytics* > the listing >
+*Add dataset to project*, picks a dataset name, and queries `<project>.<linked_dataset>.fct_orders`. Person columns
+(`customer_unique_id`, customer address) answer "access denied" unless they hold Fine-Grained Reader on the policy tags;
+`customer_key` is the column to count people on. Remove access: drop the member, apply; existing linked datasets stop
+working.
 
 ## Terraform drift alert
 

@@ -137,6 +137,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 | Input | `olist-raw` | [`olist-raw.odcs.yaml`](data-product/contracts/olist-raw.odcs.yaml) | what the product expects from its source: 8 tables, keys, allowed values, freshness |
 | Input | `review-labels` | [`review-labels.odcs.yaml`](data-product/contracts/review-labels.odcs.yaml) | the LLM labels of the review texts: one per review id, allowed sentiments and topics |
 | Output | `marts` | [`olist-marts.odcs.yaml`](data-product/contracts/olist-marts.odcs.yaml) | what it promises: 9 marts column for column, primary and foreign keys, value and SQL rules, freshness SLA, classification of person-related columns; servers local DuckDB, BigQuery prod, BigQuery live, Databricks CI |
+| Output | `marts` (delivery channel) | [`analytics_hub.tf`](infra/analytics_hub.tf) | the same marts as a BigQuery sharing (Analytics Hub) listing: a subscriber links the dataset into their own project, no copy, their queries are billed to them; person columns stay behind policy tags |
 | Output | `metrics` | [semantic models](transform/models/marts/_marts__models.yml) | KPI definitions (no ODCS: it describes tables, not metrics) |
 | Consumer | dashboard | [`olist-dashboard.yaml`](data-product/consumers/olist-dashboard.yaml) | data usage agreement: purpose, port, pinned contract version, the 54 columns and 13 metrics it relies on |
 

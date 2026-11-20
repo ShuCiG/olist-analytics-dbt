@@ -95,6 +95,17 @@ def test_descriptor_is_valid_odps(product: dict[str, Any]) -> None:
     assert product["apiVersion"] == "v1.1.0"
 
 
+def test_marts_delivery_channel_matches_terraform(product: dict[str, Any]) -> None:
+    """The listing the marts port names is the one infra/analytics_hub.tf creates (D122)."""
+    (port,) = [p for p in product["outputPorts"] if p["name"] == "marts"]
+    (channel,) = [p["value"] for p in port["customProperties"] if p["property"] == "deliveryChannel"]
+    tf = (PRODUCT_DIR.parent / "infra" / "analytics_hub.tf").read_text(encoding="utf-8")
+    exchange = re.search(r'data_exchange_id\s*=\s*"(\w+)"', tf)
+    listing = re.search(r'listing_id\s*=\s*"(\w+)"', tf)
+    assert exchange and listing, "analytics_hub.tf lost its exchange or listing id"
+    assert channel.endswith(f"/dataExchanges/{exchange[1]}/listings/{listing[1]}"), channel
+
+
 def test_ports_reference_existing_contract_versions(
     product: dict[str, Any], contracts: dict[str, dict[str, Any]]
 ) -> None:

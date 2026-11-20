@@ -21,6 +21,7 @@ locals {
     "roles/iam.workloadIdentityPoolViewer",  # pool and provider (wif.tf)
     "roles/bigquery.metadataViewer",         # datasets and their access lists, no table data
     "roles/datacatalog.viewer",              # PII taxonomy and policy tags (pii.tf)
+    "roles/analyticshub.viewer",             # exchange and listing (analytics_hub.tf)
     "roles/cloudscheduler.viewer",           # weekly dispatch jobs (scheduler.tf)
     "roles/workflows.viewer",                # dispatch workflow (scheduler.tf)
     "roles/secretmanager.viewer",            # the token's secret: metadata, never its value
