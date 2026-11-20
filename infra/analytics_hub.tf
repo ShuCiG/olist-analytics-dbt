@@ -6,8 +6,10 @@
 #   own demos). Person columns stay protected: the policy tags of pii.tf are
 #   checked on the source tables, so a subscriber without the Fine-Grained
 #   Reader role gets "access denied" on them (D94).
-# - Who may subscribe: the members in var.listing_subscribers (roles/analyticshub.subscriber
-#   on the exchange). The exchange is private: it is not listed publicly.
+# - Who may subscribe: the project owner (owner_member, the same value in the drift
+#   check as in terraform.tfvars) and the members in var.listing_subscribers
+#   (roles/analyticshub.subscriber on the exchange). A member set only in the local
+#   tfvars would show as drift in CI, which plans without that file. The exchange is private: it is not listed publicly.
 
 locals {
   product = yamldecode(file("${path.module}/../data-product/olist-commerce.odps.yaml"))
@@ -58,7 +60,7 @@ resource "google_bigquery_analytics_hub_listing" "marts" {
 }
 
 resource "google_bigquery_analytics_hub_data_exchange_iam_member" "subscriber" {
-  for_each = toset(var.listing_subscribers)
+  for_each = toset(concat(var.listing_subscribers, var.owner_member == null ? [] : [var.owner_member]))
 
   location         = var.location
   data_exchange_id = google_bigquery_analytics_hub_data_exchange.olist.data_exchange_id
