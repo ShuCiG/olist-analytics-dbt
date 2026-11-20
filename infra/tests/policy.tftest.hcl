@@ -282,6 +282,7 @@ run "analytics_hub" {
 
   variables {
     listing_subscribers = ["user:someone@example.com"]
+    owner_member        = "user:owner@example.com"
   }
 
   # One private listing, of prod marts only: raw and intermediate hold person rows
@@ -303,7 +304,7 @@ run "analytics_hub" {
   }
 
   assert {
-    condition     = length(google_bigquery_analytics_hub_data_exchange_iam_member.subscriber) == 1
-    error_message = "One grant per subscriber."
+    condition     = toset(keys(google_bigquery_analytics_hub_data_exchange_iam_member.subscriber)) == toset(["user:someone@example.com", "user:owner@example.com"])
+    error_message = "Subscribers are the listed members plus the owner (the drift check plans with owner_member only)."
   }
 }
