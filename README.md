@@ -178,12 +178,12 @@ erDiagram
 | `fct_orders` | order | item, payment, delivery and review measures. Accumulating snapshot: one timestamp per milestone (purchase → approval → carrier → delivery → review survey → answer), the lag between each pair and `order_stage`, the furthest reached. Versioned: v2 (latest, table `fct_orders`); v1 dropped after its deprecation date |
 | `fct_order_payments` | payment | one row per payment of an order (an order can mix card, boleto and vouchers): payment type, installments, paid value; semantic model `payments` ([D113](docs/DECISIONS.md)) |
 | `fct_order_items` | order line | incremental (merge on `_loaded_at`; monthly partitions on BigQuery, liquid clustering on Databricks; on BigQuery the cursor is read first so the run scans only raw partitions loaded since it); reconciles exactly with `fct_orders.order_amount` |
-| `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value and repeat flag |
+| `dim_customers` | **person** (`customer_unique_id`) | Olist issues a new `customer_id` per order. Location from the latest order; lifetime value (revenue of the person) and repeat flag |
 | `dim_products` | product | category translated to English; untranslated ones keep the Portuguese name, missing ones `unknown` |
 | `dim_sellers` | seller | zip-prefix centroid coordinates; current state |
 | `dim_sellers_history` | seller version | SCD2 from snapshot `snap_sellers`: contiguous `[valid_from, valid_to)` per seller, `is_current`, `is_deleted` |
 | `fct_order_items_seller_as_of` | order line | point-in-time join: the seller version current at `purchased_at` (location at the time of the sale) |
-| `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) |
+| `fct_customer_cohorts` | cohort × month | acquisition cohorts (month of the first order) by month since it, from a calendar spine so months without returns are zero rows: cohort size, people who ordered again, retention, revenue (items + freight, as the KPI) to date and per acquired person (LTV curve); reconciles with `dim_customers` (sizes, lifetime value) and the KPI revenue |
 | `fct_shipments` | order × seller | a seller's items in an order: seller (as of the purchase) and customer states, distance between their zip centroids (cross-engine haversine macro, same values on all four engines), delivery days and lateness; the dashboard shows delivery by distance band and the slowest routes ([D93](docs/DECISIONS.md#d93--2026-11-02--seller-to-customer-distance-cross-engine-haversine-fct_shipments)) |
 | `fct_review_topics` | order with a labelled review | sentiment, topic and English translation of the review text (LLM labels, [D92](docs/DECISIONS.md#d92--2026-11-02--review-texts-labelled-by-an-llm-topics-and-sentiment-mart)), next to the order's state, main category and delivery outcome |
 | `dim_customer_rfm` | person | RFM segments (recency / frequency / monetary scores, 7 named segments); the one **dbt Python model**: pandas, run as a serverless job on Databricks and in-process on DuckDB, disabled on BigQuery (Dataproc cost) ([D81](docs/DECISIONS.md)); same rows on both engines |
@@ -490,7 +490,7 @@ current warehouse, joins included.
 | `orders`, `sold_orders` | orders placed; of them, not canceled or unavailable |
 | `revenue`, `average_order_value` | items + freight of sold orders, BRL; revenue / sold orders |
 | `item_revenue` | the same revenue at order-line grain (same total), so it splits by seller and product category |
-| `paid_amount` | payments on sold orders, by payment type; differs from revenue (installment fees, vouchers) |
+| `paid_amount` | payments on sold orders, by payment type; differs from revenue by 0.02% in the dump (installment fees, vouchers, orders without items; D123) |
 | `customers`, `revenue_per_customer` | people who ordered in the period; revenue / them |
 | `delivered_orders`, `late_deliveries`, `late_delivery_rate` | delivered orders; of them, after the promised date; the share |
 | `avg_days_to_deliver`, `avg_review_score` | purchase → delivery, days; latest review score |

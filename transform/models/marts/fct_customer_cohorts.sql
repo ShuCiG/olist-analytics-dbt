@@ -12,7 +12,7 @@ orders as (
     select
         customer_unique_id,
         order_status,
-        paid_amount,
+        order_amount,
         cast({{ dbt.date_trunc('month', 'purchased_at') }} as date) as order_month
     from {{ ref('fct_orders') }}
 ),
@@ -49,7 +49,7 @@ spine as (
 ),
 
 -- Activity = any order (all statuses, as `orders_count` in dim_customers);
--- revenue = payments on orders not canceled/unavailable (as `lifetime_value`).
+-- revenue = `order_amount` of orders not canceled/unavailable (as `lifetime_value`, D123).
 activity as (
     select
         customers.cohort_month,
@@ -59,7 +59,7 @@ activity as (
         sum(
             case
                 when orders.order_status not in ('canceled', 'unavailable')
-                    then orders.paid_amount
+                    then orders.order_amount
                 else 0
             end
         ) as revenue
