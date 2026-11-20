@@ -2,6 +2,7 @@
 # project use them too.
 locals {
   services = toset([
+    "analyticshub.googleapis.com",         # BigQuery sharing: listing of the marts (analytics_hub.tf)
     "bigquery.googleapis.com",             # warehouse (dlt, dbt, dashboard)
     "bigqueryconnection.googleapis.com",   # Cloud resource connections (on before Terraform; D90)
     "bigquerystorage.googleapis.com",      # Storage Read API (datacontract-cli)
@@ -23,7 +24,7 @@ locals {
   # Enabled by Terraform, not adopted (imports.tf)
   services_added = toset([
     "sts.googleapis.com", "cloudbilling.googleapis.com", "datacatalog.googleapis.com",
-    "cloudscheduler.googleapis.com", "secretmanager.googleapis.com", "workflowexecutions.googleapis.com", "workflows.googleapis.com",
+    "analyticshub.googleapis.com", "cloudscheduler.googleapis.com", "secretmanager.googleapis.com", "workflowexecutions.googleapis.com", "workflows.googleapis.com",
   ])
 }
 
