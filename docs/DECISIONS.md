@@ -1091,6 +1091,26 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 - Limit: cohort retention and LTV of the last dump cohorts are computed in the mart over all orders, so generated repeat orders of those customers can still count towards them with the toggle off.
 - Agreement `data-product/consumers/olist-dashboard.yaml` lists `fct_orders.is_synthetic` as a used column (checked by `dashboard/tests/test_consumer.py`).
 
+## D120 · 2026-11-19 · Disaster recovery drill: recovery times and data loss per case (#254)
+- Problem: prod marts are rebuilt by every deploy, but no lost dataset had ever been restored on purpose, so recovery time (RTO) and data lost (RPO) were guesses.
+- Drill: throwaway datasets (`dr254_*`, never prod), the 1x dump (1,593,245 rows in 12 raw tables, 99,441 orders), BigQuery EU. Measured, one run each:
+
+| Case | Restore | RTO | RPO |
+|---|---|---|---|
+| Raw dataset deleted | `datasets:undelete` (REST) | 3 s | none (all rows back) |
+| Raw table dropped | `copy <table>@<epoch_ms>` (time travel) | 1.3 s | changes after the chosen moment |
+| Raw lost, past time travel | loader from the dump | 1 min 4 s (first load 1 min 29 s) | none against the dump |
+| dlt state table dropped | restore the table, delete the local dlt dir | 2 s + the next load | none |
+| dbt state (manifest artifact) lost | manual deploy, full build | one deploy | none |
+| Mart dataset deleted | `datasets:undelete` (REST) | 0.7 s (16 tables, 834,811 rows back) | none |
+| Marts lost past time travel | `dbt build --select path:models/marts` from the intact upper layers | 1 min 58 s with tests (170 pass); all layers from raw and a seed, 3 min 11 s (304 pass) | none (derived from raw) |
+
+- Rule found (GDPR, D105): a restored or reloaded raw can bring back a person who asked for deletion. A raw lost together with its `deletion_log` makes every request pending again, so the reload loads the person; a restore from before the deletion does the same. After any raw restore the runbook runs `apply_deletion_requests`, a build and `check_deletion_requests`; the check failed on every case that left the person in, which is what it is for. An interrupted load can leave orders of a deleted customer while the log says applied (`DELETIONS_APPLIED=0`); the check catches it, the fix is in docs/RUNNING.md.
+- Limits found: a dataset restored by undelete cannot be deleted again for 7 days (BigQuery cool-down); a lost `_dlt_pipeline_state` table makes the next load fail with a 404 and leave a half-loaded package until the table is restored and the local dlt directory is removed; the PR job `deletion request (BigQuery)` downloads the manifest artifact without a fallback and fails when it is missing, so a manual deploy comes first.
+- Quota accounting: the billed bytes summed from `INFORMATION_SCHEMA.JOBS_BY_PROJECT` for a quota day (27.9 GiB) undercount what `QueryUsagePerDay` (34,952 MiB, D48) counts: the quota was exhausted while the sum showed about 6 GiB of headroom. A build estimate also leaves out repeated apply/check runs and retries (a throwaway full build billed 6.5 GiB against an estimate of 4.7). Start a full build only when the billed sum is below half of the limit.
+- Not done, on purpose: scheduled table snapshots of raw (Terraform plus a scheduled query). Raw holds person rows, and D105 keeps their time travel to 48 h so that a deleted person is gone from every copy we can reach after two days; a snapshot kept longer breaks that, one kept shorter duplicates time travel. Rebuilding raw from the dump takes about a minute, so there is no loss a snapshot would save.
+- Runbook: docs/RUNNING.md, "Disaster recovery (BigQuery)".
+
 ## D121 · 2026-11-19 · SQLMesh: evaluated, rejected
 - Question (#256): SQLMesh offers plans, virtual environments, a data diff and column lineage natively and can load a dbt project. Would it replace or extend slim CI (D66), the data diff (D73) and the column impact (D101)? Tried on DuckDB in a scratch copy of the project at main 86892e9 (`sqlmesh[dbt]` 0.236.4 with dbt-core 1.12.7 / dbt-duckdb 1.11.1, its dbt loader and the dbt profile, `config.py` with `sqlmesh_config`). Nothing in the repo changed.
 - The whole project does not load. (1) The Python model `dim_customer_rfm` stops the load (`Error tokenizing`), so it has to be removed. (2) The semantic layer lives in the marts YAML and uses MetricFlow Jinja (`{{ Dimension('order__is_delivered') }}` in metric filters): SQLMesh's Jinja renderer fails on the file (`'Config' object has no attribute 'update'`); with those filters replaced by plain text the load went on (to a dbt "two metrics with the name" parse error, not pursued), so metrics, semantic models and saved queries would have to go. (3) `start` is required and has to be set under `models:` in `dbt_project.yml`. Tests, unit tests, contracts, groups and access, snapshots, seeds, Elementary and the project evaluator were left out of the trial and not tried.
