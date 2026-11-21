@@ -32,7 +32,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 ## Highlights
 
 - **Data product with enforced contracts.** Descriptor in the Open Data Product Standard (owner, input and output
-  ports), an ODCS data contract per port, ~410 contract checks on the data in every CI run. The dashboard's usage
+  ports), an ODCS data contract per port, 577 contract checks on the data in every CI run. The dashboard's usage
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
 - **What customers write, labelled by an LLM.** 42k Portuguese review texts get a sentiment, a topic and an English
@@ -58,7 +58,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 220 data tests, 13 unit tests, enforced model contracts, 633 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 221 data tests, 13 unit tests, enforced model contracts, 642 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
@@ -358,14 +358,14 @@ flowchart LR
 
 | Check | What | Where |
 |---|---|---|
-| **220 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
+| **221 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
 | **Data contracts** | 577 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **633 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **642 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -475,6 +475,14 @@ Set up the way marts are shared across teams (dbt Mesh), even in one repo:
   any order or customer id raw no longer has, so a stale copy fails it too. Time travel on the person datasets is
   cut to BigQuery's 48 h minimum. Tested end to end on DuckDB on every PR and on BigQuery when the deletion code
   changes ([D105](docs/DECISIONS.md#d105--2026-11-08--deletion-requests-a-person-removed-from-every-layer-verified)).
+- **Disaster recovery (BigQuery):** every case was drilled once on throwaway datasets and timed. A deleted dataset
+  comes back with `datasets:undelete` in seconds (raw 3 s, marts 0.7 s), a dropped table with a time-travel copy in
+  1.3 s, and marts lost past time travel are rebuilt from the intact layers in 1 min 58 s (all layers from raw, 3 min 11 s);
+  raw is reloaded from the dump in about a minute. After any raw restore the runbook runs the deletion requests again
+  and the check, because a restored raw can bring back a person who asked for deletion. Table snapshots were left out
+  on purpose: they would keep deleted people longer than the 48 h time travel
+  ([D120](docs/DECISIONS.md#d120--2026-11-19--disaster-recovery-drill-recovery-times-and-data-loss-per-case-254),
+  runbook in [docs/RUNNING.md](docs/RUNNING.md)).
 
 ## Semantic layer
 
@@ -720,6 +728,10 @@ prod deploys, the Airflow replay and PR CI. The page lists bytes billed per targ
 outside a node split into Elementary's uploads and dbt's own, [D76](docs/DECISIONS.md)) and the latest deploys. Only the prod writer can read the job history, through a custom role with that one permission
 ([D71](docs/DECISIONS.md)).
 
+Generated months after the dump (see [Orchestration](#orchestration-and-alerts)) are off by default: the sidebar toggle
+"Include generated months" extends the date picker past the dump's last day and warns that those rows are generated
+([D119](docs/DECISIONS.md#d119--2026-11-19--dashboard-generated-months-are-off-by-default-a-toggle-shows-them)).
+
 Another BigQuery-only page shows the BigQuery ML models: the revenue forecast against actuals with its backtest error, and how well a first order predicts a second (not much: ROC AUC 0.57). BigQuery ML bills training on what the input query scans, at 50 times a query's price and quota: making the inputs tables took one training from ~20 GiB of the daily quota to 1.6 GiB ([D96](docs/DECISIONS.md)).
 
 | Sales overview | Customers & sellers |
@@ -812,6 +824,12 @@ Options that were tried or priced, then left out:
   and the dbt v2 parser refuses the plugin. One owner deploys one repo: groups, access levels and contracts already
   draw the boundaries inside the project
   ([D97](docs/DECISIONS.md#d97--2026-11-03--dbt-mesh-producer-and-consumer-projects-dbt-loom-evaluated-rejected)).
+- **SQLMesh next to or instead of dbt.** Tried on DuckDB through its dbt loader: the marts matched row for row and
+  virtual environments promote a change without a rebuild, but the whole project does not load (the Python RFM model,
+  the MetricFlow semantic layer), a plan names models, not the columns, contracts, metrics and exposures that slim CI
+  and the column impact (D101) report, and dbt stays a dependency anyway. A full build takes about two minutes on DuckDB
+  and a deploy bills about 1 GiB on BigQuery, so promotion without a rebuild saves little
+  ([D121](docs/DECISIONS.md#d121--2026-11-19--sqlmesh-evaluated-rejected)).
 - **dbt deps inside Snowflake, the repo as a Git repository source.** Both need an external access integration,
   which trial accounts don't allow; the packages go up with the code instead ([D85](docs/DECISIONS.md)).
 
