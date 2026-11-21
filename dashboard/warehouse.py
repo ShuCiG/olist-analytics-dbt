@@ -134,18 +134,36 @@ def query(sql: str) -> pd.DataFrame:
     return _to_plain_types(df)
 
 
-def date_bounds() -> tuple[dt.date, dt.date]:
+def has_generated() -> bool:
+    """True when the feed holds generated months after the dump (`is_synthetic`, D112).
+    Prod and CI load the dump alone, so the toggle is only offered where it has an effect."""
+    df = query(f"select max(case when is_synthetic then 1 else 0 end) as n from {table('fct_orders')}")
+    n = df["n"].iloc[0]
+    return n is not None and not pd.isna(n) and int(n) > 0
+
+
+def date_bounds(include_generated: bool = False) -> tuple[dt.date, dt.date]:
+    """First and last purchase date; the dump's orders only unless `include_generated`.
+    Generated months all come after the dump, so capping the picker at the dump's last day
+    keeps them out of every query that filters by date."""
+    where = "" if include_generated else "where not is_synthetic"
     # As ISO strings: DuckDB returns datetime64, BigQuery a `dbdate` extension type
     df = query(f"""
         select cast(min(purchase_date) as string) as lo, cast(max(purchase_date) as string) as hi
         from {table('fct_orders')}
+        {where}
     """)
     return dt.date.fromisoformat(df["lo"].iloc[0]), dt.date.fromisoformat(df["hi"].iloc[0])
 
 
-def default_period(lo: dt.date, hi: dt.date) -> tuple[dt.date, dt.date]:
-    """DEFAULT_PERIOD clipped to the data; all of it while the feed is still short."""
-    start, end = max(lo, DEFAULT_PERIOD[0]), min(hi, DEFAULT_PERIOD[1])
+def default_period(lo: dt.date, hi: dt.date, include_generated: bool = False) -> tuple[dt.date, dt.date]:
+    """Default period: full months only, clipped to the data; all of it while the feed is short.
+    With generated months on, the end moves to the last full month of the data."""
+    end = DEFAULT_PERIOD[1]
+    if include_generated:
+        # Last day of the latest full month: `hi` itself when it closes its month
+        end = hi if (hi + dt.timedelta(days=1)).day == 1 else hi.replace(day=1) - dt.timedelta(days=1)
+    start, end = max(lo, DEFAULT_PERIOD[0]), min(hi, end)
     return (start, end) if start <= end else (lo, hi)
 
 

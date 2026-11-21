@@ -276,3 +276,35 @@ run "weekly_dispatch" {
     error_message = "Weekly jobs run in UTC as github-dispatch."
   }
 }
+
+run "analytics_hub" {
+  command = plan
+
+  variables {
+    listing_subscribers = ["user:someone@example.com"]
+    owner_member        = "user:owner@example.com"
+  }
+
+  # One private listing, of prod marts only: raw and intermediate hold person rows
+  # (D105), the airflow_ feed is not part of the product (D122)
+  assert {
+    condition = (
+      google_bigquery_analytics_hub_listing.marts.discovery_type == "DISCOVERY_TYPE_PRIVATE"
+      && google_bigquery_analytics_hub_listing.marts.bigquery_dataset[0].dataset == google_bigquery_dataset.this["marts"].id
+    )
+    error_message = "The listing is private and shares the prod marts dataset only."
+  }
+
+  # Subscribers can link and query; no publisher or admin role through this variable
+  assert {
+    condition = alltrue([
+      for m in google_bigquery_analytics_hub_data_exchange_iam_member.subscriber : m.role == "roles/analyticshub.subscriber"
+    ])
+    error_message = "Exchange grants are roles/analyticshub.subscriber only."
+  }
+
+  assert {
+    condition     = toset(keys(google_bigquery_analytics_hub_data_exchange_iam_member.subscriber)) == toset(["user:someone@example.com", "user:owner@example.com"])
+    error_message = "Subscribers are the listed members plus the owner (the drift check plans with owner_member only)."
+  }
+}

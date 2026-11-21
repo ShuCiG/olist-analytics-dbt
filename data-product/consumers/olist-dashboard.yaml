@@ -51,6 +51,7 @@ uses:
     - is_delivered_late
     - review_score
     - has_review
+    - is_synthetic
   fct_order_items:
     - order_id
     - product_id

@@ -4,8 +4,11 @@ with orders as (
     select * from {{ ref('int_orders_joined_to_customers') }}
 ),
 
-payments as (
-    select * from {{ ref('int_payments_pivoted_to_orders') }}
+amounts as (
+    select
+        order_id,
+        order_amount
+    from {{ ref('fct_orders') }}
 ),
 
 zip_codes as (
@@ -37,13 +40,13 @@ order_stats as (
         sum(
             case
                 when customer_orders.order_status not in ('canceled', 'unavailable')
-                    then coalesce(payments.total_payment_value, 0)
+                    then coalesce(amounts.order_amount, 0)
                 else 0
             end
         ) as lifetime_value
     from customer_orders
-    left join payments
-        on customer_orders.order_id = payments.order_id
+    left join amounts
+        on customer_orders.order_id = amounts.order_id
     group by customer_orders.customer_unique_id
 ),
 

@@ -20,3 +20,9 @@ variable "owner_member" {
   type        = string
   default     = null
 }
+
+variable "listing_subscribers" {
+  description = "IAM members that may subscribe to the Analytics Hub listing of the marts (analytics_hub.tf), e.g. [\"user:x@example.com\", \"group:y@example.com\"]; besides owner_member, who always may; keep the list empty unless CI sets it too (drift check)"
+  type        = list(string)
+  default     = []
+}

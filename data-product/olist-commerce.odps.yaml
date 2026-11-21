@@ -8,7 +8,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: olist-commerce
 name: Olist commerce analytics
-version: 1.8.0
+version: 1.9.0
 status: active
 domain: commerce
 type: aggregate
@@ -68,6 +68,12 @@ outputPorts:
     customProperties:
       - property: implementation
         value: dbt public models with enforced contracts (transform/models/marts)
+      - property: deliveryChannel
+        value: projects/olist-analytics-dbt-472315/locations/eu/dataExchanges/olist_commerce/listings/olist_marts
+        description: >-
+          BigQuery sharing (Analytics Hub) listing of the prod marts dataset: a subscriber links it into
+          their own project, no copy, and pays for their own queries. Person columns stay behind policy tags.
+          Defined in infra/analytics_hub.tf.
       - property: sloWindowDays
         value: 28
         description: Window of the error budget; the page shows the same days.

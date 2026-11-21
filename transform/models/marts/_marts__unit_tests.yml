@@ -5,7 +5,7 @@ unit_tests:
     model: dim_customers
     description: >
       One row per person across all their orders. Canceled orders count as orders
-      but not toward lifetime value; an order without payments adds 0.
+      but not toward lifetime value; an order without items adds 0.
     given:
       - input: ref('int_orders_joined_to_customers')
         rows:
@@ -17,11 +17,11 @@ unit_tests:
              order_status: delivered, purchased_at: 2018-06-01 10:00:00}
           - {order_id: o4, customer_unique_id: u2, zip_code_prefix: '01001', city: sao paulo, state: SP,
              order_status: delivered, purchased_at: 2018-02-01 10:00:00}
-      - input: ref('int_payments_pivoted_to_orders')
+      - input: ref('fct_orders')
         rows:
-          - {order_id: o1, total_payment_value: 100.00}
-          - {order_id: o2, total_payment_value: 30.00}
-          - {order_id: o3, total_payment_value: 50.00}
+          - {order_id: o1, order_amount: 100.00}
+          - {order_id: o2, order_amount: 30.00}
+          - {order_id: o3, order_amount: 50.00}
       - input: ref('int_zip_codes_located')
         rows:
           - {zip_code_prefix: '01001', latitude: -23.55, longitude: -46.63}
@@ -49,7 +49,7 @@ unit_tests:
              order_status: delivered, purchased_at: 2018-05-01 10:00:00}
           - {order_id: o4, customer_unique_id: u2, zip_code_prefix: '01001', city: sao paulo, state: SP,
              order_status: delivered, purchased_at: 2018-05-01 10:00:00}
-      - input: ref('int_payments_pivoted_to_orders')
+      - input: ref('fct_orders')
         rows: []
       - input: ref('int_zip_codes_located')
         rows:
@@ -181,11 +181,11 @@ unit_tests:
           - {customer_unique_id: u3, first_order_at: 2018-02-10 10:00:00}
       - input: ref('fct_orders')
         rows:
-          - {customer_unique_id: u1, order_status: delivered, paid_amount: 100.00, purchased_at: 2018-01-31 23:00:00}
-          - {customer_unique_id: u1, order_status: canceled, paid_amount: 30.00, purchased_at: 2018-02-01 01:00:00}
-          - {customer_unique_id: u1, order_status: delivered, paid_amount: 50.00, purchased_at: 2018-03-05 10:00:00}
-          - {customer_unique_id: u2, order_status: delivered, paid_amount: 20.00, purchased_at: 2018-01-15 10:00:00}
-          - {customer_unique_id: u3, order_status: delivered, paid_amount: 40.00, purchased_at: 2018-02-10 10:00:00}
+          - {customer_unique_id: u1, order_status: delivered, order_amount: 100.00, purchased_at: 2018-01-31 23:00:00}
+          - {customer_unique_id: u1, order_status: canceled, order_amount: 30.00, purchased_at: 2018-02-01 01:00:00}
+          - {customer_unique_id: u1, order_status: delivered, order_amount: 50.00, purchased_at: 2018-03-05 10:00:00}
+          - {customer_unique_id: u2, order_status: delivered, order_amount: 20.00, purchased_at: 2018-01-15 10:00:00}
+          - {customer_unique_id: u3, order_status: delivered, order_amount: 40.00, purchased_at: 2018-02-10 10:00:00}
       - input: ref('dim_date')
         rows:
           # one row per day in the real model: months repeat

@@ -19,6 +19,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) (Python 3.12 is installed by it),
 - [Development hooks](#development-hooks)
 - [Security review (`/audit`)](#security-review-audit)
 - [Terraform drift alert](#terraform-drift-alert)
+- [BigQuery sharing listing](#bigquery-sharing-listing)
 - [Service account keys](#service-account-keys)
 - [SCHEMA email (source column changes)](#schema-email-source-column-changes)
 
@@ -387,6 +388,64 @@ cd transform && uv run dbt run-operation drop_isolated_datasets --target ci
 The macro behind it (`dbt run-operation data_diff`, `macros/data_diff.sql`) also runs on DuckDB, e.g. against a
 hand-edited copy of a mart in another schema.
 
+## Disaster recovery (BigQuery)
+
+What to do when prod data is lost (D120). Order of preference: time travel (nothing lost up to the moment
+before the loss), then a rebuild from what is in git and the dump. The person datasets keep 48 h of time travel
+(`infra/datasets.tf`, D105); after that only a rebuild is left. Recovery is run as the owner; `<ds>` is the
+dataset (`raw`, `marts`, `airflow_raw`, ...).
+
+| Lost | Restore | Data lost (RPO) |
+|---|---|---|
+| A dataset | undelete (below) | none within 48 h |
+| One table | `bq cp '<ds>.<table>@<epoch_ms>' <ds>.<table>` | changes after `<epoch_ms>` |
+| Raw, past 48 h | reload from the dump (below) | none from the dump; generated months come out the same (seeded) |
+| dlt state (`_dlt_pipeline_state`) | restore the table, as above | none |
+| dbt state (the `prod-manifest` artifact) | a manual deploy | none |
+| A mart or any derived dataset | undelete (0.7 s), or rebuild: `dbt build --select path:models/marts` (2 min), or a manual deploy | none (derived from raw) |
+
+```bash
+P=olist-analytics-dbt-472315
+# a deleted dataset, within its time travel window (a restored dataset cannot be deleted again for 7 days)
+curl -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" \
+  -d '{}' "https://bigquery.googleapis.com/bigquery/v2/projects/$P/datasets/<ds>:undelete"
+# a dropped table: pick a moment before the drop (epoch ms)
+bq cp "$P:<ds>.<table>@$(( ($(date +%s) - 600) * 1000 ))" "$P:<ds>.<table>"
+```
+
+**After any restore or reload of raw** (the dataset, a table, a reload): the restored rows may be older than a
+deletion request (D105), and a lost `deletion_log` makes every request pending, so the people come back.
+
+```bash
+cd transform
+uv run dbt run-operation apply_deletion_requests --target prod
+uv run dbt build --target prod --select source:olist+ --exclude config.materialized:bqml_model
+uv run dbt run-operation check_deletion_requests --target prod   # must end "none of the people"
+```
+
+If the check lists rows although apply said `DELETIONS_APPLIED=0` (the log says applied, an interrupted load left
+orders of a deleted customer): delete the log row (`delete from <raw>.deletion_log where true`) and run apply again.
+
+**Reload raw from the dump** (`raw` gone, no time travel left): the loader starts from the first month, with the
+dlt state restored from the destination or, when that is gone too, from scratch.
+
+```bash
+uv run python ingestion/pipeline.py --destination bigquery          # all months; ~1 min on the full dump
+gh workflow run ci-cd.yml --ref main                                # applies requests, builds prod in full, checks
+```
+
+**A lost dlt state table** while the rest of raw is there: the next load fails with `Not found: Table
+..._dlt_pipeline_state` and leaves a half-loaded package in the runner's dlt directory. Restore the table (above),
+delete the local pipeline directory (`~/.dlt/pipelines/olist_bigquery`), and load again.
+
+**Lost dbt state**: the manifest artifact lives 90 days and is uploaded by every successful prod build. Without
+it, deploys and slim CI build in full ("no prod manifest", `ci-cd.yml`); the `deletion request (BigQuery)` PR job
+downloads it without a fallback and fails, so run `gh workflow run ci-cd.yml --ref main` first: a manual run
+builds in full and uploads a new manifest.
+
+The Airflow BigQuery datasets (`airflow_*`) follow the same steps; their feed restarts from the first month of the
+dump and catches up one month an hour.
+
 ## Databricks
 
 Free Edition works (no cloud account, no card). Create a catalog `olist` (`CREATE CATALOG olist` in the SQL editor)
@@ -531,6 +590,16 @@ uv run python .claude/skills/audit/audit_tools.py check                 # .audit
 uv run python .claude/skills/audit/audit_tools.py prepare .audit/<dir>  # context pack for the agents
 uv run python .claude/skills/audit/audit_tools.py redact .audit/<dir>   # mask secrets in the reports
 ```
+
+## BigQuery sharing listing
+
+The prod marts are a private Analytics Hub listing (D122, `infra/analytics_hub.tf`). Grant access: add the subscriber to
+`listing_subscribers` in `infra/terraform.tfvars` (`["user:x@example.com"]`), `terraform plan`, then apply (prod change).
+The subscriber opens BigQuery > Sharing (Analytics Hub) > the exchange *Olist commerce analytics* > the listing >
+*Add dataset to project*, picks a dataset name, and queries `<project>.<linked_dataset>.fct_orders`. Person columns
+(`customer_unique_id`, customer address) answer "access denied" unless they hold Fine-Grained Reader on the policy tags;
+`customer_key` is the column to count people on. Remove access: drop the member, apply; existing linked datasets stop
+working.
 
 ## Terraform drift alert
 
