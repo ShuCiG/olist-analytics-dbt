@@ -681,6 +681,22 @@ job). Otherwise the slowest node on every engine is Elementary's on-run-end hook
 its tables: 12 s on DuckDB, 42–75 s on the cloud engines. The cloud times are mostly per-query overhead, not data:
 BigQuery processed 0.66 GiB for the whole build.
 
+### Scale test: 1x, 10x, 100x the data
+
+The dump is replicated N times with new order and customer ids (`ingestion/scale_dump.py`); the same commit builds on
+DuckDB (all three sizes) and BigQuery (1x and 10x measured, 100x projected)
+([D118](docs/DECISIONS.md#d118--2026-11-19--scale-test-the-dump-at-1x-10x-and-100x-on-duckdb-and-bigquery-250)):
+
+| | 1x (99k orders) | 10x (994k) | 100x (9.9M) |
+|---|---|---|---|
+| DuckDB `dbt build` | 2 min 3 s | 2 min 57 s | 38 min (file 12.8 GB, 16 GB RAM) |
+| BigQuery `dbt build` | 2 min 37 s | 6 min 17 s | projection only |
+| BigQuery billed, one pass | 4.74 GiB | 11.83 GiB | ~83-118 GiB (~$0.5-0.7) |
+| Largest BigQuery query | 80 MiB | 491 MiB | ~4.9 GB (cap 1 GB breaks at ~21x) |
+
+The first limit on BigQuery is the 1 GB per-query cap (about 21x), the second the daily quota (about 29x); on DuckDB
+the Python RFM model ran out of memory at 100x and was vectorized (#317).
+
 ## Dashboard
 
 A [static page on GitHub Pages](https://shucig.github.io/olist-analytics-dbt/dashboard/) shows the main KPIs and
