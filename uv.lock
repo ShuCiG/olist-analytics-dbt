@@ -487,7 +487,7 @@ wheels = [
 
 [[package]]
 name = "databricks-sql-connector"
-version = "4.4.0"
+version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lz4" },
@@ -501,9 +501,9 @@ dependencies = [
     { name = "thrift" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/83/b5576b2cd457d8d393aca2d22b64cbb123e0eb91a46dddc50e5ec8b5e420/databricks_sql_connector-4.4.0.tar.gz", hash = "sha256:97d20b5e12e4aa50d16fe5fea3914f19319a207f2f4912a395a08497c25cb16f", size = 225152, upload-time = "2026-07-22T10:24:50.018Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/55/0b/300b03d183c458384ef890a86347626acc8621140d760848dd915f37c950/databricks_sql_connector-4.9.0.tar.gz", hash = "sha256:e440c671a9f27a72e13d2e1ad88d0c6a25d176aa4528b1b422753b065266a81c", size = 247223, upload-time = "2026-11-04T23:32:24.719Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/88/8bd874f39f8c3f2e36f60cebdee8b016a4f227bfc59c26c171afb6fa4825/databricks_sql_connector-4.4.0-py3-none-any.whl", hash = "sha256:6d9111dce577b954fa4684e5cf81484aaa810171d852d472c3c67ec4892bbb74", size = 252850, upload-time = "2026-07-22T10:24:48.623Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/87/3df7d5b18600adfd331d308e69de8f9676039e618e2dfc8da715eaf08e24/databricks_sql_connector-4.9.0-py3-none-any.whl", hash = "sha256:3b96fe42a392150ef62e1c5b27c678a1f4c200a061f2cf7a13380b411a457425", size = 273228, upload-time = "2026-11-04T23:32:23.285Z" },
 ]
 
 [package.optional-dependencies]
@@ -528,7 +528,7 @@ wheels = [
 
 [[package]]
 name = "datacontract-cli"
-version = "1.2.6"
+version = "1.2.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -553,9 +553,9 @@ dependencies = [
     { name = "truststore" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dc/a9/9f79177e438b5cfcf38cd18cd648c1b1a90203c2f1e4aebcd189e6ffcc8b/datacontract_cli-1.2.6.tar.gz", hash = "sha256:822ff3ad5183f24739df4742e5f78b93bd07cfd228b068b13629e4816abbadb7", size = 3524838, upload-time = "2026-10-13T14:39:09.719Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/48/617d47b7d2bec73473efe1ed12e7d31731d7e294d4595fdb076cf79e1961/datacontract_cli-1.2.11.tar.gz", hash = "sha256:6ee8535f963ae78206eb0a991eec16df1d409f810feeb5cfb9a702194d3e23ab", size = 3727103, upload-time = "2026-11-17T21:58:28.309Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/f2/706b7f76eb1b728effd863ddfd63e4c89f7bb55d79c6163befc89b834bb6/datacontract_cli-1.2.6-py3-none-any.whl", hash = "sha256:234a0c0e5dc470f6dab3e29a6861d0a01593a504cf037bf98f70e3ae5fe7f0b8", size = 3278543, upload-time = "2026-10-13T14:39:07.821Z" },
+    { url = "https://files.pythonhosted.org/packages/69/54/02344701459afa9b5be8503a2fe972ae26be4069a5eee4f38d5ccc229395/datacontract_cli-1.2.11-py3-none-any.whl", hash = "sha256:37a5a7fb14a159927be271f003ad57293ea2aa8c6f5f71019f02c2ae12198f2e", size = 3439486, upload-time = "2026-11-17T21:58:26.249Z" },
 ]
 
 [package.optional-dependencies]
@@ -708,7 +708,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/44/22/43a63fb0cd40dba71
 
 [[package]]
 name = "dbt-databricks"
-version = "1.13.0"
+version = "1.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -722,9 +722,9 @@ dependencies = [
     { name = "packaging" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/4c/3e9169d416dd78c2a7918676ce7fe7448e08869e2d1b5c596b4a44436aa3/dbt_databricks-1.13.0.tar.gz", hash = "sha256:1fbd18b740fafc462cc165fb24b9f270c598b25cfeb8f7630434f76d2a00daf6", size = 142242, upload-time = "2026-10-29T12:17:43.912Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/5a/ed1d0677688354df10d8d3edb0c2e7438787aa8c6c0153d6509ba0277060/dbt_databricks-1.13.1.tar.gz", hash = "sha256:39936ec3326e4a0ad8fd4789be42f189c2051e11bc5be3303762391381aec7f5", size = 145556, upload-time = "2026-11-19T12:48:26.557Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/22/ac8dde6fabe2d273a1d8d42a86b73e6c2c862f85291b04e21d96388f96cc/dbt_databricks-1.13.0-py3-none-any.whl", hash = "sha256:34b96b3120426f4d6e36b3b5dfe66fe79cfef8b68f6db9621d293e6fdc02c550", size = 204247, upload-time = "2026-10-29T12:17:42.072Z" },
+    { url = "https://files.pythonhosted.org/packages/11/ec/8e97e9bc62954519aee634cd52c860737f25424cf7eabc098f4f4ab7eeb1/dbt_databricks-1.13.1-py3-none-any.whl", hash = "sha256:70630eab576771925bd95be8364f2db938392210a7db1d533bdcd41b7d837f24", size = 209146, upload-time = "2026-11-19T12:48:25.217Z" },
 ]
 
 [[package]]
@@ -2233,11 +2233,11 @@ wheels = [
 
 [[package]]
 name = "oauthlib"
-version = "3.3.1"
+version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0b/5f/19930f824ffeb0ad4372da4812c50edbd1434f678c90c2733e1188edfc63/oauthlib-3.3.1.tar.gz", hash = "sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9", size = 185918, upload-time = "2025-06-19T22:48:08.269Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/17/2bb072de0b990303c985f26869fd47bb179024a051f47e7f9d208eb92f8e/oauthlib-4.0.1.tar.gz", hash = "sha256:3d73febdb6faa00f277c81fb04be7b7586fb96fc3b7f0b9c772dada69a25ede7", size = 191219, upload-time = "2026-10-31T09:52:58.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/9c/92789c596b8df838baa98fa71844d84283302f7604ed565dafe5a6b5041a/oauthlib-3.3.1-py3-none-any.whl", hash = "sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1", size = 160065, upload-time = "2025-06-19T22:48:06.508Z" },
+    { url = "https://files.pythonhosted.org/packages/df/ef/3b8adde1b32a6f540758bff734d3442c621734c83708e5f02b0ba2f43b84/oauthlib-4.0.1-py3-none-any.whl", hash = "sha256:498a298876e996301950a5b053d12c31628bb7b895db03666430c69ce182eb61", size = 161934, upload-time = "2026-10-31T09:52:56.206Z" },
 ]
 
 [[package]]
