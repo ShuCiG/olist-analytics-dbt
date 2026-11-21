@@ -98,6 +98,33 @@ unit_tests:
       rows:
         - {order_item_sk: i2, order_status: delivered, item_amount: 22.00, _loaded_at: 2026-02-01 00:00:00}
 
+  - name: test_fct_order_items_incremental_fills_empty_table
+    model: fct_order_items
+    description: >
+      Incremental run on a table that exists but is empty (truncated by hand, a failed
+      first load): no cursor, so everything is loaded, not nothing (`>= null` passes
+      no row).
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: this
+        format: sql
+        rows: |
+          select
+            'i0' as order_item_sk,
+            cast('2026-01-15 00:00:00' as timestamp) as _loaded_at
+          where 1 = 0
+      - input: ref('stg_olist__order_items')
+        rows:
+          - {order_item_sk: i1, order_id: o1, price: 10, freight_value: 1, _loaded_at: 2026-01-01 00:00:00}
+      - input: ref('int_orders_joined_to_customers')
+        rows:
+          - {order_id: o1, customer_unique_id: u1, order_status: delivered, _loaded_at: 2026-01-01 00:00:00}
+    expect:
+      rows:
+        - {order_item_sk: i1, order_status: delivered, item_amount: 11.00, _loaded_at: 2026-01-01 00:00:00}
+
   - name: test_dim_sellers_history_validity_ranges
     model: dim_sellers_history
     description: >
