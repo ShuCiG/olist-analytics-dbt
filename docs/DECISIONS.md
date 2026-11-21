@@ -1096,13 +1096,13 @@ Question: the DAGs ran, but what happens when new data arrives? Olist never gets
 | DuckDB load | 1 min 8 s | 3 min 58 s | 47 min 30 s (8 chunks) |
 | DuckDB `dbt build` | 2 min 3 s | 2 min 57 s | 38 min (1 failure, fixed: see below) |
 | Sum of model times (27 models) | 71 s | 276 s | 4,128 s |
-| BigQuery load (free load jobs) | ~2 min | TODO | projection only |
-| BigQuery `dbt build` | 2 min 37 s | TODO | projection only |
-| BigQuery bytes billed (one pass, build + tests) | 4.74 GiB | TODO | TODO (projection) |
-| Largest BigQuery query | 80 MiB | TODO | TODO (projection) |
+| BigQuery load (free load jobs) | ~2 min | 3 min 23 s | projection only |
+| BigQuery `dbt build` | 2 min 37 s | 6 min 17 s (305 pass, 9 warn, 0 error) | projection only |
+| BigQuery bytes billed (one pass, build + tests) | 4.74 GiB | 11.83 GiB | ~83-118 GiB (projection, about $0.5-0.7 at $6.25/TiB) |
+| Largest BigQuery query | 80 MiB | 491 MiB (`fct_orders`) | ~4.9 GB (projection) |
 
 - DuckDB (16 GB machine, one run each): model time grows less than linearly from 1x to 10x (x3.9 for x10 data: fixed costs dominate at 1x) and more than linearly from 10x to 100x (x15), where the large marts spill: `fct_orders` 34 s -> 1,083 s, `dim_customers` 31 s -> 548 s. The 100x build passed 257 tests (9 warnings, the same ones as at 1x); the one failure was the Python model `dim_customer_rfm`, which ran out of memory in a pandas `map` over 9.6M customers after 223 s, so its 14 dependents were skipped. #317 vectorized the scoring; rerun on the same 100x file: the model builds in 133 s and its 14 tests pass. A Python model in the warehouse-neutral stack is the part that stops scaling first: it holds the whole table in the memory of one machine, while the SQL models spill to disk.
-- BigQuery: on 1x the tests and Elementary make most of the bill (about 3.9 of 4.7 GiB); the models themselves are about 0.9 GiB. The per-query cap of 1 GB (D48) is the limit that breaks first when the data grows: the largest query at 10x is TODO, so the cap breaks at about TODO x. The daily quota of 34,952 MiB breaks one build at about TODO x.
+- BigQuery: on 1x the tests and Elementary make most of the bill (about 3.9 of 4.7 GiB); the models themselves are about 0.9 GiB. The per-query cap of 1 GB (D48) is the limit that breaks first when the data grows: the largest query at 10x is 491 MiB (`fct_orders`; next: `int_customer_first_orders_featured` 439 MiB, `fct_review_topics` 374 MiB), so the cap breaks at about 21x. One pass bills 11.83 GiB at 10x (marts 2.6, tests and Elementary the rest), x2.5 for x10 data because the 10 MiB minimum per query dominates at 1x; the daily quota of 34,952 MiB breaks one build at about 29x (linear from 10x; about 38x on the 1x-to-10x slope).
 - BigQuery order of steps in a scratch dataset: seed, `dbt run -s package:elementary`, then one `dbt build --exclude package:elementary`. Building layer by layer fails on the ML marts (they read `fct_orders`) and on `snap_sellers` (needs `dbt snapshot`). A dry-run guard (`scale_test/bq_guard.py`) sums what a layer would bill before it runs.
 - 100x on BigQuery is a projection only (bytes per model at 10x times ten): a real run would exceed the daily quota and the per-query cap.
 
