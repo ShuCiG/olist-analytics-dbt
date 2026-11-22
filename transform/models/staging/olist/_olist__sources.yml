@@ -29,7 +29,7 @@ sources:
                 the source owner and update the input contract.
               config:
                 severity: warn
-                meta: {alert_unit: column changes}
+                meta: {alert_unit: column changes, decision: D38}
       - name: order_items
         description: One row per item within an order (`order_item_id` is the line number).
         data_tests: *schema_changes

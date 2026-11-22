@@ -10,7 +10,7 @@ data_tests:
       Mostly installment interest and vouchers (about 250 orders in the full data);
       a jump means missing payments or wrong prices.
     config:
-      meta: {alert_unit: orders}
+      meta: {alert_unit: orders, decision: D10}
 
   - name: assert_revenue_reconciles_with_payments
     description: >-

@@ -562,7 +562,7 @@ models:
             seasonality: day_of_week
           config: &anomaly_config
             severity: warn
-            meta: {alert_unit: days}
+            meta: {alert_unit: days, decision: D38}
       - elementary.freshness_anomalies:
           description: >-
             Days whose gap since the previous order is unusually long. New orders
@@ -580,7 +580,7 @@ models:
             expression: "cast(review_created_at as date) >= purchase_date"
           config:
             severity: warn
-            meta: {alert_unit: orders}
+            meta: {alert_unit: orders, decision: D24}
     columns:
       - name: order_id
         description: "{{ doc('order_id') }} Primary key."
@@ -672,7 +672,7 @@ models:
                 earlier_column: approved_at
               config:
                 severity: warn
-                meta: {alert_unit: orders}
+                meta: {alert_unit: orders, decision: D14}
           - is_not_before:
               description: >-
                 Orders handed to the carrier before the customer placed them, which is
@@ -682,7 +682,7 @@ models:
                 earlier_column: purchased_at
               config:
                 severity: warn
-                meta: {alert_unit: orders}
+                meta: {alert_unit: orders, decision: D14}
       - name: delivered_to_customer_at
         description: Delivered to the customer.
         data_type: timestamp
@@ -699,7 +699,7 @@ models:
                 earlier_column: delivered_to_carrier_at
               config:
                 severity: warn
-                meta: {alert_unit: orders}
+                meta: {alert_unit: orders, decision: D14}
       - name: estimated_delivery_date
         description: Delivery date promised to the customer at purchase.
         data_type: date
@@ -1372,7 +1372,7 @@ models:
                 max_value: 5000
               config:
                 severity: warn
-                meta: {alert_unit: shipments}
+                meta: {alert_unit: shipments, decision: D24}
       - name: distance_band
         description: "Distance in bands: 0-100, 100-500, 500-1000, 1000-2000, 2000+ km, or unknown."
         data_type: string

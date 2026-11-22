@@ -55,7 +55,7 @@ models:
                 min_value: 0
               config:
                 severity: warn
-                meta: {alert_unit: orders}
+                meta: {alert_unit: orders, decision: D24}
 
   - name: int_order_reviews_deduplicated
     description: Latest review per order.
