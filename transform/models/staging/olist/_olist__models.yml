@@ -121,7 +121,7 @@ models:
                 max_value: 24
               config:
                 severity: warn
-                meta: {alert_unit: payments}
+                meta: {alert_unit: payments, decision: D24}
       - name: payment_value
         description: Amount of this payment, BRL.
         data_tests:
@@ -178,7 +178,7 @@ models:
                 field: zip_code_prefix
               config:
                 severity: warn
-                meta: {alert_unit: customers}
+                meta: {alert_unit: customers, decision: D24}
 
   - name: stg_olist__products
     description: Products; category name in Portuguese (translated in dim_products).

@@ -306,12 +306,17 @@ jobs:
       - name: Ingest raw data (dlt → DuckDB)
         run: uv run python ingestion/pipeline.py
 
+      # Inputs of the /status/ page (D125): the tools' own result files, collected here
+      # and published by deploy-prod
+      - name: Prepare status inputs
+        run: mkdir -p "$RUNNER_TEMP/status-inputs"
+
       # Data product (D36): the source must meet the input contract before dbt runs
       - name: Input data contract (raw)
-        run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server local
+        run: uv run datacontract ci data-product/contracts/olist-raw.odcs.yaml --server local --output "$RUNNER_TEMP/status-inputs/contract-raw.json" --output-format json
 
       - name: Input data contract (review labels)
-        run: uv run datacontract ci data-product/contracts/review-labels.odcs.yaml --server local
+        run: uv run datacontract ci data-product/contracts/review-labels.odcs.yaml --server local --output "$RUNNER_TEMP/status-inputs/contract-review-labels.json" --output-format json
 
       - name: dbt deps
         working-directory: transform
@@ -341,6 +346,15 @@ jobs:
         working-directory: transform
         run: uv run dbt build --exclude package:elementary
 
+      # The full build's results for the /status/ page (D125), right after the build:
+      # later dbt calls would overwrite run_results.json
+      - name: Collect build results for the status page
+        if: always()
+        run: |
+          for f in run_results manifest sources; do
+            cp "transform/target/$f.json" "$RUNNER_TEMP/status-inputs/" || true
+          done
+
       # Test descriptions for the failure email (notify-failure); written even when
       # the build fails, since dbt parses before it runs anything
       - name: Upload manifest (for the failure email)
@@ -357,7 +371,7 @@ jobs:
       # keys, relationships, quality, freshness), and the descriptor, contracts and
       # dbt project agree with each other
       - name: Output data contract (marts)
-        run: uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server local
+        run: uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server local --output "$RUNNER_TEMP/status-inputs/contract-marts.json" --output-format json
 
       - name: Data product checks
         run: uv run pytest data-product -q
@@ -390,6 +404,16 @@ jobs:
           retention-days: 3
           overwrite: true
           if-no-files-found: error
+
+      - name: Upload status inputs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: status-inputs
+          path: ${{ runner.temp }}/status-inputs
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
 
   # Slim CI on BigQuery, isolated per run: datasets ci_pr_<N>_<run_id>_*.
   # Builds only modified models + children; unmodified parents are read from prod
@@ -981,6 +1005,25 @@ jobs:
           mkdir -p _site/slo
           echo '<!doctype html><meta charset="utf-8"><title>Data SLOs</title><p>The SLO page failed to build in the last deploy; see the GitHub Actions log.</p>'             > _site/slo/index.html
           echo "::warning::SLO report failed: published a stub at /slo/"
+
+      # Status page at /status/ (D125): totals and known warnings of the full DuckDB
+      # build of this commit (artifact of job `dbt build`), contract checks, SLO states
+      # from the report above. Optional like the SLO page.
+      - name: Status page
+        id: status
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name status-inputs --dir "$RUNNER_TEMP/status-inputs"
+          uv run python .github/scripts/status_report.py --inputs "$RUNNER_TEMP/status-inputs"             --out _site/status --slo _site/slo/data.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Status page stub
+        if: steps.status.outcome == 'failure'
+        run: |
+          mkdir -p _site/status
+          echo '<!doctype html><meta charset="utf-8"><title>Data status</title><p>The status page failed to build in the last deploy; see the GitHub Actions log.</p>'             > _site/status/index.html
+          echo "::warning::Status page failed: published a stub at /status/"
 
       # Observability report at /elementary/ (D38): test and run history, anomaly
       # charts, from the `elementary` dataset prod builds fill. The CLI runs in its
