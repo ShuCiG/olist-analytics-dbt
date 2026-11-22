@@ -355,6 +355,24 @@ cd transform && uv run dbt run-operation drop_isolated_datasets --target ci   # 
 
 The model ignores `--full-refresh` (its rows outlive the 180 days of job history); drop the table to rebuild it.
 
+### Quota guard in the PR cost comment
+
+The PR comment "BigQuery cost of this PR's CI build" (`.github/scripts/ci_cost.py`, D124) also reports the quota day:
+the bytes billed by all jobs of the project since midnight Pacific time (08:00 UTC in winter, 07:00 in summer) against
+`QueryUsagePerDay` (34,952 MiB, `infra/cost.tf`), and the total after a merge, at the cost of the last prod deploy.
+The comment carries a warning when that total is **15 GiB or more**, about half of the limit: the billed sum
+undercounts what the quota counts (D120), so a full build or a deploy should start below it. Above the threshold,
+merge after the reset. The comment is advisory: nothing blocks a merge or the deploy. Reading all jobs needs
+`bigquery.jobs.listAll` for `olist-ci` (`infra/job_history.tf`); until that is applied the comment says the quota is
+not readable. The same sum by hand:
+
+```sql
+select round(sum(total_bytes_billed) / pow(1024, 3), 2) as gib_billed
+from `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+where creation_time >= timestamp(date(current_timestamp(), 'America/Los_Angeles'), 'America/Los_Angeles')
+  and parent_job_id is null;
+```
+
 ### PR column impact
 
 What slim CI posts on a PR (D101). Local: compile what the branch changes against the last prod deploy's manifest,

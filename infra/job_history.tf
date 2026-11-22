@@ -18,3 +18,12 @@ resource "google_project_iam_member" "job_history_viewer" {
   role    = google_project_iam_custom_role.job_history_viewer.name
   member  = google_service_account.this["dbt-runner"].member
 }
+
+# The PR cost comment (.github/scripts/ci_cost.py, D124) reads the project's quota-day
+# usage from the same view. olist-ci already lists its own jobs (roles/bigquery.user);
+# this adds the other accounts' jobs, still no table data and no write.
+resource "google_project_iam_member" "job_history_viewer_ci" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.job_history_viewer.name
+  member  = google_service_account.this["olist-ci"].member
+}

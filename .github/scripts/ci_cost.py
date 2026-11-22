@@ -6,6 +6,11 @@ Every dbt query of the run carries the job label `github_run` = `<run id>-<attem
 with roles/bigquery.user) per dbt node, and sets each node next to its last prod
 build from the cost mart `marts.fct_dbt_job_costs` (D71), which olist-ci can read.
 
+The comment also states the project's quota day (D124): bytes billed so far since
+midnight Pacific time, against QueryUsagePerDay (infra/cost.tf), and the forecast after
+a prod deploy at the cost of the last one. That needs `bigquery.jobs.listAll`
+(infra/job_history.tf); without it the section says so and the rest stays.
+
 Usage: python .github/scripts/ci_cost.py <project id> <github_run label> <out.md> [run url]
 Env:   Application Default Credentials (google-github-actions/auth in CI)
 """
@@ -21,6 +26,11 @@ from typing import Any
 MARKER = "<!-- bigquery-cost -->"
 TOP = 15
 MIB = 1024 * 1024
+GIB = 1024 * MIB
+# QueryUsagePerDay in infra/cost.tf (MiB). The billed sum undercounts what the quota
+# counts (D120), so the warning comes at about half of it.
+QUOTA_LIMIT = 34952 * MIB
+WARN_AT = 15 * GIB
 
 # Run-level jobs (no node) split by origin as in the cost mart (#147): `elementary` when
 # the job or one of its statements (child jobs) touches an Elementary dataset, else the
@@ -70,6 +80,29 @@ where j.parent_job_id is null
 group by resource_type, node, origin
 """
 
+# Whole project since midnight Pacific time (the quota day: 08:00 UTC in winter), top-level
+# jobs only: a script's statements are already inside their parent's bytes
+QUOTA_SQL = """
+select
+    coalesce(sum(total_bytes_billed), 0) as bytes_billed,
+    timestamp(date(current_timestamp(), 'America/Los_Angeles'), 'America/Los_Angeles') as day_start
+from `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+where
+    creation_time >= timestamp_sub(current_timestamp(), interval 2 day)
+    and creation_time >= timestamp(date(current_timestamp(), 'America/Los_Angeles'), 'America/Los_Angeles')
+    and parent_job_id is null
+"""
+
+# Bytes of the latest prod deploy, the cost a merge adds
+DEPLOY_SQL = """
+select sum(bytes_billed) as bytes_billed
+from `{project}.marts.fct_dbt_job_costs`
+where dbt_target = 'prod'
+group by dbt_invocation_id
+order by max(created_at) desc
+limit 1
+"""
+
 # Per node, the jobs of the latest prod invocation that built or tested it
 PROD_SQL = """
 with per_invocation as (
@@ -88,6 +121,12 @@ select resource_type, node, jobs, bytes_billed
 from per_invocation
 qualify row_number() over (partition by resource_type, node order by built_at desc) = 1
 """
+
+
+@dataclass
+class Quota:
+    used: int  # billed bytes of the whole project since the quota day began
+    deploy: int | None  # bytes of the last prod deploy; None when unknown
 
 
 @dataclass
@@ -112,7 +151,26 @@ def size(n: int) -> str:
     return f"{n / 1024 / MIB:.2f} GiB" if n >= 1024 * MIB else f"{n / MIB:.0f} MiB"
 
 
-def render(ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: str = "") -> str:
+def quota_lines(quota: Quota | None) -> list[str]:
+    """The quota-day section; a warning above WARN_AT, now or after a prod deploy."""
+    if quota is None:
+        return ["**Quota today:** not readable (the CI account lacks `bigquery.jobs.listAll`, infra/job_history.tf)."]
+    limit = f"{QUOTA_LIMIT / GIB:.1f} GiB"
+    lines = [f"**Quota today:** {size(quota.used)} billed of {limit} (all jobs, this run included)."]
+    after = quota.used + (quota.deploy or 0)
+    if quota.deploy:
+        lines.append(f"A merge deploys prod for about {size(quota.deploy)} (the last deploy): {size(after)} after it.")
+    if after >= WARN_AT:
+        lines.append(
+            f"> [!WARNING]\n> Above {WARN_AT // GIB} GiB: the billed sum undercounts the quota (D120). "
+            "Merge after the reset (midnight Pacific time) or the prod deploy may fail on QueryUsagePerDay."
+        )
+    return lines
+
+
+def render(
+    ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: str = "", quota: Quota | None = None
+) -> str:
     """Comment body: total, the TOP most expensive nodes, each next to its last prod build."""
     total = sum(c.bytes_billed for c in ci)
     jobs = sum(c.jobs for c in ci)
@@ -120,6 +178,7 @@ def render(ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: s
     lines = [MARKER, "### BigQuery cost of this PR's CI build", ""]
     if not ci:
         lines.append(f"No dbt jobs found for this run{run}.")
+        lines += ["", *quota_lines(quota)]
         return "\n".join(lines) + "\n"
     nodes = [c for c in ci if c.node]
     matched = [prod[(c.resource_type or "", c.node or "")] for c in nodes if (c.resource_type or "", c.node or "") in prod]
@@ -132,6 +191,7 @@ def render(ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: s
     unfinished = sum(c.unfinished for c in ci)
     if unfinished:
         lines.append(f"{unfinished} jobs were still running: their bytes are not counted yet.")
+    lines += ["", *quota_lines(quota)]
     lines += ["", "| Node | Type | Jobs | Billed | Last prod build |", "|---|---|--:|--:|--:|"]
     ranked = sorted(ci, key=lambda c: (-c.bytes_billed, c.node or "", c.origin or ""))
     for c in ranked[:TOP]:
@@ -148,7 +208,7 @@ def render(ci: list[NodeCost], prod: dict[tuple[str, str], NodeCost], run_url: s
         "merges new rows. BigQuery bills at least 10 MiB per table a query reads. "
         "Last prod build: the node's jobs in the latest prod run that built or tested it; "
         "– when prod has not built it since the job labels (D71). "
-        "Updated on every push; this summary's own two queries are not counted.</sub>",
+        "Updated on every push; this summary's own queries are not counted in the run's cost.</sub>",
     ]
     return "\n".join(lines) + "\n"
 
@@ -171,6 +231,22 @@ def read_prod(client: Any, project: str, nodes: list[str]) -> dict[tuple[str, st
     return {(r.resource_type, r.node): NodeCost(r.resource_type, r.node, r.jobs, r.bytes_billed) for r in rows}
 
 
+def read_quota(client: Any, project: str) -> Quota | None:
+    """None when the account may not list the project's jobs."""
+    from google.api_core.exceptions import Forbidden
+
+    try:
+        used = next(iter(client.query(QUOTA_SQL).result())).bytes_billed
+    except Forbidden:
+        return None
+    try:
+        rows = list(client.query(DEPLOY_SQL.format(project=project)).result())
+        deploy = int(rows[0].bytes_billed) if rows else None
+    except Exception:  # noqa: BLE001 - the forecast is optional
+        deploy = None
+    return Quota(int(used), deploy)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) not in (4, 5):
         print(__doc__, file=sys.stderr)
@@ -182,7 +258,7 @@ def main(argv: list[str]) -> int:
     client = bigquery.Client(project=project, location="EU")
     ci = read_ci(client, run)
     prod = read_prod(client, project, sorted({c.node for c in ci if c.node}))
-    body = render(ci, prod, run_url)
+    body = render(ci, prod, run_url, read_quota(client, project))
     Path(out).write_text(body, encoding="utf-8")
     print(body)
     return 0
