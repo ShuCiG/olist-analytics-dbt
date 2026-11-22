@@ -67,3 +67,31 @@ def test_run_level_split_by_origin() -> None:
         "| run-level: dbt run-operation | run | 3 | 30 MiB | – |",
         "| run-level: dbt (hooks, introspection) | run | 1 | 10 MiB | – |",
     ]
+
+
+GIB = ci_cost.GIB
+
+
+def test_quota_below_the_warning() -> None:
+    body = ci_cost.render([NodeCost("model", "m", 1, 10 * MIB)], {}, quota=ci_cost.Quota(5 * GIB, 4 * GIB))
+    assert "**Quota today:** 5.00 GiB billed of 34.1 GiB" in body
+    assert "A merge deploys prod for about 4.00 GiB (the last deploy): 9.00 GiB after it." in body
+    assert "WARNING" not in body
+
+
+def test_quota_warns_after_a_deploy() -> None:
+    body = ci_cost.render([NodeCost("model", "m", 1, 10 * MIB)], {}, quota=ci_cost.Quota(12 * GIB, 4 * GIB))
+    assert "16.00 GiB after it." in body
+    assert "> [!WARNING]" in body and "Above 15 GiB" in body
+
+
+def test_quota_unreadable_and_without_deploy_figure() -> None:
+    ci = [NodeCost("model", "m", 1, 10 * MIB)]
+    assert "not readable" in ci_cost.render(ci, {}, quota=None)
+    body = ci_cost.render(ci, {}, quota=ci_cost.Quota(16 * GIB, None))
+    assert "A merge deploys" not in body and "> [!WARNING]" in body
+
+
+def test_quota_shown_without_dbt_jobs() -> None:
+    body = ci_cost.render([], {}, quota=ci_cost.Quota(GIB, None))
+    assert "No dbt jobs found" in body and "**Quota today:** 1.00 GiB" in body
