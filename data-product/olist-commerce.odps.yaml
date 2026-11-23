@@ -51,6 +51,12 @@ inputPorts:
     customProperties:
       - property: loader
         value: dlt (ingestion/pipeline.py), label batches in the repo (ingestion/review_labels), LLM-labelled
+  - name: brasilapi-holidays
+    contractId: brasilapi-holidays
+    version: 1.0.0
+    customProperties:
+      - property: loader
+        value: dlt (ingestion/pipeline.py), REST feed BrasilAPI with Nager.Date as fallback (ingestion/holidays_feed.py)
 
 outputPorts:
   - name: marts
@@ -64,6 +70,8 @@ outputPorts:
       - id: olist-raw
         version: 1.1.0
       - id: review-labels
+        version: 1.0.0
+      - id: brasilapi-holidays
         version: 1.0.0
     customProperties:
       - property: implementation

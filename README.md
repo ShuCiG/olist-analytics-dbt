@@ -97,9 +97,11 @@ flowchart LR
     ic --> raw
     labels[(review labels<br/>LLM, files in repo)] -->|dlt, when changed| lc{{input contract<br/>review-labels}}
     lc --> raw
+    holidays[(national holidays<br/>BrasilAPI REST)] -->|dlt, new years only| hc{{input contract<br/>brasilapi-holidays}}
+    hc --> raw
 
     subgraph product[Data product olist-commerce · Product Owner]
-        raw[raw<br/>9 tables] --> staging[staging<br/>9 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
+        raw[raw<br/>10 tables] --> staging[staging<br/>10 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
         marts --> metrics[semantic layer<br/>34 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end

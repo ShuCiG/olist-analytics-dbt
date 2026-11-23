@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: stg_brasilapi__holidays
+    description: Brazilian national holidays, typed. One row per date.
+    columns:
+      - name: holiday_date
+        description: The day of the holiday; primary key (two holidays on one day are joined in the name).
+        data_tests:
+          - unique
+          - not_null
+      - name: holiday_name
+        description: Name in Portuguese (BrasilAPI) or the local name (fallback source).
+        data_tests: [not_null]
+      - name: holiday_type
+        description: Always `national`; regional holidays are not loaded.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [national]
+      - name: holiday_year
+        description: Calendar year of the holiday.
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "= extract(year from holiday_date)"
+      - name: source_api
+        description: Which API answered for this year, `brasilapi` or the fallback `nager`.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [brasilapi, nager]

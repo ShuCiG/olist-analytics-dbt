@@ -10,6 +10,7 @@ import json
 import re
 import shutil
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -41,6 +42,20 @@ LABEL_HEADER = ["review_id", "sentiment", "topic", "translation_en", "labeled_by
 
 def write_labels(path: Path, rows: list[tuple[str, str]]) -> None:
     write_csv(path, LABEL_HEADER, [(rid, s, "delivery", "Arrived, \"fast\",\nthanks", "test", "1") for rid, s in rows])
+
+
+def fake_holiday_years(years: list[int]) -> list[dict[str, str]]:
+    return [
+        {
+            "holiday_date": f"{year}-{month:02d}-01",
+            "holiday_name": f"Holiday {month}",
+            "holiday_type": "national",
+            "holiday_year": str(year),
+            "source": "test",
+        }
+        for year in years
+        for month in range(1, 11)
+    ]
 
 
 @pytest.fixture
@@ -84,6 +99,7 @@ def run(dump: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     labels.mkdir()
     write_labels(labels / "batch_000.csv", [("rv_o1", "positive"), ("rv_o3", "negative")])
     monkeypatch.setattr(pipeline, "LABELS_DIR", labels)
+    monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", fake_holiday_years)  # never the real API
 
     def _run(*args: str) -> dict:
         monkeypatch.setattr(sys, "argv", ["pipeline.py", "--duckdb-path", str(db), *args])
@@ -628,3 +644,64 @@ def test_deletion_request_table_on_bigquery_is_in_the_project(monkeypatch: pytes
     monkeypatch.delenv("OLIST_DELETION_REQUESTS", raising=False)
     assert pipeline.deletion_requests_table("bigquery") == f"`{pipeline.GCP_PROJECT_ID}.pii_keys.deletion_requests`"
     assert pipeline.deletion_requests_table("duckdb") == "pii_keys.deletion_requests"
+
+
+def holiday_years(db: Path) -> list[int]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        return [int(r[0]) for r in con.execute("select distinct holiday_year from raw.holidays order by 1").fetchall()]
+
+
+def test_holidays_load_from_the_first_order_year_to_next_year(run) -> None:
+    this_year = datetime.now(UTC).year
+    status = run("--until", "2016-09")
+    years = list(range(pipeline.HOLIDAYS_FIRST_YEAR, this_year + 2))
+    assert holiday_years(run.db) == years
+    assert status["holidays_loaded"] == 10 * len(years) == raw_count(run.db, "holidays")
+
+
+def test_complete_holidays_make_no_request(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "holidays")
+
+    def no_request(years: list[int]) -> list[dict[str, str]]:
+        raise AssertionError(f"a complete table must not fetch {years}")
+
+    monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", no_request)
+    assert run("--until", "2016-09")["holidays_loaded"] == 0
+    assert raw_count(run.db, "holidays") == before
+
+
+def test_only_the_missing_year_is_fetched(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    asked: list[list[int]] = []
+
+    def record(years: list[int]) -> list[dict[str, str]]:
+        asked.append(years)
+        return fake_holiday_years(years)
+
+    monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", record)
+    monkeypatch.setattr(pipeline, "HOLIDAYS_FIRST_YEAR", 2015)
+    assert run("--until", "2016-09")["holidays_loaded"] == 10
+    assert asked == [[2015]]
+    assert holiday_years(run.db)[0] == 2015
+
+
+def test_holidays_feed_down_fails_the_run_and_keeps_the_table(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "holidays")
+
+    def down(years: list[int]) -> list[dict[str, str]]:
+        raise pipeline.holidays_feed.HolidaysError(f"no holidays for {years[0]}: brasilapi: down; nager: down")
+
+    monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", down)
+    monkeypatch.setattr(pipeline, "HOLIDAYS_FIRST_YEAR", 2015)
+    with pytest.raises(pipeline.holidays_feed.HolidaysError, match="no holidays for 2015"):
+        run("--until", "2016-09")
+    assert raw_count(run.db, "holidays") == before
+
+
+def test_full_refresh_leaves_complete_holidays(run) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "holidays")
+    run("--full-refresh", "--until", "2016-09")  # drops the dlt state too: the years load again
+    assert raw_count(run.db, "holidays") == before
