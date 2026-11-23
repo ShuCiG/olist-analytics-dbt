@@ -34,6 +34,10 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   `holidays`, `merge` on the date, loaded for the years raw lacks (2016 to next year).
   A normal run makes no request. The feed is fetched and checked in full before the first
   write; BrasilAPI first, Nager.Date as fallback; both down = the run fails.
+- Daily weather per state (REST, ingestion/weather_feed.py, #349): one table `weather_daily`,
+  `merge` on (state, weather_date), from the first purchase to 210 days after the last one
+  (capped at the archive's last day). Loads only the days after the last loaded one; same
+  all-or-nothing rule as the holidays, no fallback source.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
   dbt models and the field for `dbt source freshness`. An order and its items,
   payments and reviews always load in the same chunk, so they share it.
@@ -107,6 +111,7 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import holidays_feed  # noqa: E402
 import synthetic  # noqa: E402
+import weather_feed  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
@@ -118,6 +123,10 @@ LABEL_MAX_TEXTS = int(os.environ.get("OLIST_LABEL_MAX_TEXTS", "500"))
 # Holidays: loaded for every year from the first order year to next year (#348)
 HOLIDAYS_FIRST_YEAR = 2016
 HOLIDAY_COLUMNS = ["holiday_date", "holiday_name", "holiday_type", "holiday_year", "source"]
+# Weather (#349): per state and day from the first purchase to this many days after the last one
+# (the slowest delivery of the dump took 210 days), never past what the archive has
+WEATHER_TAIL_DAYS = 210
+WEATHER_COLUMNS = ["state", "weather_date", "precipitation_mm", "temperature_c"]
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -652,6 +661,66 @@ def load_holidays(pipeline: dlt.Pipeline, today: date) -> int:
     return table.num_rows
 
 
+def lenient_date(text: str) -> date:
+    """A 'YYYY-MM-DD' prefix as a date; an impossible day (2018-06-31) is clamped to the month's last day.
+
+    The weather range comes from raw order times, which the loader checks only for form (read_orders):
+    a bad one is dbt's to flag (fault injection: impossible purchase time), not a reason to fail the ingest.
+    """
+    year, month, day = int(text[:4]), int(text[5:7]), int(text[8:10])
+    last_day = (date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(day, last_day))
+
+
+def weather_range(pipeline: dlt.Pipeline, today: date) -> tuple[date, date] | None:
+    """Days of weather raw lacks: after the last loaded day (or from the first purchase) up to
+    the last purchase + WEATHER_TAIL_DAYS, capped at the last day the archive has. None = complete."""
+    with pipeline.sql_client() as client:
+        orders = client.make_qualified_table_name("orders")
+        try:
+            bounds = client.execute_sql(
+                f"select min(substr(order_purchase_timestamp, 1, 10)), max(substr(order_purchase_timestamp, 1, 10)) from {orders}"
+            )
+        except DatabaseUndefinedRelation:
+            return None
+        assert bounds, "no result from the order dates query"
+        first, last = bounds[0]
+        try:
+            weather = client.make_qualified_table_name("weather_daily")
+            latest = client.execute_sql(f"select max(weather_date) from {weather}")
+        except DatabaseUndefinedRelation:
+            latest = None
+        loaded = latest[0][0] if latest else None
+    if first is None:
+        return None
+    start = date.fromisoformat(loaded) + timedelta(days=1) if loaded else lenient_date(first)
+    end = min(lenient_date(last) + timedelta(days=WEATHER_TAIL_DAYS), weather_feed.last_available_day(today))
+    return (start, end) if start <= end else None
+
+
+def load_weather(pipeline: dlt.Pipeline, today: date) -> int:
+    """Load the weather of the days raw lacks; returns the rows loaded.
+
+    Order dates (the dump and the generated months, D112) are history: the archive has them
+    for good, so a normal run costs two queries and no request. A longer feed (or a later
+    first load) fetches only the days after the last loaded one. Everything is fetched and
+    checked before the first write: a feed that is down or answers wrongly fails the run and
+    leaves raw.weather_daily as it was.
+    """
+    missing = weather_range(pipeline, today)
+    if missing is None:
+        print("Weather complete: load skipped")
+        return 0
+    rows = weather_feed.fetch_range(*missing)
+    table = pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in WEATHER_COLUMNS]))
+    table = with_loaded_at(with_required(table, ["state", "weather_date"]), datetime.now(UTC))
+    pipeline.run(
+        dlt.resource([table], name="weather_daily", write_disposition="merge", primary_key=["state", "weather_date"])
+    )
+    print(f"Weather {missing[0]}..{missing[1]}: {table.num_rows} rows loaded")
+    return table.num_rows
+
+
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
     return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
@@ -842,6 +911,7 @@ def feed_status(
     dropped_columns: dict[str, list[str]],
     labels_loaded: int = 0,
     holidays_loaded: int = 0,
+    weather_loaded: int = 0,
 ) -> dict[str, object]:
     """This run's order count and column changes + the raw orders table as it is now.
 
@@ -860,6 +930,8 @@ def feed_status(
         "labels_loaded": labels_loaded,
         # New holiday years change dim_date: same rule
         "holidays_loaded": holidays_loaded,
+        # New weather days change fct_order_weather: same rule
+        "weather_loaded": weather_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -991,8 +1063,9 @@ def main() -> None:
     label_new_reviews(pipeline, LABELS_DIR)
     labels_loaded = load_review_labels(pipeline, LABELS_DIR)
     holidays_loaded = load_holidays(pipeline, datetime.now(UTC).date())
+    weather_loaded = load_weather(pipeline, datetime.now(UTC).date())
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded, holidays_loaded)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded, holidays_loaded, weather_loaded)))
 
 
 if __name__ == "__main__":

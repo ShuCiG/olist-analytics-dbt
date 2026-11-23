@@ -8,7 +8,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: olist-commerce
 name: Olist commerce analytics
-version: 1.9.0
+version: 1.10.0
 status: active
 domain: commerce
 type: aggregate
@@ -57,6 +57,12 @@ inputPorts:
     customProperties:
       - property: loader
         value: dlt (ingestion/pipeline.py), REST feed BrasilAPI with Nager.Date as fallback (ingestion/holidays_feed.py)
+  - name: openmeteo-weather
+    contractId: openmeteo-weather
+    version: 1.0.0
+    customProperties:
+      - property: loader
+        value: dlt (ingestion/pipeline.py), REST feed Open-Meteo archive, one point per state (ingestion/weather_feed.py)
 
 outputPorts:
   - name: marts
@@ -65,13 +71,15 @@ outputPorts:
       Star schema in BigQuery (prod and hourly live feed) and DuckDB (local); also built and
       contract-tested weekly on Databricks (CI only).
     contractId: olist-marts
-    version: 1.7.0
+    version: 1.8.0
     inputContracts:
       - id: olist-raw
         version: 1.1.0
       - id: review-labels
         version: 1.0.0
       - id: brasilapi-holidays
+        version: 1.0.0
+      - id: openmeteo-weather
         version: 1.0.0
     customProperties:
       - property: implementation
@@ -102,7 +110,7 @@ outputPorts:
       warehouse.
     inputContracts:
       - id: olist-marts
-        version: 1.7.0
+        version: 1.8.0
     authoritativeDefinitions:
       - type: implementation
         url: https://github.com/ShuCiG/olist-analytics-dbt/blob/main/transform/models/marts/_marts__models.yml

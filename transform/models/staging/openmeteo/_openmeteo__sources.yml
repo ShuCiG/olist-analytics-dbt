@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: openmeteo
+    description: >
+      The second external REST feed: daily weather per Brazilian state from Open-Meteo (archive API,
+      ERA5 reanalysis), fetched by `ingestion/pipeline.py` (`ingestion/weather_feed.py`, #349). Not part
+      of the Olist dump. Every column is a string, plus `_loaded_at`.
+    schema: "{{ env_var('DBT_RAW_SCHEMA', 'raw') }}"
+    tables:
+      - name: weather_daily
+        description: >
+          One row per state and day, from the first order purchase to 210 days after the last one.
+          The point of a state is its capital. Days are loaded once and kept (the archive does not
+          change), a longer order feed adds the days after the last loaded one.

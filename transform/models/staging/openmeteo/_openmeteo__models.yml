@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_openmeteo__weather_daily
+    description: Daily weather per state (capital of the state), typed. One row per state and day.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [state, weather_date]
+    columns:
+      - name: state
+        description: Two-letter state code (the state's capital stands for it).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [AC, AL, AM, AP, BA, CE, DF, ES, GO, MA, MG, MS, MT, PA, PB, PE, PI, PR, RJ, RN, RO, RR, RS, SC, SE, SP, TO]
+      - name: weather_date
+        description: Local calendar day of the capital.
+        data_tests: [not_null]
+      - name: precipitation_mm
+        description: Total precipitation of the day, mm.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1000
+      - name: temperature_c
+        description: Mean 2 m air temperature of the day, degrees Celsius.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -10
+                max_value: 45

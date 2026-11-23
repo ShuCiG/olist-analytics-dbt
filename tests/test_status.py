@@ -146,7 +146,7 @@ def test_workflow_hands_the_build_results_to_the_deploy() -> None:
     build = WORKFLOW["jobs"]["dbt-build"]["steps"]
     assert any(s.get("with", {}).get("name") == "status-inputs" for s in build)
     runs = "\n".join(s.get("run", "") for s in build)
-    for name in ("raw", "review-labels", "brasilapi-holidays", "marts"):
+    for name in ("raw", "review-labels", "brasilapi-holidays", "openmeteo-weather", "marts"):
         assert f"status-inputs/contract-{name}.json" in runs
     deploy = "\n".join(s.get("run", "") for s in WORKFLOW["jobs"]["deploy-prod"]["steps"])
     assert "--name status-inputs" in deploy and "status_report.py" in deploy and "--out _site/status" in deploy
