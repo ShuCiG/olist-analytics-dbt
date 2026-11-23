@@ -1406,6 +1406,74 @@ models:
         description: Delivered after the estimated date (date comparison); false if not delivered.
         data_type: boolean
 
+  - name: fct_order_weather
+    description: >
+      Delivery against the weather: one row per order, with the weather of the customer's state (Open-Meteo,
+      the state's capital stands for it, #349) on the purchase day and on the delivery day. Weather is real
+      for every order, generated months included (`is_synthetic`): a rain-vs-delay result for generated
+      orders only reflects the dump's delays copied onto real weather, so it is not evidence.
+    config:
+      group: orders
+      contract:
+        enforced: true
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: is_synthetic
+        description: True for orders of the generated months after the dump (D112).
+        data_type: boolean
+        data_tests: [not_null]
+      - name: customer_state
+        description: Two-letter state code of the customer's address on the order.
+        data_type: string
+      - name: purchase_date
+        description: Order purchase date.
+        data_type: date
+      - name: delivery_date
+        description: Date the customer received the order; null if not delivered.
+        data_type: date
+      - name: purchase_precipitation_mm
+        description: Precipitation in the customer's state on the purchase day, mm; null when the day has no weather row.
+        data_type: *float_type
+      - name: purchase_temperature_c
+        description: Mean temperature in the customer's state on the purchase day, degrees Celsius.
+        data_type: *float_type
+      - name: delivery_precipitation_mm
+        description: Precipitation in the customer's state on the delivery day, mm; null if not delivered.
+        data_type: *float_type
+      - name: delivery_temperature_c
+        description: Mean temperature in the customer's state on the delivery day, degrees Celsius.
+        data_type: *float_type
+      - name: is_delivered
+        description: True if the order has a delivery timestamp.
+        data_type: boolean
+      - name: days_to_deliver
+        description: Days from purchase to delivery; null if not delivered.
+        data_type: bigint
+      - name: is_delivered_late
+        description: Delivered after the estimated date (date comparison); false if not delivered.
+        data_type: boolean
+      - name: delivery_rain_band
+        description: "Rain on the delivery day: dry (< 0.1 mm), light (< 5), moderate (< 20), heavy, or unknown (not delivered)."
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [dry, light, moderate, heavy, unknown]
+
   - name: fct_review_topics
     description: >
       What customers write about: one row per order whose review has a label (D92). Sentiment and topic

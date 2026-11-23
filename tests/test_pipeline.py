@@ -10,7 +10,7 @@ import json
 import re
 import shutil
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -58,6 +58,20 @@ def fake_holiday_years(years: list[int]) -> list[dict[str, str]]:
     ]
 
 
+def fake_weather(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+    days = (end - start).days + 1
+    return [
+        {
+            "state": state,
+            "weather_date": (start + timedelta(days=i)).isoformat(),
+            "precipitation_mm": "1.00",
+            "temperature_c": "20.0",
+        }
+        for state, _, _ in pipeline.weather_feed.STATES
+        for i in range(days)
+    ]
+
+
 @pytest.fixture
 def dump(tmp_path: Path) -> Path:
     src = tmp_path / "kaggle"
@@ -100,6 +114,9 @@ def run(dump: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     write_labels(labels / "batch_000.csv", [("rv_o1", "positive"), ("rv_o3", "negative")])
     monkeypatch.setattr(pipeline, "LABELS_DIR", labels)
     monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", fake_holiday_years)  # never the real API
+    monkeypatch.setattr(pipeline.weather_feed, "fetch_range", fake_weather)
+    monkeypatch.setattr(pipeline, "WEATHER_TAIL_DAYS", 10)  # small ranges in the tests
+    monkeypatch.setattr(pipeline.weather_feed, "last_available_day", lambda today: date(2030, 1, 1))
 
     def _run(*args: str) -> dict:
         monkeypatch.setattr(sys, "argv", ["pipeline.py", "--duckdb-path", str(db), *args])
@@ -705,3 +722,55 @@ def test_full_refresh_leaves_complete_holidays(run) -> None:
     before = raw_count(run.db, "holidays")
     run("--full-refresh", "--until", "2016-09")  # drops the dlt state too: the years load again
     assert raw_count(run.db, "holidays") == before
+
+
+def weather_days(db: Path) -> tuple[str, str, int]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        row = con.execute("select min(weather_date), max(weather_date), count(distinct weather_date) from raw.weather_daily").fetchone()
+    assert row is not None
+    return row
+
+
+def test_weather_covers_the_orders_and_a_tail(run) -> None:
+    status = run("--until", "2016-09")  # purchases 2016-09-04 and 2016-09-15
+    assert weather_days(run.db) == ("2016-09-04", "2016-09-25", 22)
+    assert status["weather_loaded"] == 22 * 27 == raw_count(run.db, "weather_daily")
+
+
+def test_complete_weather_makes_no_request(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "weather_daily")
+
+    def no_request(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+        raise AssertionError(f"complete weather must not fetch {start}..{end}")
+
+    monkeypatch.setattr(pipeline.weather_feed, "fetch_range", no_request)
+    assert run("--until", "2016-09")["weather_loaded"] == 0
+    assert raw_count(run.db, "weather_daily") == before
+
+
+def test_a_later_month_fetches_only_the_new_days(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    asked: list[tuple[date, date]] = []
+
+    def record(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+        asked.append((start, end))
+        return fake_weather(start, end)
+
+    monkeypatch.setattr(pipeline.weather_feed, "fetch_range", record)
+    run("--until", "2016-10")  # purchase 2016-10-02: the range now ends 2016-10-12
+    assert asked == [(date(2016, 9, 26), date(2016, 10, 12))]
+    assert weather_days(run.db)[:2] == ("2016-09-04", "2016-10-12")
+
+
+def test_weather_feed_down_fails_the_run_and_keeps_the_table(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "weather_daily")
+
+    def down(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+        raise pipeline.weather_feed.WeatherError("weather: ConnectionError: down")
+
+    monkeypatch.setattr(pipeline.weather_feed, "fetch_range", down)
+    with pytest.raises(pipeline.weather_feed.WeatherError, match="ConnectionError"):
+        run("--until", "2016-10")
+    assert raw_count(run.db, "weather_daily") == before

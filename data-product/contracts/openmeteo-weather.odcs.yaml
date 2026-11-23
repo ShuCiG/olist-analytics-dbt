@@ -1,0 +1,99 @@
+# Input contract of the Olist commerce data product (../olist-commerce.odps.yaml): the daily
+# weather per Brazilian state, the product's fourth input and its second REST feed (#349).
+# Open-Meteo's archive API answers (ERA5 reanalysis, no key); ingestion/weather_feed.py checks
+# every answer and ingestion/pipeline.py loads the days raw lacks. Checked with
+# `datacontract test` after every CI ingest, like the other inputs.
+apiVersion: v3.1.0
+kind: DataContract
+id: openmeteo-weather
+name: Daily weather per Brazilian state
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    The weather on the day of an order's purchase and delivery, so late deliveries can be read
+    against rain and temperature (`fct_order_weather`).
+  limitations: >-
+    One point per state: its capital stands for the whole state. Days from the first purchase to
+    210 days after the last one, loaded once and kept. Real weather for every date, also for the
+    generated order months (D112). Third-party data: Open-Meteo gives no guarantee; ERA5 is a
+    model reanalysis, not a station reading.
+  usage: >-
+    Read by dbt staging only (transform/models/staging/openmeteo). Consumers use
+    `fct_order_weather` on the marts port.
+tags: [olist, raw, weather, rest]
+
+team:
+  name: olist-analytics
+  members:
+    - username: aliaksandr.letsko
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: raw
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: Loaded by CD after the orders (and in a fresh dataset).
+    project: olist-analytics-dbt-472315
+    dataset: raw
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Loaded by the local Airflow's ingest.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_raw
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: Loaded by the weekly Databricks run into a per-run schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_RAW_SCHEMA}
+
+schema:
+  - name: weather_daily
+    physicalName: weather_daily
+    physicalType: table
+    description: One row per state and day.
+    properties:
+      - name: state
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        description: Two-letter state code.
+      - name: weather_date
+        logicalType: string
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+        description: ISO date, YYYY-MM-DD (local day of the capital).
+      - name: precipitation_mm
+        logicalType: string
+        required: true
+        description: Total precipitation of the day, mm (a number as a string, like every raw column).
+      - name: temperature_c
+        logicalType: string
+        required: true
+        description: Mean 2 m air temperature of the day, degrees Celsius (a number as a string).
+      - name: _loaded_at
+        logicalType: timestamp
+        required: true
+        description: UTC time of the dlt run that wrote the rows.
+    quality:
+      - type: library
+        metric: rowCount
+        mustBeGreaterThan: 10000

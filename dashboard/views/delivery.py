@@ -142,3 +142,24 @@ st.dataframe(
     },
 )
 st.caption(f"State-to-state routes with at least {MIN_SHIPMENTS} delivered shipments in the period.")
+
+st.subheader("Late deliveries and rain")
+st.caption(
+    "Rain in the customer's state (its capital, Open-Meteo, `fct_order_weather`) on the day the order arrived, "
+    "delivered orders only. Weather is real for every order; for generated months the delays are the dump's, "
+    "so turn them off in the sidebar to read this as evidence."
+)
+rain = query(f"""
+    select
+        delivery_rain_band,
+        count(*) as orders,
+        avg(case when is_delivered_late then 1.0 else 0.0 end) as late_rate
+    from {table('fct_order_weather')}
+    where is_delivered and delivery_rain_band <> 'unknown' and {period_filter()}
+    group by 1
+""")
+charts.bar_v(
+    rain, "delivery_rain_band", "late_rate", "Delivered late", ".1%", ["dry", "light", "moderate", "heavy"],
+    extra_tooltip=[alt.Tooltip("orders:Q", title="Orders", format=",")],
+)
+st.caption("Dry < 0.1 mm, light < 5 mm, moderate < 20 mm, heavy 20 mm or more on the delivery day.")

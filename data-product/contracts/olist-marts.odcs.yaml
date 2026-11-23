@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.7.0
+version: 1.8.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -589,6 +589,60 @@ schema:
         logicalType: integer
       - name: is_delivered_late
         logicalType: boolean
+    quality:
+      - *not_empty_rule
+  - name: fct_order_weather
+    physicalName: fct_order_weather
+    physicalType: table
+    description: >-
+      Delivery against the weather: one row per order, with the weather of the customer's state
+      (its capital, Open-Meteo) on the purchase day and on the delivery day. Real weather for
+      every order, also for generated months (`is_synthetic`).
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_order_weather
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: is_synthetic
+        logicalType: boolean
+        required: true
+      - name: customer_state
+        logicalType: string
+      - name: purchase_date
+        logicalType: date
+      - name: delivery_date
+        logicalType: date
+      - name: purchase_precipitation_mm
+        logicalType: number
+        logicalTypeOptions:
+          minimum: 0
+      - name: purchase_temperature_c
+        logicalType: number
+      - name: delivery_precipitation_mm
+        logicalType: number
+        logicalTypeOptions:
+          minimum: 0
+      - name: delivery_temperature_c
+        logicalType: number
+      - name: is_delivered
+        logicalType: boolean
+      - name: days_to_deliver
+        logicalType: integer
+      - name: is_delivered_late
+        logicalType: boolean
+      - name: delivery_rain_band
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [dry, light, moderate, heavy, unknown]
+            mustBe: 0
     quality:
       - *not_empty_rule
   - name: fct_review_topics

@@ -275,6 +275,21 @@ left as it was; the next run tries again. The dbt test `assert_holidays_cover_ev
 missing in raw. A bad year is fixed by deleting its rows from `raw.holidays` (`holiday_year = '2018'`) and rerunning
 the ingest.
 
+## Weather feed (REST)
+
+`fct_order_weather` comes from the second REST source: daily weather per state from Open-Meteo's archive API (D127).
+The ingest loads the days `raw.weather_daily` lacks (first purchase up to 210 days after the last one); a normal run
+makes no request. One request carries the 27 state capitals and at most a year; the loader waits when the minute's
+budget (`X-RateLimit-Remaining`) is smaller than the next request.
+
+```powershell
+uv run python ingestion/pipeline.py          # weather_loaded in the status line
+```
+
+If the feed is down or answers wrongly the ingest fails with `weather <from>..<to>: ...` and `raw.weather_daily` is left
+as it was. `assert_weather_covers_every_order_day` fails when a state-day is missing. A bad day is fixed by deleting
+its rows (`weather_date = '2018-07-01'`) and rerunning the ingest.
+
 ## Review labels
 
 Labels (sentiment, topic, English translation) are CSV batches in `ingestion/review_labels/labels/`, made by

@@ -64,3 +64,11 @@ data_tests:
       the holiday feed (BrasilAPI, Nager.Date) and the ingest log, then rerun the ingest.
     config:
       meta: {alert_unit: years}
+
+  - name: assert_weather_covers_every_order_day
+    description: >-
+      State and day pairs without weather between the first purchase and the last delivery. The weather
+      columns of `fct_order_weather` are silently null for those days, so rain-vs-delay results are wrong
+      without any other sign. Look at the weather feed (Open-Meteo) and the ingest log, then rerun the ingest.
+    config:
+      meta: {alert_unit: state-days}
