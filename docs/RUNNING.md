@@ -259,6 +259,22 @@ On Windows set `PYTHONUTF8=1`: dbt-core reads the v2 manifest with the console c
 The second line runs dbt-oss directly; point `DBT_DUCKDB_PATH` at a copy named `olist.duckdb` (the file name is the
 catalog name), not at `data/olist.duckdb`.
 
+## Holidays feed (REST)
+
+`dim_date.is_holiday` comes from the first external REST source: Brazilian national holidays from BrasilAPI,
+Nager.Date as fallback (D126). The ingest (`ingestion/pipeline.py`, so the Airflow task `dlt_ingest`, the CI ingest
+and the prod deploy alike) loads the years `raw.holidays` lacks, 2016 up to next year; a normal run makes no request.
+
+```powershell
+uv run python ingestion/pipeline.py          # loads missing years, holidays_loaded in the status line
+uv run python -c "import sys; sys.path.insert(0, 'ingestion'); import holidays_feed as f; print(f.fetch_year(2018)[:2])"   # try the feed
+```
+
+If the feed is down the ingest fails with `no holidays for <year>: brasilapi: ...; nager: ...` and `raw.holidays` is
+left as it was; the next run tries again. The dbt test `assert_holidays_cover_every_year` fails when a year is
+missing in raw. A bad year is fixed by deleting its rows from `raw.holidays` (`holiday_year = '2018'`) and rerunning
+the ingest.
+
 ## Review labels
 
 Labels (sentiment, topic, English translation) are CSV batches in `ingestion/review_labels/labels/`, made by

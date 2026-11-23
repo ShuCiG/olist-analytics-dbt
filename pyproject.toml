@@ -59,6 +59,8 @@ typeCheckingMode = "standard"
 # its imports can't resolve here. CI job `airflow DAGs parse` covers that code.
 [[tool.pyright.executionEnvironments]]
 root = "airflow"
+# The image has the repo at /opt/project (sys.path in dags/olist_lineage.py): `lineage` resolves here
+extraPaths = ["."]
 reportMissingImports = "none"
 # `task_a >> task_b` sets a dependency; untyped here, it looks like a no-op
 reportUnusedExpression = "none"

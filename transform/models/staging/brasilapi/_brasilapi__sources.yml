@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: brasilapi
+    description: >
+      The first external REST feed: Brazilian national holidays from BrasilAPI (Nager.Date as fallback),
+      fetched by `ingestion/pipeline.py` (`ingestion/holidays_feed.py`, #348). Not part of the Olist dump.
+      Every column is a string, plus `_loaded_at`.
+    schema: "{{ env_var('DBT_RAW_SCHEMA', 'raw') }}"
+    tables:
+      - name: holidays
+        description: >
+          One row per national holiday date, every year from 2016 to next year. A year is loaded once and
+          kept (holiday lists do not change), the first run of a new year adds the next one.
+          `source` says which API answered.

@@ -1,0 +1,109 @@
+# Input contract of the Olist commerce data product (../olist-commerce.odps.yaml): the
+# Brazilian national holidays, the product's third input and its first REST feed (#348).
+# BrasilAPI answers, Nager.Date is the fallback; ingestion/holidays_feed.py checks every
+# answer and ingestion/pipeline.py loads the years raw lacks. Checked with
+# `datacontract test` after every CI ingest, like the other inputs.
+apiVersion: v3.1.0
+kind: DataContract
+id: brasilapi-holidays
+name: Brazilian national holidays
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    The days that are national holidays in Brazil, so order volume and delivery times can be
+    read against them (`dim_date.is_holiday`).
+  limitations: >-
+    National holidays only (no state or city ones, no bridge days). Years 2016 up to next year;
+    a year is loaded once and kept. Names are in Portuguese (the fallback source gives its local
+    name). Third-party data: BrasilAPI and Nager.Date give no guarantee.
+  usage: >-
+    Read by dbt staging only (transform/models/staging/brasilapi). Consumers use
+    `dim_date` on the marts port.
+tags: [olist, raw, holidays, rest]
+
+team:
+  name: olist-analytics
+  members:
+    - username: aliaksandr.letsko
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: raw
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: Loaded by CD in the first run of a year (and in a fresh dataset).
+    project: olist-analytics-dbt-472315
+    dataset: raw
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Loaded by the local Airflow's ingest in the first run of a year.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_raw
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: Loaded by the weekly Databricks run into a per-run schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_RAW_SCHEMA}
+
+schema:
+  - name: holidays
+    physicalName: holidays
+    physicalType: table
+    description: One row per national holiday date.
+    properties:
+      - name: holiday_date
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+        description: ISO date, YYYY-MM-DD.
+      - name: holiday_name
+        logicalType: string
+        required: true
+      - name: holiday_type
+        logicalType: string
+        required: true
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [national]
+            mustBe: 0
+      - name: holiday_year
+        logicalType: string
+        required: true
+      - name: source
+        logicalType: string
+        required: true
+        description: Which API answered for the year.
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [brasilapi, nager]
+            mustBe: 0
+      - name: _loaded_at
+        logicalType: timestamp
+        required: true
+        description: UTC time of the dlt run that wrote the rows.
+    quality:
+      - type: library
+        metric: rowCount
+        mustBeGreaterThan: 100

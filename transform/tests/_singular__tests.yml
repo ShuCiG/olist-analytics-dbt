@@ -55,3 +55,12 @@ data_tests:
       so every seller-to-customer distance is too.
     config:
       meta: {alert_unit: city pairs}
+
+  - name: assert_holidays_cover_every_year
+    description: >-
+      Years from 2016 to next year with fewer than 8 national holidays loaded (Brazil has 10+).
+      `dim_date.is_holiday` is false for every day of such a year, so holiday comparisons are
+      wrong without any other sign. The loader brings next year in the first run of a year: look at
+      the holiday feed (BrasilAPI, Nager.Date) and the ingest log, then rerun the ingest.
+    config:
+      meta: {alert_unit: years}

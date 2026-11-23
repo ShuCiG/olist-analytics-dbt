@@ -30,6 +30,10 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   replaced DuckDB file (or a dropped dataset) resets it from the destination.
 - Reference tables (customers, products, sellers, geolocation) are full snapshots,
   `replace` on every run.
+- Brazilian national holidays (REST, ingestion/holidays_feed.py, #348): one table
+  `holidays`, `merge` on the date, loaded for the years raw lacks (2016 to next year).
+  A normal run makes no request. The feed is fetched and checked in full before the first
+  write; BrasilAPI first, Nager.Date as fallback; both down = the run fails.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
   dbt models and the field for `dbt source freshness`. An order and its items,
   payments and reviews always load in the same chunk, so they share it.
@@ -85,7 +89,7 @@ import re
 import sys
 import warnings
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import dlt
@@ -101,6 +105,7 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 # Run as a script (Airflow, CI) or imported as ingestion.pipeline (tests)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import holidays_feed  # noqa: E402
 import synthetic  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -110,6 +115,9 @@ DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
 LABELS_DIR = ROOT / "ingestion" / "review_labels" / "labels"
 # Labels for reviews that arrive later (classify_api.py): at most this many new texts per run
 LABEL_MAX_TEXTS = int(os.environ.get("OLIST_LABEL_MAX_TEXTS", "500"))
+# Holidays: loaded for every year from the first order year to next year (#348)
+HOLIDAYS_FIRST_YEAR = 2016
+HOLIDAY_COLUMNS = ["holiday_date", "holiday_name", "holiday_type", "holiday_year", "source"]
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -610,6 +618,40 @@ def load_review_labels(pipeline: dlt.Pipeline, labels_dir: Path) -> int:
     return table.num_rows
 
 
+def loaded_holiday_years(pipeline: dlt.Pipeline) -> set[int]:
+    try:
+        with pipeline.sql_client() as client:
+            holidays = client.make_qualified_table_name("holidays")
+            rows = client.execute_sql(f"select distinct holiday_year from {holidays}")
+    except DatabaseUndefinedRelation:
+        return set()
+    return {int(row[0]) for row in rows or []}
+
+
+def load_holidays(pipeline: dlt.Pipeline, today: date) -> int:
+    """Load the holidays of the years raw.holidays lacks; returns the rows loaded.
+
+    Years are final once loaded (a holiday list does not change), so a normal run
+    costs one query and no request; the first run of a year brings the next one.
+    Everything is fetched and checked before the first write: a feed that is down or
+    answers wrongly fails the run and leaves raw.holidays as it was (the missing years
+    are tried again on the next run). Not tied to the order months, like the labels.
+    """
+    wanted = set(range(HOLIDAYS_FIRST_YEAR, today.year + 2))
+    missing = sorted(wanted - loaded_holiday_years(pipeline))
+    if not missing:
+        print("Holidays complete: load skipped")
+        return 0
+    rows = holidays_feed.fetch_years(missing)
+    table = pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in HOLIDAY_COLUMNS]))
+    table = with_loaded_at(with_required(table, ["holiday_date"]), datetime.now(UTC))
+    pipeline.run(
+        dlt.resource([table], name="holidays", write_disposition="merge", primary_key="holiday_date")
+    )
+    print(f"Holidays {missing[0]}-{missing[-1]}: {table.num_rows} rows loaded")
+    return table.num_rows
+
+
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
     return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
@@ -799,6 +841,7 @@ def feed_status(
     added_columns: dict[str, list[str]],
     dropped_columns: dict[str, list[str]],
     labels_loaded: int = 0,
+    holidays_loaded: int = 0,
 ) -> dict[str, object]:
     """This run's order count and column changes + the raw orders table as it is now.
 
@@ -815,6 +858,8 @@ def feed_status(
         "orders_loaded": orders_loaded,
         # New review labels are new data too: Airflow and the prod deploy rebuild for them
         "labels_loaded": labels_loaded,
+        # New holiday years change dim_date: same rule
+        "holidays_loaded": holidays_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -945,8 +990,9 @@ def main() -> None:
         status = orders_status(pipeline)
     label_new_reviews(pipeline, LABELS_DIR)
     labels_loaded = load_review_labels(pipeline, LABELS_DIR)
+    holidays_loaded = load_holidays(pipeline, datetime.now(UTC).date())
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded, holidays_loaded)))
 
 
 if __name__ == "__main__":
