@@ -661,6 +661,17 @@ def load_holidays(pipeline: dlt.Pipeline, today: date) -> int:
     return table.num_rows
 
 
+def lenient_date(text: str) -> date:
+    """A 'YYYY-MM-DD' prefix as a date; an impossible day (2018-06-31) is clamped to the month's last day.
+
+    The weather range comes from raw order times, which the loader checks only for form (read_orders):
+    a bad one is dbt's to flag (fault injection: impossible purchase time), not a reason to fail the ingest.
+    """
+    year, month, day = int(text[:4]), int(text[5:7]), int(text[8:10])
+    last_day = (date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(day, last_day))
+
+
 def weather_range(pipeline: dlt.Pipeline, today: date) -> tuple[date, date] | None:
     """Days of weather raw lacks: after the last loaded day (or from the first purchase) up to
     the last purchase + WEATHER_TAIL_DAYS, capped at the last day the archive has. None = complete."""
@@ -682,8 +693,8 @@ def weather_range(pipeline: dlt.Pipeline, today: date) -> tuple[date, date] | No
         loaded = latest[0][0] if latest else None
     if first is None:
         return None
-    start = date.fromisoformat(loaded) + timedelta(days=1) if loaded else date.fromisoformat(first)
-    end = min(date.fromisoformat(last) + timedelta(days=WEATHER_TAIL_DAYS), weather_feed.last_available_day(today))
+    start = date.fromisoformat(loaded) + timedelta(days=1) if loaded else lenient_date(first)
+    end = min(lenient_date(last) + timedelta(days=WEATHER_TAIL_DAYS), weather_feed.last_available_day(today))
     return (start, end) if start <= end else None
 
 

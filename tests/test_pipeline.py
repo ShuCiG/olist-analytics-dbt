@@ -774,3 +774,11 @@ def test_weather_feed_down_fails_the_run_and_keeps_the_table(run, monkeypatch: p
     with pytest.raises(pipeline.weather_feed.WeatherError, match="ConnectionError"):
         run("--until", "2016-10")
     assert raw_count(run.db, "weather_daily") == before
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("2018-06-31 25:00:00", date(2018, 6, 30)), ("2018-02-30", date(2018, 2, 28)), ("2016-12-31 01:00:00", date(2016, 12, 31))],
+)
+def test_lenient_date_clamps_an_impossible_day(text: str, expected: date) -> None:
+    assert pipeline.lenient_date(text) == expected
