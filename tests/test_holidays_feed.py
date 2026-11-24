@@ -67,7 +67,7 @@ def test_fallback_when_the_primary_is_down(capsys: pytest.CaptureFixture[str]) -
         brasilapi(2019),  # wrong year
         [{"date": "2018-02-30", "name": "x", "type": "national"}] * 1 + brasilapi(2018)[:9],  # impossible date
         [{"name": "no date"}],  # missing key
-        [{"date": "2018-01-01", "name": " ", "type": "national"}] + brasilapi(2018)[1:],  # no name
+        [{"date": "2018-01-01", "name": " ", "type": "national"}, *brasilapi(2018)[1:]],  # no name
     ],
 )
 def test_bad_answer_from_both_sources_raises(bad: object) -> None:
@@ -81,7 +81,7 @@ def test_bad_primary_answer_falls_back() -> None:
 
 
 def test_two_holidays_on_one_day_are_joined() -> None:
-    body = brasilapi(2018) + [{"date": "2018-01-05", "name": "Outro", "type": "national"}]
+    body = [*brasilapi(2018), {"date": "2018-01-05", "name": "Outro", "type": "national"}]
     rows = feed.fetch_year(2018, session(body))
     assert len(rows) == 12
     assert rows[0]["holiday_name"] == "Dia 1 / Outro"

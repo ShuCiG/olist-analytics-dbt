@@ -72,9 +72,7 @@ def _schema(tables: set[str], known: dict[str, list[str]]) -> dict:
     schema: dict = {}
     for table in tables & known.keys():
         database, schema_name, name = table.split(".")
-        schema.setdefault(database, {}).setdefault(schema_name, {})[name] = {
-            column: "unknown" for column in known[table]
-        }
+        schema.setdefault(database, {}).setdefault(schema_name, {})[name] = dict.fromkeys(known[table], "unknown")
     return schema
 
 
@@ -88,7 +86,7 @@ def _guessed(sql: str, tables: set[str], known: dict[str, list[str]], dialect: s
     """
     used = sorted({c.name for c in sqlglot.parse_one(sql, read=dialect).find_all(exp.Column)})
     unknown = {t for t in tables - known.keys() if t.count(".") == 2}
-    return _schema(tables, {**known, **{t: used for t in unknown}})
+    return _schema(tables, {**known, **dict.fromkeys(unknown, used)})
 
 
 def _column_trace(node: Node, column: str) -> ColumnTrace:

@@ -11,7 +11,17 @@ from typing import Any
 
 import pytest
 
-from lineage.impact import MARKER, MAX_BODY, UPDATE_ONLY, WHOLE_MODEL, Change, Consumers, analyze, main, render
+from lineage.impact import (
+    MARKER,
+    MAX_BODY,
+    UPDATE_ONLY,
+    WHOLE_MODEL,
+    Change,
+    Consumers,
+    analyze,
+    main,
+    render,
+)
 
 PROD_STG = "`p`.`staging`.`stg_orders`"
 PROD_FCT = "`p`.`marts`.`fct_orders`"

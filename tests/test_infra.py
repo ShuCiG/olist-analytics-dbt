@@ -15,7 +15,7 @@ def _resources() -> dict[str, str]:
     blocks: dict[str, str] = {}
     for tf in sorted(INFRA.glob("*.tf")):
         text = tf.read_text(encoding="utf-8")
-        starts = [m for m in re.finditer(r'^resource "([\w-]+)" "([\w-]+)"', text, re.M)]
+        starts = list(re.finditer(r'^resource "([\w-]+)" "([\w-]+)"', text, re.M))
         for i, m in enumerate(starts):
             end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
             blocks[f"{m[1]}.{m[2]}"] = text[m.end() : end]

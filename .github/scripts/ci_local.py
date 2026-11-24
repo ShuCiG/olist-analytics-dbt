@@ -81,6 +81,7 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("pytest", "python-tests", "pytest", "uv run pytest -q", lane="pytest"),
     Check("pyright", "pyright", "pyright", "uv run pyright", lane="light"),
+    Check("ruff", "ruff", "ruff", "uv run ruff check .", lane="light"),
     Check(
         "audit-reports",
         "python-tests",
@@ -238,10 +239,11 @@ def run_check(check: Check, scratch: Path, out: list[str]) -> int | None:
         env["DBT_DUCKDB_PATH"] = str(scratch / "evaluator.duckdb")
         env["DBT_TARGET_PATH"] = str(scratch / "evaluator-target")
         env["DBT_LOG_PATH"] = str(scratch / "evaluator-logs")
-    if check.key == "contract-versioning":
-        # CI fetches main first; offline, compare with the last fetched main
-        if _run(["git", "fetch", "--no-tags", "--quiet", "origin", "main"], ROOT, env, out):
-            out.append("git fetch failed: comparing with the last fetched origin/main\n")
+    # CI fetches main first; offline, compare with the last fetched main
+    if check.key == "contract-versioning" and _run(
+        ["git", "fetch", "--no-tags", "--quiet", "origin", "main"], ROOT, env, out
+    ):
+        out.append("git fetch failed: comparing with the last fetched origin/main\n")
     return _run(local_args(check), ROOT / check.cwd, env, out)
 
 

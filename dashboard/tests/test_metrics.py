@@ -24,9 +24,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # Streamlit-style imports
 
-import export_site  # noqa: E402
-import kpis  # noqa: E402
-import warehouse  # noqa: E402
+import export_site
+import kpis
+import warehouse
 
 TRANSFORM = Path(__file__).resolve().parents[2] / "transform"
 SCRIPTS = Path(sys.executable).parent  # dbt and mf of this venv

@@ -38,7 +38,7 @@ from airflow.sdk import Variable
 
 # Repo root (in the image): the alerting package is shared with the CI failure email
 sys.path.insert(0, "/opt/project")
-from alerting import airflow_emails  # noqa: E402
+from alerting import airflow_emails
 
 RECIPIENTS_VAR = "olist_alert_emails"
 DEFAULT_RECIPIENTS = "data-team@olist.local"  # caught by Mailpit

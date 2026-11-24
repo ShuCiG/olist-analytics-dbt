@@ -40,7 +40,7 @@ class Status:
     budget_left: float | None  # share of the budget left, below 0 when overspent
     burn_rate: float | None  # over `burn_days`
     state: str  # ok | burning | exhausted | no data
-    daily: list[dict[str, Any]] = field(default_factory=list)
+    daily: list[dict[str, Any]] = field(default_factory=lambda: [])
 
     def as_dict(self, daily: bool = True) -> dict[str, Any]:
         data = asdict(self)

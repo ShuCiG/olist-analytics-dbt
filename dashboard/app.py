@@ -1,7 +1,6 @@
 """Olist dashboard over the dbt marts. Run: uv run streamlit run dashboard/app.py"""
 
 import streamlit as st
-
 import warehouse
 
 st.set_page_config(page_title="Olist analytics", page_icon=":bar_chart:", layout="wide")

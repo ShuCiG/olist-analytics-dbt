@@ -40,10 +40,19 @@ from pathlib import Path
 
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.providers.standard.operators.python import (
+    PythonOperator,
+    ShortCircuitOperator,
+)
 from airflow.sdk import DAG, Param
 from airflow.task.trigger_rule import TriggerRule
-from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
+from cosmos import (
+    DbtTaskGroup,
+    ExecutionConfig,
+    ProfileConfig,
+    ProjectConfig,
+    RenderConfig,
+)
 from cosmos.constants import (
     ExecutionMode,
     InvocationMode,
@@ -53,7 +62,12 @@ from cosmos.constants import (
     TestIndirectSelection,
 )
 from olist_alerts import on_dag_failure, report, schema_report
-from olist_lineage import RawLoadOperator, exposures, send_dbt_lineage, stash_dbt_lineage
+from olist_lineage import (
+    RawLoadOperator,
+    exposures,
+    send_dbt_lineage,
+    stash_dbt_lineage,
+)
 
 PROJECT_DIR = Path("/opt/project")  # repo, mounted by docker-compose
 DBT_PROJECT_DIR = PROJECT_DIR / "transform"

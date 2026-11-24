@@ -19,8 +19,9 @@ from pathlib import Path
 
 # Repo root: alerting/ is shared with the Airflow alert emails
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from alerting import schema_changes  # noqa: E402
-from notify_failure import config_error, send  # noqa: E402  (same folder)
+from notify_failure import config_error, send
+
+from alerting import schema_changes
 
 
 def main() -> None:

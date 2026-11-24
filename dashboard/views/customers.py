@@ -1,9 +1,8 @@
 import altair as alt
-import numpy as np
-import streamlit as st
-
 import charts
 import kpis
+import numpy as np
+import streamlit as st
 from warehouse import LOST_STATUSES, period, period_filter, query, table
 
 st.title("Customers & sellers")

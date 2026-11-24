@@ -1,7 +1,6 @@
 import altair as alt
-import streamlit as st
-
 import charts
+import streamlit as st
 from warehouse import costs_table, query
 
 # BigQuery SQL: the cost mart exists only there (the page is registered on that backend only)

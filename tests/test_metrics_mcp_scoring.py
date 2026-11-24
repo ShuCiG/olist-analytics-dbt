@@ -4,7 +4,13 @@ from typing import Any
 
 import pytest
 
-from metrics_mcp.eval.scoring import difference, grade, normalize_key, parse_final_line, period_key
+from metrics_mcp.eval.scoring import (
+    difference,
+    grade,
+    normalize_key,
+    parse_final_line,
+    period_key,
+)
 
 SCALAR = {"shape": "scalar", "gold": {"metrics": ["revenue"]}}
 MAPPING = {"shape": "mapping", "gold": {"metrics": ["revenue"], "group_by": ["customer__state"]}}

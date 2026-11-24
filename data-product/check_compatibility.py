@@ -64,7 +64,7 @@ def pair_by_id(base: dict[str, str], current: dict[str, str]) -> tuple[dict[str,
     and the ids that are on the base branch but gone now."""
     base_by_id = {yaml.safe_load(text)["id"]: text for text in base.values()}
     pairs: dict[str, str | None] = {}
-    current_ids = set()
+    current_ids: set[str] = set()
     for path, text in current.items():
         contract_id = yaml.safe_load(text)["id"]
         current_ids.add(contract_id)
@@ -88,7 +88,7 @@ def is_breaking(old_text: str, new_path: Path) -> bool:
 
 
 def main(base_ref: str = "origin/main") -> int:
-    problems = []
+    problems: list[str] = []
     current = {
         path.relative_to(REPO).as_posix(): path.read_text(encoding="utf-8")
         for path in sorted((REPO / CONTRACTS).glob("*.odcs.yaml"))

@@ -129,7 +129,7 @@ flowchart LR
 | Orchestration | Airflow 3 + Astronomer Cosmos (watcher mode) in Docker Compose; image published to GHCR |
 | Lineage | OpenLineage (Airflow provider, Cosmos' dbt events, sqlglot column lineage) → Marquez, local |
 | Dashboard | Streamlit + Altair on Streamlit Community Cloud, read-only service account, dbt exposure |
-| Quality & CI | GitHub Actions, sqlfluff, pyright, pytest, pre-commit, dbt_project_evaluator |
+| Quality & CI | GitHub Actions, sqlfluff, ruff, pyright (strict on `alerting/`, `data-product/`), pytest, pre-commit, dbt_project_evaluator |
 | Environment | uv, Python 3.12 |
 
 ## Data product
@@ -618,7 +618,7 @@ to GHCR on every merge (deploy and roll back by tag). Details: [airflow/README.m
 
 | On every pull request | On every merge to `main` |
 |---|---|
-| sqlfluff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main`, dbt v2 parse (warning only, [D83](docs/DECISIONS.md)) | dlt → BigQuery `raw` (new months only), source freshness |
+| sqlfluff, ruff, pyright, pytest, terraform fmt / validate / test, dbt_project_evaluator, Airflow DAG parse (built image), contract versioning vs `main`, dbt v2 parse (warning only, [D83](docs/DECISIONS.md)) | dlt → BigQuery `raw` (new months only), source freshness |
 | full `dbt build` on DuckDB after a fresh ingest, with input / output contract tests, semantic layer validation, dashboard and data product tests | `dbt build --target prod` (Elementary's history tables first, when its models changed), then the cost per dbt node from BigQuery's job history |
 | slim CI on BigQuery: only modified models and their children (`state:modified+ --defer` to the prod manifest), in per-run datasets dropped afterwards; PR comments with the column impact of the change, the data diff of the rebuilt marts vs prod and the bytes billed per node next to its last prod build | dbt docs + data product page + Elementary report → GitHub Pages (catalog re-read only for changed relations on slim deploys, [D77](docs/DECISIONS.md)); manifest kept for slim CI |
 | email on any failed job | Airflow image → GHCR; email on any failed job |

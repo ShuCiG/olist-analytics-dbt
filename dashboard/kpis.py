@@ -8,7 +8,6 @@ checked by dashboard/tests/test_metrics.py against `mf query`.
 import datetime as dt
 
 import pandas as pd
-
 from warehouse import LOST_STATUSES, date_filter, query, table
 
 Period = tuple[dt.date, dt.date]

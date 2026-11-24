@@ -47,7 +47,7 @@ def estimate(queries: dict[str, str]) -> tuple[dict[str, int], dict[str, str]]:
     for name, sql in queries.items():
         try:
             billed[name] = max(MIN_BILLED, client.query(sql, job_config=config).total_bytes_processed or 0)
-        except Exception as error:  # noqa: BLE001 - the message is the report
+        except Exception as error:
             failed[name] = str(error).splitlines()[0][:160]
     return billed, failed
 

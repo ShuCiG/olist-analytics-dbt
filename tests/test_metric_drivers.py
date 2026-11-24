@@ -493,7 +493,10 @@ def test_load_engine_reads_the_given_manifest(tmp_path: Path, monkeypatch: pytes
     """
     from dbt.adapters.factory import FACTORY
     from dbt_metricflow.cli.dbt_connectors import dbt_config_accessor
-    from metricflow.engine.metricflow_engine import MetricFlowExplainResult, MetricFlowQueryRequest
+    from metricflow.engine.metricflow_engine import (
+        MetricFlowExplainResult,
+        MetricFlowQueryRequest,
+    )
 
     class Adapter:
         @staticmethod

@@ -278,9 +278,8 @@ class _Graph:
             for child, node in side.nodes.items():
                 for parent in node.get("depends_on", {}).get("nodes", []):
                     self.children.setdefault(parent, set()).add(child)
-                if side is pr or child not in pr.nodes:
-                    if not side.traced(child):
-                        self.untraced.add(child)
+                if (side is pr or child not in pr.nodes) and not side.traced(child):
+                    self.untraced.add(child)
                 for column, trace in side.columns(child).items():
                     for table, source_column in trace.inputs:
                         parent = side.uid_by_name.get(table.lower())

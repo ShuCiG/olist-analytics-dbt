@@ -30,7 +30,7 @@ def email(
     added = sum(len(columns) for columns in new_columns.values())
     removed = sum(len(columns) for columns in removed_columns.values())
     tables = ", ".join(sorted({*new_columns, *removed_columns}))
-    parts = []
+    parts: list[str] = []
     if added:
         parts.append(f"{added} new source column{'s' if added > 1 else ''}")
     if removed:
