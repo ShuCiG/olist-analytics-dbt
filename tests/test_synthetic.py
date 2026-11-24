@@ -16,6 +16,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 
+from fault_injection import feeds
 from fault_injection.dump import clean_rows, write_dump
 from ingestion import pipeline, synthetic
 
@@ -28,9 +29,12 @@ def dump_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(scope="module")
 def dump(dump_dir: Path) -> synthetic.Dump:
     source = pipeline.SourceDump(dump_dir)
-    return synthetic.Dump({table: source.table(table).drop_columns(
-        [pipeline.SYNTHETIC_FLAG] if table == "orders" else []
-    ) for table in synthetic.TABLES})
+    return synthetic.Dump(
+        {
+            table: source.table(table).drop_columns([pipeline.SYNTHETIC_FLAG] if table == "orders" else [])
+            for table in synthetic.TABLES
+        }
+    )
 
 
 def column(table: pa.Table, name: str) -> list[str]:
@@ -48,12 +52,16 @@ def test_shift_days_keeps_nulls() -> None:
 
 
 def test_template_is_the_latest_full_month_of_the_same_calendar_month() -> None:
-    orders = pa.table({
-        "order_id": [f"o{i}" for i in range(31)],
-        "customer_id": [f"c{i}" for i in range(31)],
-        # 2017-11: 10 orders, 2018-11: 1 (under 10 % of the busiest), 2018-01: 20
-        "order_purchase_timestamp": ["2017-11-05 10:00:00"] * 10 + ["2018-11-01 10:00:00"] + ["2018-01-05 10:00:00"] * 20,
-    })
+    orders = pa.table(
+        {
+            "order_id": [f"o{i}" for i in range(31)],
+            "customer_id": [f"c{i}" for i in range(31)],
+            # 2017-11: 10 orders, 2018-11: 1 (under 10 % of the busiest), 2018-01: 20
+            "order_purchase_timestamp": ["2017-11-05 10:00:00"] * 10
+            + ["2018-11-01 10:00:00"]
+            + ["2018-01-05 10:00:00"] * 20,
+        }
+    )
     empty = {name: pa.table({"order_id": pa.array([], pa.string())}) for name in synthetic.ORDER_CHILDREN}
     customers = pa.table({"customer_id": ["c0"], "customer_unique_id": ["p0"]})
     sellers = pa.table({"seller_id": pa.array([], pa.string())})
@@ -91,7 +99,9 @@ def test_generated_rows_fit_together(dump: synthetic.Dump) -> None:
     assert set(column(month["sellers"], "seller_id")) & set(column(month["order_items"], "seller_id"))
     # Reviews keep the template's id (its label joins on it), keys stay unique
     assert set(column(month["order_reviews"], "review_id")) <= set(column(dump.tables["order_reviews"], "review_id"))
-    keys = list(zip(column(month["order_reviews"], "review_id"), column(month["order_reviews"], "order_id"), strict=True))
+    keys = list(
+        zip(column(month["order_reviews"], "review_id"), column(month["order_reviews"], "order_id"), strict=True)
+    )
     assert len(set(keys)) == len(keys)
     assert all(t.schema == dump.tables[name].schema for name, t in month.items())
 
@@ -132,7 +142,11 @@ def test_generated_months_follow_their_template(dump: synthetic.Dump) -> None:
     orders = generated["orders"].num_rows
     items_per_order = generated["order_items"].num_rows / orders
     assert abs(items_per_order - of_template("order_items").num_rows / len(template_rows)) < 0.05
-    for name, field in [("orders", "order_status"), ("order_payments", "payment_type"), ("order_reviews", "review_score")]:
+    for name, field in [
+        ("orders", "order_status"),
+        ("order_payments", "payment_type"),
+        ("order_reviews", "review_score"),
+    ]:
         made, real = shares(column(generated[name], field)), shares(column(of_template(name), field))
         assert all(abs(made.get(k, 0) - real.get(k, 0)) < 0.05 for k in real | made), (name, field, made, real)
     real_people = set(column(dump.tables["customers"], "customer_unique_id"))
@@ -160,7 +174,12 @@ NOW = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
     ],
 )
 def test_synthetic_until(
-    cursor: str | None, until: str | None, next_only: bool, every: float | None, hours_ago: float | None, expected: str | None
+    cursor: str | None,
+    until: str | None,
+    next_only: bool,
+    every: float | None,
+    hours_ago: float | None,
+    expected: str | None,
 ) -> None:
     last_loaded_at = NOW - timedelta(hours=hours_ago) if hours_ago is not None else None
     assert pipeline.synthetic_until("2018-06", cursor, until, next_only, every, last_loaded_at, NOW) == expected
@@ -175,9 +194,7 @@ def test_synthetic_until(
         ("2018-03", "2018-09", False, "2018-09"),  # --until up to the end
     ],
 )
-def test_synthetic_until_stops_at_the_feed_end(
-    cursor: str, until: str | None, next_only: bool, expected: str
-) -> None:
+def test_synthetic_until_stops_at_the_feed_end(cursor: str, until: str | None, next_only: bool, expected: str) -> None:
     old = NOW - timedelta(hours=48)
     assert pipeline.synthetic_until("2018-06", cursor, until, next_only, 24, old, NOW, max_months=3) == expected
 
@@ -203,6 +220,14 @@ def run(dump_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys:
     labels = tmp_path / "labels"
     labels.mkdir()
     monkeypatch.setattr(pipeline, "LABELS_DIR", labels)
+    # The loader also asks three public APIs: fixtures, never the network (a rate limit
+    # there made this test retry for minutes and hung the pre-push run)
+    states = [state for state, _, _ in pipeline.weather_feed.STATES]
+    monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", feeds.holiday_rows)
+    monkeypatch.setattr(
+        pipeline.weather_feed, "fetch_range", lambda start, end, session=None: feeds.weather_rows(start, end, states)
+    )
+    monkeypatch.setattr(pipeline.fx_feed, "fetch_range", lambda start, end, session=None: feeds.fx_rows(start, end))
 
     def _run(*args: str) -> dict:
         monkeypatch.setattr(sys, "argv", ["pipeline.py", "--duckdb-path", str(db), *args])
@@ -227,21 +252,32 @@ def test_next_past_the_dump_loads_generated_months(run) -> None:
     assert july["orders_loaded"] > 0 and july["last_order_at"][:7] == "2018-07"
     august = run("--next", "--synthetic-every-hours", "0")
     assert august["last_order_at"][:7] == "2018-08"
-    by_month = dict(query(run.db, """
+    by_month = dict(
+        query(
+            run.db,
+            """
         select left(order_purchase_timestamp, 7), bool_and(_is_synthetic)
         from raw.orders group by 1 having left(order_purchase_timestamp, 7) >= '2018-06'
-    """))
+    """,
+        )
+    )
     assert by_month == {"2018-06": False, "2018-07": True, "2018-08": True}
     # The customers snapshot keeps July's customers after August's load (replace)
-    orphans = query(run.db, """
+    orphans = query(
+        run.db,
+        """
         select count(*) from raw.orders
         where customer_id not in (select customer_id from raw.customers)
-    """)
+    """,
+    )
     assert orphans == [(0,)]
-    sellers = query(run.db, """
+    sellers = query(
+        run.db,
+        """
         select count(*) from raw.order_items
         where seller_id not in (select seller_id from raw.sellers)
-    """)
+    """,
+    )
     assert sellers == [(0,)]
 
 
@@ -254,7 +290,9 @@ def test_generated_month_waits_for_the_interval(run) -> None:
 def test_until_past_the_dump_generates_every_month_up_to_it(run, monkeypatch: pytest.MonkeyPatch) -> None:
     status = run("--until", "2018-09", "--synthetic-every-hours", "24")
     assert status["last_order_at"][:7] == "2018-09"
-    months = query(run.db, "select count(distinct left(order_purchase_timestamp, 7)) from raw.orders where _is_synthetic")
+    months = query(
+        run.db, "select count(distinct left(order_purchase_timestamp, 7)) from raw.orders where _is_synthetic"
+    )
     assert months == [(3,)]
     # A later load without the flag (here: one retrying a failed run's packages)
     # replaces the customers snapshot and keeps the generated customers in it
@@ -283,7 +321,9 @@ def test_feed_ends_after_max_months(run) -> None:
     assert run("--next", *flags)["last_order_at"][:7] == "2018-08"
     ended = run("--next", *flags)  # the limit: nothing loaded, the 2 months stay
     assert ended["orders_loaded"] == 0 and ended["last_order_at"][:7] == "2018-08"
-    assert query(run.db, "select count(distinct left(order_purchase_timestamp, 7)) from raw.orders where _is_synthetic") == [(2,)]
+    assert query(
+        run.db, "select count(distinct left(order_purchase_timestamp, 7)) from raw.orders where _is_synthetic"
+    ) == [(2,)]
     orphans = "select count(*) from raw.orders where customer_id not in (select customer_id from raw.customers)"
     assert query(run.db, orphans) == [(0,)]
     with pytest.raises(SystemExit, match="end of the generated feed"):
