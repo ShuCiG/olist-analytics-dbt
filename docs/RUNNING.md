@@ -127,6 +127,18 @@ DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defec
 `fault_injection/scenarios.py`, a row in the README table. `fault_injection/test_deletion.py` (a deletion request
 end to end, D105) shares the baseline: `uv run pytest fault_injection/test_deletion.py`, ~5 min.
 
+## T-SQL to Spark parity
+
+```bash
+export OLIST_CSV_DIR=<folder with the Olist CSVs>            # kagglehub cache, versions/2
+docker compose -f tsql_parity/docker-compose.yml up -d --wait   # SQL Server 2022 (port 14330)
+uv run python -m tsql_parity.run --csv-dir "$OLIST_CSV_DIR"     # ~3 min, writes tsql_parity/report.md, exit 1 on a deviation
+uv run pytest tsql_parity                                       # one test per semantic difference
+```
+
+Needs Java 17 or 21. On Windows Spark also needs `winutils`: run `bash tsql_parity/docker_run.sh run|pytest`
+instead (a Linux container reaches SQL Server through `host.docker.internal`). Differences: `docs/tsql-spark-differences.md`.
+
 ## Deletion requests (GDPR)
 
 A person's erasure request (D105). In prod it is two actions:

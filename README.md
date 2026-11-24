@@ -372,6 +372,7 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
+| **T-SQL to Spark parity** | 4 legacy procedures on SQL Server 2022 vs a PySpark/Delta port on the same data, 8 documented semantic differences ([`docs/tsql-spark-differences.md`](docs/tsql-spark-differences.md)) | CI, every PR with code |
 | **642 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
@@ -784,6 +785,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
+├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota

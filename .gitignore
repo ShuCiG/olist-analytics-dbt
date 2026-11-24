@@ -64,3 +64,7 @@ infra/snowflake/.terraform/
 *.tfplan
 infra/terraform.tfvars
 infra/snowflake/terraform.tfvars
+tsql_parity/.spark-warehouse/
+metastore_db/
+derby.log
+spark-warehouse/

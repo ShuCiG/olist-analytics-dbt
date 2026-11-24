@@ -1,0 +1,20 @@
+# SQL Server 2022 Developer for the T-SQL -> Spark parity harness (#357).
+# Start: docker compose -f tsql_parity/docker-compose.yml up -d --wait
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Parity_Pass1!}
+    ports:
+      - "14330:1433"
+    volumes:
+      # raw CSVs for BULK INSERT, read-only: set OLIST_CSV_DIR to the dump folder
+      - ${OLIST_CSV_DIR:?set OLIST_CSV_DIR to the folder with the Olist CSVs}:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'select 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

@@ -294,6 +294,66 @@ jobs:
       - name: pytest fault_injection
         run: uv run pytest fault_injection -q
 
+  # T-SQL -> Spark parity (#357, D132): legacy procedures on SQL Server 2022 vs the PySpark/Delta
+  # port, same raw data; the job fails when the faithful port deviates. The report is a
+  # step summary, an artifact and a PR comment. No cloud warehouse involved.
+  tsql-parity:
+    name: T-SQL Spark parity
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    needs: [changes, python-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write # the report as a PR comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Locate the Olist CSVs
+        run: |
+          echo "OLIST_CSV_DIR=$(uv run python -c 'import kagglehub; print(kagglehub.dataset_download("olistbr/brazilian-ecommerce"))')" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+
+      - name: SQL Server 2022
+        run: docker compose -f tsql_parity/docker-compose.yml up -d --wait
+
+      - name: Parity run (fails on a deviation of the faithful port)
+        run: uv run python -m tsql_parity.run --csv-dir "$OLIST_CSV_DIR"
+
+      - name: One test per semantic difference
+        run: uv run pytest tsql_parity -q
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: cat tsql_parity/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: tsql-parity-report
+          path: tsql_parity/report.md
+
+      - name: PR comment
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file tsql_parity/report.md
+
   # Required check: gating it on pyright and the Python tests blocks merges with
   # type errors or failing tests. Skipped for docs-only changes (still passes)
   dbt-build:
@@ -1222,7 +1282,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, tsql-parity, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
