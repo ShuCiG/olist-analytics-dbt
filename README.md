@@ -59,8 +59,12 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 221 data tests, 13 unit tests, enforced model contracts, 642 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 221 data tests, 13 unit tests, enforced model contracts, 666 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
+- **Migration parity: legacy T-SQL to Spark.** Four stored procedures on SQL Server 2022 and the same logic in
+  PySpark on Delta Lake run on the same raw data, and a runner compares the outputs row by row. A faithful port
+  matches; a port that only translates the syntax gets 4,914 payment instalments wrong by a cent and 1,737 orders
+  wrong on overdue days. Eight engine differences are documented, one test each. → [T-SQL to Spark](#t-sql-to-spark-migration-parity)
 - **Data observability.** Elementary keeps the run and test history and checks volume, freshness, column averages
   and source schemas over time; a simulated clock lets the replayed feed catch Black Friday 2017 as an anomaly.
   → [Observability](#data-observability)
@@ -79,7 +83,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 - **Data products and governance:** Open Data Product Standard, data usage agreements, contract versioning and
   breaking-change detection, dbt groups / access / model versions, dbt_project_evaluator, PII classification
 - **Semantic layer:** dbt Semantic Layer, MetricFlow (semantic models, simple / ratio metrics, saved queries, time spine)
-- **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), ELT, cross-database SQL
+- **Data engineering:** dlt (incremental loads, state cursor, merge), DuckDB, BigQuery, Databricks (Unity Catalog), PySpark + Delta Lake, SQL Server (T-SQL), ELT, cross-database SQL, legacy-to-Spark parity testing
 - **Orchestration:** Apache Airflow 3, Astronomer Cosmos (watcher mode), Docker Compose, backfills, SLA / stale-data alerting
 - **DevOps:** GitHub Actions CI/CD, slim CI with state deferral, ephemeral CI datasets, data diff vs prod (audit_helper), column impact from manifests, GHCR images, branch protection,
   pre-commit, pyright, pytest, GitHub Issues + Projects (issue → PR → decision log)
@@ -372,7 +376,8 @@ flowchart LR
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
-| **642 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **T-SQL to Spark parity** | 4 legacy procedures on SQL Server 2022 vs a PySpark/Delta port on the same data, 8 documented semantic differences ([`docs/tsql-spark-differences.md`](docs/tsql-spark-differences.md)) | CI, every PR with code |
+| **666 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -715,6 +720,32 @@ DuckDB (all three sizes) and BigQuery (1x and 10x measured, 100x projected)
 The first limit on BigQuery is the 1 GB per-query cap (about 21x), the second the daily quota (about 29x); on DuckDB
 the Python RFM model ran out of memory at 100x and was vectorized (#317).
 
+## T-SQL to Spark migration parity
+
+Porting legacy T-SQL to Spark is a different problem from running one dbt project on four warehouses: the source is
+procedural and the engines differ in semantics, so a port that reads right can return wrong numbers.
+[`tsql_parity/`](tsql_parity/) builds a small version of that migration with a harness that proves the outputs match:
+
+- **Source:** SQL Server 2022 (Docker Compose) with four stored procedures written in a deliberately legacy style
+  (cursor, temp tables, `NOT IN`, `GETDATE()`), over the same raw Olist tables dlt loads.
+- **Target:** the same logic in PySpark on Delta Lake (open-source `pyspark` + `delta-spark`, no Databricks), in two
+  versions: *faithful* and *naive* (syntax translated only).
+- **Runner:** compares outputs on the business key (row count and deviation, left only / right only / values
+  differ, per-column differences with a decimal tolerance, aggregates per dimension) and writes
+  [`report.md`](tsql_parity/report.md). The CI job fails when the faithful port deviates.
+
+| Procedure | Rows (T-SQL = Spark) | Faithful port | Naive port |
+|---|---:|---|---|
+| `usp_payment_installments` | 103,886 | match | 4,914 values off by a cent (half-even rounding) |
+| `usp_delivery_metrics` | 99,441 | match | 1,737 orders with other overdue days (`GETDATE()`) |
+| `usp_orders_without_reviews` | 768 | match | match on this data (no NULL review ids) |
+| `usp_payment_type_summary` | 5 | match | match |
+
+Eight semantic differences, each with a test that runs the same tiny case on both engines (`NOT IN` with NULL,
+rounding and integer division, collation, `TOP` without `ORDER BY`, `GETDATE()`, trailing spaces, implicit casts,
+division by zero): [docs/tsql-spark-differences.md](docs/tsql-spark-differences.md),
+[D132](docs/DECISIONS.md). Run it: [docs/RUNNING.md](docs/RUNNING.md#t-sql-to-spark-parity).
+
 ## Dashboard
 
 A [static page on GitHub Pages](https://shucig.github.io/olist-analytics-dbt/dashboard/) shows the main KPIs and
@@ -784,6 +815,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
+├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota
