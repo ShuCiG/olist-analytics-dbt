@@ -8,7 +8,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: olist-marts
 name: Olist commerce star schema
-version: 1.8.0
+version: 1.9.0
 status: active
 domain: commerce
 dataProduct: olist-commerce
@@ -643,6 +643,76 @@ schema:
             arguments:
               validValues: [dry, light, moderate, heavy, unknown]
             mustBe: 0
+    quality:
+      - *not_empty_rule
+  - name: fct_fx_rates_daily
+    physicalName: fct_fx_rates_daily
+    physicalType: table
+    description: >-
+      BRL per USD for every calendar day from the first to the latest published rate; weekends
+      and bank holidays carry the last published rate forward.
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_fx_rates_daily
+    properties:
+      - name: date_day
+        logicalType: date
+        primaryKey: true
+        required: true
+        unique: true
+      - name: rate_date_used
+        logicalType: date
+        required: true
+      - name: brl_per_usd
+        logicalType: number
+        required: true
+        logicalTypeOptions:
+          minimum: 1.5
+          maximum: 10
+      - name: rate_source
+        logicalType: string
+      - name: is_carried_forward
+        logicalType: boolean
+        required: true
+    quality:
+      - *not_empty_rule
+  - name: fct_order_fx
+    physicalName: fct_order_fx
+    physicalType: table
+    description: >-
+      Order value in USD: one row per order, items + freight and the amount paid converted at the
+      rate of the purchase day. Real historic rates for every order, also generated months
+      (`is_synthetic`).
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://shucig.github.io/olist-analytics-dbt/#!/model/model.olist.fct_order_fx
+    properties:
+      - name: order_id
+        logicalType: string
+        primaryKey: true
+        required: true
+        unique: true
+      - name: is_synthetic
+        logicalType: boolean
+        required: true
+      - name: purchase_date
+        logicalType: date
+      - name: rate_date_used
+        logicalType: date
+      - name: brl_per_usd
+        logicalType: number
+      - name: rate_source
+        logicalType: string
+      - name: order_amount
+        logicalType: number
+      - name: paid_amount
+        logicalType: number
+      - name: order_amount_usd
+        logicalType: number
+        logicalTypeOptions:
+          minimum: 0
+      - name: paid_amount_usd
+        logicalType: number
     quality:
       - *not_empty_rule
   - name: fct_review_topics

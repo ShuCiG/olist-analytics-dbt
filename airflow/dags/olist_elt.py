@@ -206,8 +206,8 @@ def has_new_orders(ti, params) -> bool:
     if previous is not None and previous.state == "failed":
         print(f"Previous run {previous.run_id} failed: building again")
         return True
-    # New review labels (D92), holiday years (#348) and weather days (#349) change raw without new orders
-    return any(status.get(key, 0) > 0 for key in ("orders_loaded", "labels_loaded", "holidays_loaded", "weather_loaded"))
+    # New review labels (D92), holiday years (#348) and weather days (#349) and exchange rates (#351) change raw without new orders
+    return any(status.get(key, 0) > 0 for key in ("orders_loaded", "labels_loaded", "holidays_loaded", "weather_loaded", "fx_loaded"))
 
 
 DUCKDB_FILE = PROJECT_DIR / "data" / "airflow.duckdb"

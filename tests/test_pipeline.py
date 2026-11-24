@@ -72,6 +72,13 @@ def fake_weather(start: date, end: date, session: object = None) -> list[dict[st
     ]
 
 
+def fake_fx(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    return [
+        {"rate_date": d.isoformat(), "brl_per_usd": "3.500000", "source": "bcb-ptax"} for d in days if d.weekday() < 5
+    ]
+
+
 @pytest.fixture
 def dump(tmp_path: Path) -> Path:
     src = tmp_path / "kaggle"
@@ -115,6 +122,7 @@ def run(dump: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     monkeypatch.setattr(pipeline, "LABELS_DIR", labels)
     monkeypatch.setattr(pipeline.holidays_feed, "fetch_years", fake_holiday_years)  # never the real API
     monkeypatch.setattr(pipeline.weather_feed, "fetch_range", fake_weather)
+    monkeypatch.setattr(pipeline.fx_feed, "fetch_range", fake_fx)
     monkeypatch.setattr(pipeline, "WEATHER_TAIL_DAYS", 10)  # small ranges in the tests
     monkeypatch.setattr(pipeline.weather_feed, "last_available_day", lambda today: date(2030, 1, 1))
 
@@ -782,3 +790,56 @@ def test_weather_feed_down_fails_the_run_and_keeps_the_table(run, monkeypatch: p
 )
 def test_lenient_date_clamps_an_impossible_day(text: str, expected: date) -> None:
     assert pipeline.lenient_date(text) == expected
+
+
+def fx_days(db: Path) -> tuple[str, str, int]:
+    with duckdb.connect(str(db), read_only=True) as con:
+        row = con.execute("select min(rate_date), max(rate_date), count(*) from raw.fx_rates_daily").fetchone()
+    assert row is not None
+    return row
+
+
+def test_fx_rates_start_before_the_first_purchase(run) -> None:
+    status = run("--until", "2016-09")  # first purchase 2016-09-04
+    first, last, count = fx_days(run.db)
+    assert first >= "2016-08-25"
+    assert last <= datetime.now(UTC).date().isoformat()
+    assert status["fx_loaded"] == count == raw_count(run.db, "fx_rates_daily")
+
+
+def test_fx_second_run_with_the_same_rates_writes_nothing(run) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "fx_rates_daily")
+    assert run("--until", "2016-09")["fx_loaded"] == 0
+    assert raw_count(run.db, "fx_rates_daily") == before
+
+
+def test_fx_asks_the_trailing_days_again_and_writes_only_a_change(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    _, last, count = fx_days(run.db)
+    asked: list[tuple[date, date]] = []
+
+    def corrected(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+        asked.append((start, end))
+        return [{**r, "brl_per_usd": "3.600000"} if r["rate_date"] == last else r for r in fake_fx(start, end)]
+
+    monkeypatch.setattr(pipeline.fx_feed, "fetch_range", corrected)
+    status = run("--until", "2016-09")
+    assert asked[0][0] == date.fromisoformat(last) - timedelta(days=pipeline.FX_TRAILING_DAYS)
+    assert status["fx_loaded"] == 1  # the corrected day only
+    with duckdb.connect(str(run.db), read_only=True) as con:
+        assert con.execute("select brl_per_usd from raw.fx_rates_daily where rate_date = ?", [last]).fetchone() == ("3.600000",)
+    assert raw_count(run.db, "fx_rates_daily") == count
+
+
+def test_fx_feed_down_fails_the_run_and_keeps_the_table(run, monkeypatch: pytest.MonkeyPatch) -> None:
+    run("--until", "2016-09")
+    before = raw_count(run.db, "fx_rates_daily")
+
+    def down(start: date, end: date, session: object = None) -> list[dict[str, str]]:
+        raise pipeline.fx_feed.FxError("no rates: ConnectionError: down")
+
+    monkeypatch.setattr(pipeline.fx_feed, "fetch_range", down)
+    with pytest.raises(pipeline.fx_feed.FxError, match="ConnectionError"):
+        run("--until", "2016-10")
+    assert raw_count(run.db, "fx_rates_daily") == before

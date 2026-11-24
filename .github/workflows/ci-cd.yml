@@ -324,6 +324,9 @@ jobs:
       - name: Input data contract (weather)
         run: uv run datacontract ci data-product/contracts/openmeteo-weather.odcs.yaml --server local --output "$RUNNER_TEMP/status-inputs/contract-openmeteo-weather.json" --output-format json
 
+      - name: Input data contract (exchange rates)
+        run: uv run datacontract ci data-product/contracts/bcb-fx-rates.odcs.yaml --server local --output "$RUNNER_TEMP/status-inputs/contract-bcb-fx-rates.json" --output-format json
+
       - name: dbt deps
         working-directory: transform
         run: uv run dbt deps
@@ -814,6 +817,7 @@ jobs:
           echo "labels_loaded=$(tail -n 1 ingest.log | jq '.labels_loaded')" >> "$GITHUB_OUTPUT"
           echo "holidays_loaded=$(tail -n 1 ingest.log | jq '.holidays_loaded')" >> "$GITHUB_OUTPUT"
           echo "weather_loaded=$(tail -n 1 ingest.log | jq '.weather_loaded')" >> "$GITHUB_OUTPUT"
+          echo "fx_loaded=$(tail -n 1 ingest.log | jq '.fx_loaded')" >> "$GITHUB_OUTPUT"
           echo "new_columns=$(tail -n 1 ingest.log | jq -c '.new_columns // {}')" >> "$GITHUB_OUTPUT"
           echo "removed_columns=$(tail -n 1 ingest.log | jq -c '.removed_columns // {}')" >> "$GITHUB_OUTPUT"
 
@@ -842,7 +846,7 @@ jobs:
       # state:modified+ against its manifest (changed models, seeds, snapshots, tests,
       # the macros they call, configs, and everything downstream). Full build when
       # that baseline isn't enough: no manifest, a manual run (the way to rebuild
-      # prod), orders, review labels, holidays or weather loaded by this run (new data is no project change),
+      # prod), orders, review labels, holidays, weather or exchange rates loaded by this run (new data is no project change),
       # deletion requests applied by this run (rows left raw: everything built from it is stale), or a changed
       # uv.lock (a dbt or adapter upgrade changes materialization SQL, which the
       # state comparison doesn't see).
@@ -854,6 +858,7 @@ jobs:
           LABELS_LOADED: ${{ steps.ingest.outputs.labels_loaded }}
           HOLIDAYS_LOADED: ${{ steps.ingest.outputs.holidays_loaded }}
           WEATHER_LOADED: ${{ steps.ingest.outputs.weather_loaded }}
+          FX_LOADED: ${{ steps.ingest.outputs.fx_loaded }}
           BASELINE_SHA: ${{ steps.baseline.outputs.sha }}
           DELETIONS_APPLIED: ${{ steps.deletions.outputs.applied }}
         run: |
@@ -864,6 +869,7 @@ jobs:
           elif [ "$LABELS_LOADED" != 0 ]; then reason="the load brought ${LABELS_LOADED:-an unknown number of} review labels"
           elif [ "$HOLIDAYS_LOADED" != 0 ]; then reason="the load brought ${HOLIDAYS_LOADED:-an unknown number of} holidays"
           elif [ "$WEATHER_LOADED" != 0 ]; then reason="the load brought ${WEATHER_LOADED:-an unknown number of} weather rows"
+          elif [ "$FX_LOADED" != 0 ]; then reason="the load brought ${FX_LOADED:-an unknown number of} new exchange rates"
           elif ! git diff --quiet "$BASELINE_SHA" HEAD -- uv.lock; then reason="uv.lock changed since ${BASELINE_SHA:0:7} (or that commit is unknown)"
           fi
           if [ -n "${reason:-}" ]; then

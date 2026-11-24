@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: stg_bcb__fx_rates_daily
+    description: BRL per USD on business days, typed. One row per rate date.
+    columns:
+      - name: rate_date
+        description: The business day the rate is for; primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: brl_per_usd
+        description: Reais per one US dollar (PTAX mean of buy and sell, or the ECB reference rate from the fallback source).
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1.5
+                max_value: 10
+      - name: source_api
+        description: Which API answered for this day, `bcb-ptax` or the fallback `frankfurter`.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [bcb-ptax, frankfurter]

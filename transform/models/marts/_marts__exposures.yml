@@ -33,4 +33,5 @@ exposures:
       - ref('fct_customer_cohorts')
       - ref('fct_shipments')
       - ref('fct_order_weather')
+      - ref('fct_order_fx')
       - ref('fct_review_topics')

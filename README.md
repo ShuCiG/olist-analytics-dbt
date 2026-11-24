@@ -101,9 +101,11 @@ flowchart LR
     hc --> raw
     weather[(daily weather<br/>Open-Meteo REST)] -->|dlt, new days only| wc{{input contract<br/>openmeteo-weather}}
     wc --> raw
+    fx[(daily BRL per USD<br/>BCB PTAX REST)] -->|dlt, every run| fc{{input contract<br/>bcb-fx-rates}}
+    fc --> raw
 
     subgraph product[Data product olist-commerce · Product Owner]
-        raw[raw<br/>11 tables] --> staging[staging<br/>11 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
+        raw[raw<br/>12 tables] --> staging[staging<br/>12 views] --> intermediate[intermediate<br/>7 views] --> marts[marts<br/>star schema]
         marts --> metrics[semantic layer<br/>34 metrics]
         raw --> snap[snapshot<br/>SCD2 sellers] --> marts
     end

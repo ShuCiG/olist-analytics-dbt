@@ -1,0 +1,99 @@
+# Input contract of the Olist commerce data product (../olist-commerce.odps.yaml): the daily
+# BRL per USD exchange rate, the product's fifth input and its third REST feed (#351), the one
+# that changes every day. Banco Central do Brasil PTAX answers (Frankfurter / ECB as fallback, no
+# key); ingestion/fx_feed.py checks every answer and ingestion/pipeline.py loads new or changed
+# rates. Checked with `datacontract test` after every CI ingest, like the other inputs.
+apiVersion: v3.1.0
+kind: DataContract
+id: bcb-fx-rates
+name: Daily BRL per USD exchange rate
+version: 1.0.0
+status: active
+domain: commerce
+dataProduct: olist-commerce
+description:
+  purpose: >-
+    The reais-per-dollar rate of every business day, so order value can be shown in USD at the
+    rate of the purchase day (`fct_order_fx`, `fct_fx_rates_daily`).
+  limitations: >-
+    Business days only: weekends and Brazilian bank holidays have no row (dbt carries the last
+    rate forward). PTAX is the mean of the official buy and sell rate; the fallback source gives
+    the ECB reference rate instead (about 0.3 % apart on average), tagged in `source`. Rates of
+    the last 7 days are asked again every run and corrected when they changed. Third-party data
+    without a guarantee.
+  usage: >-
+    Read by dbt staging only (transform/models/staging/bcb). Consumers use `fct_order_fx` and
+    `fct_fx_rates_daily` on the marts port.
+tags: [olist, raw, fx, rest]
+
+team:
+  name: olist-analytics
+  members:
+    - username: aliaksandr.letsko
+      name: Aliaksandr Letsko
+      role: Product Owner
+
+support:
+  - channel: issues
+    tool: github
+    url: https://github.com/ShuCiG/olist-analytics-dbt/issues
+
+servers:
+  - server: local
+    type: duckdb
+    environment: dev
+    database: data/olist.duckdb
+    schema: raw
+  - server: prod
+    type: bigquery
+    environment: prod
+    description: Loaded by CD after the orders (and in a fresh dataset).
+    project: olist-analytics-dbt-472315
+    dataset: raw
+  - server: live
+    type: bigquery
+    environment: prod
+    description: Loaded by the local Airflow's ingest.
+    project: olist-analytics-dbt-472315
+    dataset: airflow_raw
+  - server: databricks-ci
+    type: databricks
+    environment: ci
+    description: Loaded by the weekly Databricks run into a per-run schema of catalog olist_ci, dropped after the run.
+    host: ${DATABRICKS_HOST}
+    catalog: olist_ci
+    schema: ${DBT_RAW_SCHEMA}
+
+schema:
+  - name: fx_rates_daily
+    physicalName: fx_rates_daily
+    physicalType: table
+    description: One row per business day.
+    properties:
+      - name: rate_date
+        logicalType: string
+        primaryKey: true
+        required: true
+        description: ISO date, YYYY-MM-DD.
+      - name: brl_per_usd
+        logicalType: string
+        required: true
+        description: Reais per one US dollar (a number as a string, like every raw column).
+      - name: source
+        logicalType: string
+        required: true
+        description: API that gave the rate, `bcb-ptax` or the fallback `frankfurter`.
+        quality:
+          - type: library
+            metric: invalidValues
+            arguments:
+              validValues: [bcb-ptax, frankfurter]
+            mustBe: 0
+      - name: _loaded_at
+        logicalType: timestamp
+        required: true
+        description: UTC time of the dlt run that wrote the rows.
+    quality:
+      - type: library
+        metric: rowCount
+        mustBeGreaterThan: 2000

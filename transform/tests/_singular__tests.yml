@@ -72,3 +72,11 @@ data_tests:
       without any other sign. Look at the weather feed (Open-Meteo) and the ingest log, then rerun the ingest.
     config:
       meta: {alert_unit: state-days}
+
+  - name: assert_fx_covers_every_order
+    description: >-
+      Orders without an exchange rate for their purchase day. The USD columns of `fct_order_fx` are silently
+      null for them, so revenue in USD is understated without any other sign. Look at the rate feed (BCB PTAX,
+      Frankfurter) and the ingest log, then rerun the ingest.
+    config:
+      meta: {alert_unit: orders}
