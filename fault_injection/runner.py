@@ -1,6 +1,6 @@
 """Run a scenario: the corrupted dump's next month through the real loader and dbt.
 
-The clean months are loaded and built once. Every scenario starts from a copy of that
+The REST feeds come from fixtures (feeds.py), not the network. The clean months are loaded and built once. Every scenario starts from a copy of that
 warehouse and dlt state, as the feed's next run would, so Elementary compares with a
 previous run and anomaly tests have their training data.
 """
@@ -22,7 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "data-product" / "contracts" / "olist-raw.odcs.yaml"
 INGEST = """
 import sys
+from fault_injection import feeds
 from ingestion import pipeline
+feeds.install(pipeline.holidays_feed, pipeline.weather_feed, pipeline.fx_feed)
 dump = sys.argv.pop(1)
 pipeline.kagglehub.dataset_download = lambda _: dump
 pipeline.main()
@@ -107,7 +109,9 @@ def run_scenario(baseline: Path, work: Path, scenario: Scenario) -> tuple[list[s
 
     loaded = ingest(work, corrupted_dump(scenario.corrupt, work / "kaggle"), AS_OF_NEW, "--next")
     if loaded.returncode != 0:
-        return ["loader"], None
+        # The tail of the output goes into the reaction: a failed assertion shows why the loader stopped
+        tail = (loaded.stdout[-1500:] + loaded.stderr[-1500:]).strip()
+        return [f"loader: {tail}"], None
     status = json.loads(loaded.stdout.strip().splitlines()[-1])
     reactions = [f"schema:new:{table}" for table in status["new_columns"]]
     reactions += [f"schema:removed:{table}" for table in status["removed_columns"]]
