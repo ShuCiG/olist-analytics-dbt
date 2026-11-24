@@ -13,8 +13,12 @@ The dashboard's consumer-agreement test runs on the marts already built in the
 local DuckDB file (skipped, loudly, when there are none); the rest of the dashboard
 suite (MetricFlow KPI checks, ~5 min) stays CI-only.
 
+Local-only guards (no CI step): `new-sources` (a source table new on the branch must exist in prod
+raw, #353) and `fault-control` (the clean month of the fault injection suite, ~6 min, only when
+transform/, ingestion/ or fault_injection/ changed).
+
 Not mirrored (CI only): the dbt builds on DuckDB, BigQuery and Databricks (fresh
-ingest, cloud credentials), fault injection (~14-20 min), the Airflow image, the
+ingest, cloud credentials), the other fault injection scenarios (~14-20 min), the Airflow image, the
 MCP server tests, and `terraform validate` / `terraform test` (init would rewrite
 infra/.terraform, which holds the owner's GCS backend).
 """
@@ -53,6 +57,8 @@ class Check:
     subset: tuple[str, ...] = ()
     needs_marts: bool = False  # reads the marts built in the local DuckDB file
     hint: str = ""  # printed under a failure
+    # Runs only when the branch changed a file under one of these paths (vs origin/main)
+    when_changed: tuple[str, ...] = ()
 
 
 CHECKS: tuple[Check, ...] = (
@@ -122,6 +128,28 @@ CHECKS: tuple[Check, ...] = (
             "rebuild them first (`cd transform && uv run dbt build -s marts`), then push again."
         ),
     ),
+    # Local only (job ""): no CI step to mirror. PR CI reads prod `raw`, so a new source
+    # table has to be loaded there first (#353)
+    Check(
+        "new-sources",
+        "",
+        "",
+        "uv run python .github/scripts/check_new_sources.py",
+        lane="light",
+        hint="Only the owner's load into prod raw (command above) fixes it.",
+    ),
+    # Local only, a slice of CI job `fault injection` (D100, ~14 min whole): the clean
+    # control month through loader + dbt. A test that holds on the full dump only (a
+    # `relationships` on few customer states, #353) turns it red, as it does in CI
+    Check(
+        "fault-control",
+        "",
+        "",
+        "uv run pytest fault_injection/test_faults.py -q -k clean_month",
+        lane="faults",
+        when_changed=("transform/", "ingestion/", "fault_injection/"),
+        hint="The same scenario fails in CI job `fault injection`: run `uv run pytest fault_injection`.",
+    ),
 )
 
 AGREEMENT = ROOT / "data-product" / "consumers" / "olist-dashboard.yaml"
@@ -162,7 +190,19 @@ def missing_marts() -> str | None:
     return None
 
 
+def changed_paths() -> list[str] | None:
+    """Files this branch changes against origin/main (working tree included), None if unknown."""
+    done = subprocess.run(
+        ["git", "diff", "--name-only", "origin/main"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8"
+    )
+    return done.stdout.splitlines() if done.returncode == 0 else None
+
+
 def skip_reason(check: Check) -> str | None:
+    if check.when_changed:
+        changed = changed_paths()
+        if changed is not None and not any(p.startswith(check.when_changed) for p in changed):
+            return f"nothing changed under {', '.join(check.when_changed)}"
     if check.tool and not shutil.which(check.tool):
         return f"`{check.tool}` not on PATH"
     if check.needs_marts and (why := missing_marts()):
@@ -256,8 +296,9 @@ def main(argv: list[str]) -> int:
 
     for c, code, output in failed:
         print(f"\n{'=' * 70}\n{c.key}: output\n{'=' * 70}\n{output.rstrip()}")
+        what = f"which CI runs as job {c.job!r}, step {c.step!r}" if c.job else "a local-only guard"
         print(
-            f"\nFAILED: {c.key}, which CI runs as job {c.job!r}, step {c.step!r} (exit {code}).\n"
+            f"\nFAILED: {c.key}, {what} (exit {code}).\n"
             + (f"{c.hint}\n" if c.hint else "")
             + "Fix it, or skip on purpose with `git push --no-verify`."
         )
