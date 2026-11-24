@@ -290,6 +290,22 @@ If the feed is down or answers wrongly the ingest fails with `weather <from>..<t
 as it was. `assert_weather_covers_every_order_day` fails when a state-day is missing. A bad day is fixed by deleting
 its rows (`weather_date = '2018-07-01'`) and rerunning the ingest.
 
+## Exchange rate feed (REST)
+
+`fct_order_fx` and `fct_fx_rates_daily` come from the third REST source: BRL per USD from Banco Central do Brasil (PTAX),
+Frankfurter (ECB) as fallback (D128). Unlike holidays and weather it changes every day: each ingest asks for the last 7
+loaded days and everything after, and writes only new or changed rates.
+
+```powershell
+uv run python ingestion/pipeline.py          # fx_loaded in the status line (0 = nothing new)
+```
+
+If both sources are down or answer wrongly the ingest fails with `no rates for <from>..<to>: bcb-ptax: ...; frankfurter: ...`
+and `raw.fx_rates_daily` is left as it was. `assert_fx_covers_every_order` fails when an order has no rate; the source
+freshness check warns when the newest rate is older than 6 days. A bad rate is fixed by deleting its row
+(`rate_date = '2018-07-02'`) and rerunning the ingest. A new source table must exist in prod `raw` before the PR (#353):
+`uv run python ingestion/pipeline.py --destination bigquery` (owner runs it).
+
 ## Review labels
 
 Labels (sentiment, topic, English translation) are CSV batches in `ingestion/review_labels/labels/`, made by

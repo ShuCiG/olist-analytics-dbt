@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: bcb
+    description: >
+      The third external REST feed and the only one that changes daily: BRL per USD from Banco Central do Brasil
+      (PTAX; Frankfurter / ECB as fallback), fetched by `ingestion/pipeline.py` (`ingestion/fx_feed.py`, #351).
+      Not part of the Olist dump. Every column is a string, plus `_loaded_at`.
+    schema: "{{ env_var('DBT_RAW_SCHEMA', 'raw') }}"
+    tables:
+      - name: fx_rates_daily
+        description: >
+          One row per business day, from 10 days before the first purchase to the latest published rate.
+          Weekends and Brazilian bank holidays have no row. Every run asks again for the last 7 days and
+          writes only new or changed rates.
+        config:
+          # Age of the newest rate, not of the load: a quiet weekend writes nothing. A long weekend or
+          # Carnival leaves 4-5 days between two rates; more means the feed has stopped.
+          loaded_at_field: cast(rate_date as timestamp)
+          freshness:
+            warn_after: {count: 6, period: day}

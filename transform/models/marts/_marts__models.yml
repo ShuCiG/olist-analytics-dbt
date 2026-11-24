@@ -1474,6 +1474,104 @@ models:
               arguments:
                 values: [dry, light, moderate, heavy, unknown]
 
+  - name: fct_fx_rates_daily
+    description: >
+      BRL per USD for every calendar day from the first to the latest published rate (Banco Central do Brasil
+      PTAX, Frankfurter / ECB as fallback, #351). Banks publish on business days only: a weekend or bank
+      holiday carries the last published rate forward (`is_carried_forward`).
+    config:
+      group: orders
+      contract:
+        enforced: true
+    columns:
+      - name: date_day
+        description: Calendar day; primary key.
+        data_type: date
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests:
+          - unique
+          - not_null
+      - name: rate_date_used
+        description: The business day whose rate applies (the day itself, or the last one before it).
+        data_type: date
+        data_tests: [not_null]
+      - name: brl_per_usd
+        description: Reais per one US dollar.
+        data_type: *float_type
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1.5
+                max_value: 10
+      - name: rate_source
+        description: API that gave the rate, `bcb-ptax` or the fallback `frankfurter`.
+        data_type: string
+      - name: is_carried_forward
+        description: True when the day has no published rate of its own (weekend, bank holiday).
+        data_type: boolean
+        data_tests: [not_null]
+
+  - name: fct_order_fx
+    description: >
+      Order value in USD: one row per order, `order_amount` (items + freight) and `paid_amount` converted at the
+      BRL per USD rate of the purchase day (#351). Generated months (`is_synthetic`) carry the real historic
+      rate of their dates. USD figures move with the exchange rate even when BRL sales do not.
+    config:
+      group: orders
+      contract:
+        enforced: true
+    columns:
+      - name: order_id
+        description: "{{ doc('order_id') }}"
+        data_type: string
+        constraints:
+          - type: not_null
+          - type: primary_key
+            warn_unenforced: false
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: is_synthetic
+        description: True for orders of the generated months after the dump (D112).
+        data_type: boolean
+        data_tests: [not_null]
+      - name: purchase_date
+        description: Order purchase date.
+        data_type: date
+      - name: rate_date_used
+        description: The business day whose rate was used (the purchase day, or the last business day before it).
+        data_type: date
+      - name: brl_per_usd
+        description: Reais per one US dollar on that day; null when no rate covers the purchase day.
+        data_type: *float_type
+      - name: rate_source
+        description: API that gave the rate, `bcb-ptax` or the fallback `frankfurter`.
+        data_type: string
+      - name: order_amount
+        description: Items + freight in BRL, as in `fct_orders`.
+        data_type: *money_type
+      - name: paid_amount
+        description: Amount paid in BRL, as in `fct_orders`.
+        data_type: *money_type
+      - name: order_amount_usd
+        description: "`order_amount` in USD at the purchase-day rate, rounded to cents."
+        data_type: *money_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: paid_amount_usd
+        description: "`paid_amount` in USD at the purchase-day rate, rounded to cents."
+        data_type: *money_type
+
   - name: fct_review_topics
     description: >
       What customers write about: one row per order whose review has a label (D92). Sentiment and topic

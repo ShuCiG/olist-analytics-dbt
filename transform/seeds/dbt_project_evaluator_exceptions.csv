@@ -7,3 +7,4 @@ fct_sources_without_freshness,resource_name,brasilapi.holidays,"National holiday
 fct_sources_without_freshness,resource_name,openmeteo.weather_daily,"Weather history (#349): the days of the orders are loaded once and kept, so the table has no age to check; the coverage test assert_weather_covers_every_order_day fails when a day is missing"
 fct_model_fanout,parent,int_orders_joined_to_customers,"The one place where orders meet customers (state, zip prefix): every order-grain mart reads it, fct_order_weather (#349) is one more"
 fct_model_fanout,parent,int_orders_delivery_metrics,"The one place where delivery lags and the late flag are defined: every mart that reports delivery reads it, fct_order_weather (#349) is one more"
+fct_model_fanout,parent,fct_orders,"The order fact every order-grain mart converts or aggregates: dim_customers, cohorts, payments and fct_order_fx (#351, USD at the purchase-day rate) read it so the BRL amounts stay defined once"

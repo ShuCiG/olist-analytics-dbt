@@ -38,6 +38,10 @@ Simulated arrival in monthly chunks (the Kaggle export is a static 2016-2018 dum
   `merge` on (state, weather_date), from the first purchase to 210 days after the last one
   (capped at the archive's last day). Loads only the days after the last loaded one; same
   all-or-nothing rule as the holidays, no fallback source.
+- Daily BRL per USD rate (REST, ingestion/fx_feed.py, #351): one table `fx_rates_daily`, `merge` on
+  `rate_date`, from 10 days before the first purchase to today. The one feed that changes daily: every
+  run asks for the last 7 days (and the days raw lacks) and writes only new or changed rates; BCB PTAX
+  first, Frankfurter as fallback, both down = the run fails.
 - Every row gets `_loaded_at` (UTC, one value per run): the cursor for incremental
   dbt models and the field for `dbt source freshness`. An order and its items,
   payments and reviews always load in the same chunk, so they share it.
@@ -109,6 +113,7 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 # Run as a script (Airflow, CI) or imported as ingestion.pipeline (tests)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fx_feed  # noqa: E402
 import holidays_feed  # noqa: E402
 import synthetic  # noqa: E402
 import weather_feed  # noqa: E402
@@ -127,6 +132,11 @@ HOLIDAY_COLUMNS = ["holiday_date", "holiday_name", "holiday_type", "holiday_year
 # (the slowest delivery of the dump took 210 days), never past what the archive has
 WEATHER_TAIL_DAYS = 210
 WEATHER_COLUMNS = ["state", "weather_date", "precipitation_mm", "temperature_c"]
+# FX rates (#351): daily BRL per USD from this many days before the first purchase (a weekend purchase
+# carries the last business day's rate) to today; the last days are asked again on every run (corrections)
+FX_LEAD_DAYS = 10
+FX_TRAILING_DAYS = 7
+FX_COLUMNS = ["rate_date", "brl_per_usd", "source"]
 KAGGLE_DATASET = "olistbr/brazilian-ecommerce"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "olist-analytics-dbt-472315")
 BQ_LOCATION = "EU"
@@ -721,6 +731,63 @@ def load_weather(pipeline: dlt.Pipeline, today: date) -> int:
     return table.num_rows
 
 
+def fx_range(pipeline: dlt.Pipeline, today: date) -> tuple[date, date] | None:
+    """Days of rates to ask for: the last FX_TRAILING_DAYS loaded days again and everything after
+    (or, on the first load, from FX_LEAD_DAYS before the first purchase) up to today. None = no orders yet."""
+    with pipeline.sql_client() as client:
+        orders = client.make_qualified_table_name("orders")
+        try:
+            bounds = client.execute_sql(f"select min(substr(order_purchase_timestamp, 1, 10)) from {orders}")
+        except DatabaseUndefinedRelation:
+            return None
+        assert bounds, "no result from the order dates query"
+        first = bounds[0][0]
+        try:
+            fx = client.make_qualified_table_name("fx_rates_daily")
+            latest = client.execute_sql(f"select max(rate_date) from {fx}")
+        except DatabaseUndefinedRelation:
+            latest = None
+        loaded = latest[0][0] if latest else None
+    if first is None:
+        return None
+    if loaded:
+        return date.fromisoformat(loaded) - timedelta(days=FX_TRAILING_DAYS), today
+    return lenient_date(first) - timedelta(days=FX_LEAD_DAYS), today
+
+
+def load_fx_rates(pipeline: dlt.Pipeline, today: date) -> int:
+    """Load the rates that are new or changed since the last run; returns the rows written.
+
+    The range (see fx_range) is fetched and checked in full before the first write: a feed that is
+    down or answers wrongly fails the run and leaves raw.fx_rates_daily as it was. Rows equal to
+    what raw already has are not written, so a quiet day (weekend, bank holiday) is 0 new data and
+    does not start a rebuild.
+    """
+    asked = fx_range(pipeline, today)
+    if asked is None:
+        print("FX rates: no orders yet, load skipped")
+        return 0
+    fetched = fx_feed.fetch_range(*asked)
+    with pipeline.sql_client() as client:
+        try:
+            fx = client.make_qualified_table_name("fx_rates_daily")
+            raw_rates = client.execute_sql(
+                f"select rate_date, brl_per_usd, source from {fx} where rate_date >= '{asked[0].isoformat()}'"
+            )
+            known = {str(day): (str(rate), str(source)) for day, rate, source in raw_rates or []}
+        except DatabaseUndefinedRelation:
+            known = {}
+    rows = [r for r in fetched if known.get(r["rate_date"]) != (r["brl_per_usd"], r["source"])]
+    if not rows:
+        print(f"FX rates {asked[0]}..{asked[1]}: nothing new")
+        return 0
+    table = pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in FX_COLUMNS]))
+    table = with_loaded_at(with_required(table, ["rate_date", "brl_per_usd"]), datetime.now(UTC))
+    pipeline.run(dlt.resource([table], name="fx_rates_daily", write_disposition="merge", primary_key="rate_date"))
+    print(f"FX rates {asked[0]}..{asked[1]}: {table.num_rows} new or changed rates loaded")
+    return table.num_rows
+
+
 def loaded_until(pipeline: dlt.Pipeline) -> str | None:
     return pipeline.state.get("sources", {}).get("olist", {}).get(STATE_KEY)
 
@@ -912,6 +979,7 @@ def feed_status(
     labels_loaded: int = 0,
     holidays_loaded: int = 0,
     weather_loaded: int = 0,
+    fx_loaded: int = 0,
 ) -> dict[str, object]:
     """This run's order count and column changes + the raw orders table as it is now.
 
@@ -932,6 +1000,8 @@ def feed_status(
         "holidays_loaded": holidays_loaded,
         # New weather days change fct_order_weather: same rule
         "weather_loaded": weather_loaded,
+        # New or corrected exchange rates change fct_fx_rates_daily and fct_order_fx: same rule
+        "fx_loaded": fx_loaded,
         "orders_total": total,
         "last_order_at": last_order_at,
         "last_loaded_at": last_loaded_at.isoformat() if last_loaded_at else None,
@@ -1064,8 +1134,9 @@ def main() -> None:
     labels_loaded = load_review_labels(pipeline, LABELS_DIR)
     holidays_loaded = load_holidays(pipeline, datetime.now(UTC).date())
     weather_loaded = load_weather(pipeline, datetime.now(UTC).date())
+    fx_loaded = load_fx_rates(pipeline, datetime.now(UTC).date())
     # Last line on purpose: Airflow's BashOperator pushes it as the task's XCom
-    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded, holidays_loaded, weather_loaded)))
+    print(json.dumps(feed_status(status, orders_loaded, added_columns, dropped_columns, labels_loaded, holidays_loaded, weather_loaded, fx_loaded)))
 
 
 if __name__ == "__main__":

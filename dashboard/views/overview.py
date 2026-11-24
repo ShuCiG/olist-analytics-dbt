@@ -79,3 +79,26 @@ with right:
         extra_tooltip=[alt.Tooltip("amount:Q", title="Amount, R$", format=",.0f")],
     )
     st.caption("Boleto: Brazilian bank slip, paid in cash or online banking.")
+
+st.subheader("Revenue in US dollars")
+usd = monthly(query(f"""
+    select
+        extract(year from x.purchase_date) as yr,
+        extract(month from x.purchase_date) as mo,
+        sum(case when o.order_status not in ({lost}) then x.order_amount_usd end) as revenue_usd,
+        avg(x.brl_per_usd) as brl_per_usd
+    from {table('fct_order_fx')} as x
+    inner join {table('fct_orders')} as o on x.order_id = o.order_id
+    where {period_filter('x.purchase_date')}
+    group by 1, 2
+"""))
+left, right = st.columns(2)
+with left:
+    charts.line(usd, "revenue_usd", "Revenue, US$", ",.0f")
+with right:
+    charts.line(usd, "brl_per_usd", "BRL per USD (average of the month's orders)", ".2f")
+st.caption(
+    "Each order is converted at the rate of its purchase day (Banco Central do Brasil PTAX, `fct_order_fx`); "
+    "weekends take the last business day's rate. The rate is real for generated months too. "
+    "In dollars, revenue follows the real depreciation as well as sales."
+)

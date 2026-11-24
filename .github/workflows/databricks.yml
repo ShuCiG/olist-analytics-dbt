@@ -87,6 +87,10 @@ jobs:
         if: steps.warehouse.outputs.available == 'true'
         run: uv run datacontract ci data-product/contracts/openmeteo-weather.odcs.yaml --server databricks-ci
 
+      - name: Input data contract (exchange rates)
+        if: steps.warehouse.outputs.available == 'true'
+        run: uv run datacontract ci data-product/contracts/bcb-fx-rates.odcs.yaml --server databricks-ci
+
       - name: dbt deps
         if: steps.warehouse.outputs.available == 'true'
         working-directory: transform
