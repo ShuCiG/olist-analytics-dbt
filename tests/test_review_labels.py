@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingestion" / "review_labels"))
 
-import classify_api  # noqa: E402
-import labels  # noqa: E402
+import classify_api
+import labels
 
 GROUPS = labels.by_text([
     {"review_id": "r1", "review_score": "5", "review_comment_title": "", "review_comment_message": "bom"},

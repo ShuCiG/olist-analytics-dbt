@@ -1,8 +1,7 @@
 import altair as alt
-import streamlit as st
-
 import charts
 import kpis
+import streamlit as st
 from warehouse import monthly, period, period_filter, query, table
 
 st.title("Delivery & reviews")

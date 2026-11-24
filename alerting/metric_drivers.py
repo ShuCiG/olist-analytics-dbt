@@ -133,7 +133,7 @@ class Explanation:
     after: float
     delta: float
     relative: float | None
-    breakdowns: list[Breakdown] = field(default_factory=list)
+    breakdowns: list[Breakdown] = field(default_factory=lambda: [])
 
 
 # --- which metrics can be decomposed ----------------------------------------------------------
@@ -147,7 +147,7 @@ def specs_from_manifest(manifest: dict[str, Any]) -> dict[str, MetricSpec | str]
         metric = metrics[name]
         if metric["type"] != "simple":
             return f"{metric['type']} metric"
-        agg = (metric["type_params"].get("metric_aggregation_params") or {}).get("agg")
+        agg: str | None = (metric["type_params"].get("metric_aggregation_params") or dict[str, Any]()).get("agg")
         if agg not in ADDITIVE_AGGS:
             return f"aggregation {agg!r} is not a sum"
         return MetricSpec(name, "additive")
@@ -165,7 +165,7 @@ def specs_from_manifest(manifest: dict[str, Any]) -> dict[str, MetricSpec | str]
 
     same_total: dict[str, list[str]] = {}
     for name, metric in metrics.items():
-        target = ((metric.get("config") or {}).get("meta") or {}).get("same_total_as")
+        target: str | None = ((metric.get("config") or dict[str, Any]()).get("meta") or dict[str, Any]()).get("same_total_as")
         if not target:
             continue
         if target not in result:
@@ -203,7 +203,7 @@ def source_metric(spec: MetricSpec, dimension: str, group_bys: GroupBys | None) 
 
 def reachable(spec: MetricSpec, group_bys: GroupBys) -> set[str]:
     """Every name `spec` can be split by, directly or through a same-total metric."""
-    return set().union(group_bys(spec.name), *(group_bys(other) for other in spec.same_total))
+    return set[str]().union(group_bys(spec.name), *(group_bys(other) for other in spec.same_total))
 
 
 # --- maths -------------------------------------------------------------------------------------
@@ -483,7 +483,7 @@ def drivers_html(drivers: dict[str, Any]) -> str:
         )
         for breakdown in item["breakdowns"]:
             ratio = item["kind"] == "ratio"
-            lines = []
+            lines: list[list[str]] = []
             for driver in [*breakdown["drivers"], *([breakdown["other"]] if breakdown["other"] else [])]:
                 cells = [escape(driver["member"]), _signed(driver["delta"], metric)]
                 if ratio:
@@ -576,17 +576,25 @@ def load_engine(target: str, project_dir: Path, manifest_path: Path, profiles_di
     """
     os.environ["DBT_TARGET"] = target
     with contextlib.redirect_stdout(sys.stderr):
-        from dbt.adapters.factory import get_adapter_by_type
-        from dbt_metricflow.cli.dbt_connectors.adapter_backed_client import AdapterBackedSqlClient
-        from dbt_metricflow.cli.dbt_connectors.dbt_config_accessor import dbtProjectMetadata
+        from dbt.adapters.factory import get_adapter_by_type  # pyright: ignore[reportUnknownVariableType]
+        from dbt_metricflow.cli.dbt_connectors.adapter_backed_client import (
+            AdapterBackedSqlClient,
+        )
+        from dbt_metricflow.cli.dbt_connectors.dbt_config_accessor import (
+            dbtProjectMetadata,
+        )
         from metricflow.engine.metricflow_engine import MetricFlowEngine
-        from metricflow_semantics.model.dbt_manifest_parser import parse_manifest_from_dbt_generated_manifest
-        from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
+        from metricflow_semantics.model.dbt_manifest_parser import (
+            parse_manifest_from_dbt_generated_manifest,
+        )
+        from metricflow_semantics.model.semantic_manifest_lookup import (
+            SemanticManifestLookup,
+        )
 
         # `dbt debug` inside registers the adapter for the target's profile
         metadata = dbtProjectMetadata.load_from_paths(profiles_path=profiles_dir or project_dir, project_path=project_dir)
         manifest = parse_manifest_from_dbt_generated_manifest(manifest_json_string=manifest_path.read_text(encoding="utf-8"))
-        adapter: Any = get_adapter_by_type(metadata.profile.credentials.type)  # a BaseAdapter; typed as the protocol
+        adapter: Any = get_adapter_by_type(metadata.profile.credentials.type)  # pyright: ignore[reportUnknownVariableType]  # a BaseAdapter; typed as the protocol
         return MetricFlowEngine(semantic_manifest_lookup=SemanticManifestLookup(manifest), sql_client=AdapterBackedSqlClient(adapter))
 
 

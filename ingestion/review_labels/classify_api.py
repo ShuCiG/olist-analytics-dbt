@@ -21,7 +21,16 @@ import time
 from pathlib import Path
 from typing import Any
 
-from labels import HERE, SENTIMENTS, TOPICS, by_text, known_text_labels, read_labels, validate, write_labels
+from labels import (
+    HERE,
+    SENTIMENTS,
+    TOPICS,
+    by_text,
+    known_text_labels,
+    read_labels,
+    validate,
+    write_labels,
+)
 
 MODEL = "claude-haiku-5-5"
 LABELED_BY = "claude-api-haiku-5-5"

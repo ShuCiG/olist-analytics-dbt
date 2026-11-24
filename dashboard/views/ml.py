@@ -1,8 +1,7 @@
 import altair as alt
+import charts
 import pandas as pd
 import streamlit as st
-
-import charts
 from warehouse import ml_table, query
 
 # BigQuery SQL: the BigQuery ML marts exist only there (the page is registered on that backend only)

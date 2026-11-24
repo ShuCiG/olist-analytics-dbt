@@ -37,14 +37,14 @@ def build_findings(run_results: dict[str, Any], manifest: dict[str, Any]) -> lis
     """Warned and failed nodes, failures counted, with the description the data team
     wrote for the business reader and the decision (`meta.decision`) that explains why
     the warning is kept. A finding without a decision shows up as unexplained."""
-    nodes = manifest.get("nodes", {})
-    findings = []
+    nodes: dict[str, dict[str, Any]] = manifest.get("nodes", {})
+    findings: list[dict[str, Any]] = []
     for result in run_results["results"]:
         outcome = OUTCOME.get(result["status"], "error")
         if outcome not in ("warn", "error"):
             continue
-        node = nodes.get(result["unique_id"], {})
-        meta = (node.get("config") or {}).get("meta") or {}
+        node: dict[str, Any] = nodes.get(result["unique_id"], {})
+        meta: dict[str, Any] = (node.get("config") or dict[str, Any]()).get("meta") or dict[str, Any]()
         findings.append(
             {
                 "outcome": outcome,
@@ -65,7 +65,7 @@ def freshness(sources: dict[str, Any] | None) -> dict[str, Any]:
     if not sources:
         return {"totals": {}, "findings": []}
     totals: dict[str, int] = {}
-    findings = []
+    findings: list[dict[str, Any]] = []
     for result in sources["results"]:
         outcome = OUTCOME.get(result["status"], "error")
         totals[outcome] = totals.get(outcome, 0) + 1

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 from . import dbt_summary, email_html, metric_drivers, schema_changes
@@ -171,14 +172,14 @@ def is_reminder_due(age_h: float, stale_after: float, reminded_at: datetime | No
 def report_email(
     warehouse: str,
     run_id: str,
-    status: dict,
+    status: dict[str, Any],
     dbt_built: bool,
     now: datetime,
     stale_after: float,
     log_dir: Path,
     manifest: str | Path,
     reminded_at: datetime | None = None,
-    drivers: dict | None = None,
+    drivers: dict[str, Any] | None = None,
 ) -> tuple[Email | None, float]:
     """(email or None, hours since new orders) for a run that did not fail.
 
@@ -257,7 +258,7 @@ def report_email(
     return Email(kind, subject, html), age_h
 
 
-def schema_email(warehouse: str, run_id: str, status: dict) -> Email | None:
+def schema_email(warehouse: str, run_id: str, status: dict[str, Any]) -> Email | None:
     """SCHEMA email when the run's load added source columns to raw or found raw
     columns missing from the source (D61), else None.
 

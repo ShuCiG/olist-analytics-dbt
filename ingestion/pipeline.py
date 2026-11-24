@@ -113,10 +113,10 @@ from dlt.destinations.exceptions import DatabaseUndefinedRelation
 
 # Run as a script (Airflow, CI) or imported as ingestion.pipeline (tests)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import fx_feed  # noqa: E402
-import holidays_feed  # noqa: E402
-import synthetic  # noqa: E402
-import weather_feed  # noqa: E402
+import fx_feed
+import holidays_feed
+import synthetic
+import weather_feed
 
 ROOT = Path(__file__).resolve().parents[1]
 DUCKDB_PATH = ROOT / "data" / "olist.duckdb"
@@ -243,7 +243,7 @@ def check_purchase_times(orders: pa.Table) -> pa.Table:
         pc.is_valid(purchased_at) & ~pc.match_substring_regex(purchased_at, f"^{TIMESTAMP}$")
     )
     if bad.num_rows:
-        examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3]))
+        examples = list(zip(bad["order_id"].to_pylist()[:3], bad["order_purchase_timestamp"].to_pylist()[:3], strict=True))
         raise ValueError(f"{bad.num_rows} orders with a malformed order_purchase_timestamp, e.g. {examples}")
     return orders
 
@@ -272,7 +272,7 @@ class SourceDump:
     def real_orders(self) -> pa.Table:
         return read_orders(self.source_dir)
 
-    @functools.cache
+    @functools.cache  # noqa: B019 - one Dump per process, the cache lives as long as it
     def _real(self, table: str) -> pa.Table:
         """A file read once per run: the generator needs it as well as the load."""
         if table == "orders":
@@ -315,7 +315,7 @@ class SourceDump:
             parts.append(block.filter(pc.is_in(block["order_id"], value_set=order_ids)))
         return pa.concat_tables(parts) if parts else self.table(name)
 
-    @functools.cache
+    @functools.cache  # noqa: B019 - same as _real
     def _generate(self, until: str) -> dict[str, pa.Table]:
         real = synthetic.Dump({table: self._real(table) for table in synthetic.TABLES})
         generated = synthetic.generate(real, until)
@@ -1115,10 +1115,7 @@ def main() -> None:
             partitioned=args.destination == "bigquery",
             deleted_people=read_deletion_requests(pipeline, args.destination),
         )
-        if args.full_refresh:
-            load_info = pipeline.run(source, refresh="drop_sources")
-        else:
-            load_info = pipeline.run(source)
+        load_info = pipeline.run(source, refresh="drop_sources") if args.full_refresh else pipeline.run(source)
         print(load_info)
         normalize_info = pipeline.last_trace.last_normalize_info if pipeline.last_trace else None
         assert normalize_info is not None, "pipeline.run() finished without a normalize step"

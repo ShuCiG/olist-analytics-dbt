@@ -242,7 +242,7 @@ def read_quota(client: Any, project: str) -> Quota | None:
     try:
         rows = list(client.query(DEPLOY_SQL.format(project=project)).result())
         deploy = int(rows[0].bytes_billed) if rows else None
-    except Exception:  # noqa: BLE001 - the forecast is optional
+    except Exception:
         deploy = None
     return Quota(int(used), deploy)
 

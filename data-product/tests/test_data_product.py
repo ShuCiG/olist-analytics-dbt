@@ -90,8 +90,8 @@ def output_contract(product: dict[str, Any], contracts: dict[str, dict[str, Any]
 
 def test_descriptor_is_valid_odps(product: dict[str, Any]) -> None:
     with ODPS_SCHEMA.open(encoding="utf-8") as f:
-        schema = json.load(f)
-    jsonschema.Draft201909Validator(schema).validate(product)
+        schema: dict[str, Any] = json.load(f)
+    jsonschema.Draft201909Validator(schema).validate(product)  # pyright: ignore[reportUnknownMemberType]
     assert product["apiVersion"] == "v1.1.0"
 
 

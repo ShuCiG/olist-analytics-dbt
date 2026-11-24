@@ -2,7 +2,6 @@
 contract and freshness summaries, the rendered page, and the wiring in the workflow."""
 
 import importlib.util
-import json
 import re
 from pathlib import Path
 from typing import Any

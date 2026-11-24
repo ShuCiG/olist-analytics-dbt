@@ -24,7 +24,7 @@ def bars(daily: list[dict[str, Any]]) -> str:
     """Inline SVG, one bar per day: height = share of good events, full red-tinted
     bar when a day had bad events, grey stub when it had no events."""
     width, height, gap = 14, 48, 3
-    parts = []
+    parts: list[str] = []
     for i, d in enumerate(daily):
         x = i * (width + gap)
         total, good = d["total"], d["good"]

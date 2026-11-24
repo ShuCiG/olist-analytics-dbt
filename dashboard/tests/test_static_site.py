@@ -9,10 +9,9 @@ import re
 from pathlib import Path
 
 import duckdb
+import export_site
 import pandas as pd
 import pytest
-
-import export_site
 import warehouse
 
 SOURCE = export_site.HERE

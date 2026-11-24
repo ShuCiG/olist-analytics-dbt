@@ -49,6 +49,12 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check
+        language: system
+        types: [python]
+
       # Python unit tests (tests/, ~45 s) when the code they cover changes
       - id: pytest
         name: pytest

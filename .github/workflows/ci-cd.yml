@@ -99,6 +99,24 @@ jobs:
       - name: pyright
         run: uv run pyright
 
+  # Lint (rules in [tool.ruff.lint], pyproject.toml); gates dbt build like pyright
+  ruff:
+    name: ruff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: ruff
+        run: uv run ruff check .
+
   # Python unit tests (tests/): dlt chunk cursor on a fake dump, dbt summary parsing,
   # alert email decisions. No warehouse or Kaggle download needed
   python-tests:
@@ -280,7 +298,7 @@ jobs:
   # type errors or failing tests. Skipped for docs-only changes (still passes)
   dbt-build:
     name: dbt build
-    needs: [changes, sqlfluff-lint, pyright, python-tests]
+    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -1204,7 +1222,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

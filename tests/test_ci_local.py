@@ -22,6 +22,7 @@ _spec.loader.exec_module(ci_local)
 NOT_MIRRORED = {
     "sqlfluff-lint": {"Install dependencies", "dbt deps (templater needs package macros)"},
     "pyright": {"Install dependencies"},
+    "ruff": {"Install dependencies"},
     "python-tests": {"Install dependencies"},
     "dbt-project-evaluator": {"Install dependencies", "dbt deps"},
     # init would rewrite infra/.terraform, which holds the owner's GCS backend

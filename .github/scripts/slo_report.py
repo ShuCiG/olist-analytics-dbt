@@ -23,7 +23,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +87,7 @@ def deploy_events(runs: list[dict[str, Any]]) -> slo.Daily:
     for run in runs:
         if run["conclusion"] not in ("success", "failure"):
             continue
-        day = datetime.fromisoformat(run["createdAt"].replace("Z", "+00:00")).astimezone(timezone.utc).date()
+        day = datetime.fromisoformat(run["createdAt"].replace("Z", "+00:00")).astimezone(UTC).date()
         counts = days.setdefault(day, [0, 0])
         counts[0] += run["conclusion"] == "success"
         counts[1] += 1
@@ -122,7 +122,7 @@ def main() -> None:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--duckdb", help="read the model from this DuckDB file instead of BigQuery prod")
     parser.add_argument("--runs", type=Path, help="gh run list JSON instead of calling gh (local check)")
-    parser.add_argument("--today", type=date.fromisoformat, default=datetime.now(timezone.utc).date())
+    parser.add_argument("--today", type=date.fromisoformat, default=datetime.now(UTC).date())
     args = parser.parse_args()
 
     config = yaml.safe_load((ROOT / "data-product" / "slo.yaml").read_text(encoding="utf-8"))
@@ -130,7 +130,7 @@ def main() -> None:
     rows = model_rows_duckdb(args.duckdb, since) if args.duckdb else model_rows_bigquery(since)
     runs = json.loads(args.runs.read_text(encoding="utf-8")) if args.runs else deploy_runs(since)
 
-    report = build_report(config, rows, runs, args.today, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    report = build_report(config, rows, runs, args.today, datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"))
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "data.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     (args.out / "index.html").write_text(load_site().render(report, config), encoding="utf-8")

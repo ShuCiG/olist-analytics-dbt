@@ -47,9 +47,9 @@ from airflow.providers.standard.operators.bash import BashOperator
 
 # Repo root (in the image): the lineage package is unit-tested in the project venv
 sys.path.insert(0, "/opt/project")
-from lineage.columns import column_lineage  # noqa: E402
-from lineage.exposures import exposure_inputs  # noqa: E402
-from lineage.exposures import exposures as exposures  # noqa: E402  (re-exported for olist_elt.py)
+from lineage.columns import column_lineage
+from lineage.exposures import exposure_inputs
+from lineage.exposures import exposures as exposures  # re-exported for olist_elt.py
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +131,11 @@ def _failed_model_events(task, project_dir: str) -> list:
 
 def _exposure_event(exposure: dict, inputs: list[dict], parent, namespace: str, producer: str) -> dict:
     from openlineage.client.event_v2 import InputDataset, Job, Run, RunEvent, RunState
-    from openlineage.client.facet_v2 import documentation_job, job_type_job, ownership_job
+    from openlineage.client.facet_v2 import (
+        documentation_job,
+        job_type_job,
+        ownership_job,
+    )
     from openlineage.client.serde import Serde
     from openlineage.client.uuid import generate_new_uuid
 

@@ -25,17 +25,17 @@ import re
 import smtplib
 import ssl
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from email.message import EmailMessage
 from html import escape
-import urllib.error
-import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 # Repo root: alerting/dbt_summary.py is shared with the Airflow alert emails
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from alerting import dbt_summary, email_html  # noqa: E402
+from alerting import dbt_summary, email_html
 
 EXCERPT_LINES = 30
 GH_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z ?")  # Actions log line prefix

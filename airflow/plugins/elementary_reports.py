@@ -30,8 +30,9 @@ app.mount("/", StaticFiles(directory=REPORTS_DIR, html=True, check_dir=False), n
 
 class ElementaryReportsPlugin(AirflowPlugin):
     name = "elementary_reports"
-    fastapi_apps = [{"app": app, "url_prefix": URL_PREFIX, "name": "Elementary reports"}]
-    external_views = [
+    # Airflow reads plain class attributes (no ClassVar)
+    fastapi_apps = [{"app": app, "url_prefix": URL_PREFIX, "name": "Elementary reports"}]  # noqa: RUF012
+    external_views = [  # noqa: RUF012
         {
             "name": f"Elementary ({label})",
             "href": f"{URL_PREFIX}/airflow_{warehouse}/index.html",

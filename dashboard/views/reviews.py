@@ -1,8 +1,7 @@
 import altair as alt
+import charts
 import pandas as pd
 import streamlit as st
-
-import charts
 from warehouse import period_filter, query, table
 
 st.title("What customers write")
