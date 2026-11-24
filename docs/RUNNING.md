@@ -636,8 +636,12 @@ product tests, the project evaluator, `terraform fmt` and the dashboard's consum
 output with the CI job it stands for. The dashboard test reads the marts in `data/olist.duckdb`
 (or `DBT_DUCKDB_PATH`) and is skipped with a message when they are not built; after a model change,
 rebuild them (`cd transform && uv run dbt build -s marts`) before pushing. Builds on a warehouse,
-the rest of the dashboard suite, the MCP server tests, fault injection, the Airflow image and
-`terraform validate` / `test` stay CI-only. Skip a hook on purpose only:
+the rest of the dashboard suite, the MCP server tests, the Airflow image and
+`terraform validate` / `test` stay CI-only. Two guards have no CI step (#353): `new-sources` fails the push
+when a source table added in a `sources.yml` is missing in prod `raw` (PR CI reads it there; the message gives the
+one-off load, which the owner runs; without Google credentials it only warns), and `fault-control` runs the clean
+month of the fault injection suite (~6 min, only when `transform/`, `ingestion/` or `fault_injection/` changed).
+The other fault injection scenarios stay CI-only (`uv run pytest fault_injection`, ~14 min). Skip a hook on purpose only:
 `git commit --no-verify`, `git push --no-verify`.
 
 How a change goes: an issue (Task or Bug form) → a branch per issue → a PR whose description has `Closes #N`.

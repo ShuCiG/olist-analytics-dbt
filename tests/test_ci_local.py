@@ -44,7 +44,10 @@ def _step(job: dict, name: str) -> dict:
     return steps[name]
 
 
-@pytest.mark.parametrize("check", ci_local.CHECKS, ids=lambda c: c.key)
+CI_CHECKS = [c for c in ci_local.CHECKS if c.job]  # the rest are local-only guards (job "")
+
+
+@pytest.mark.parametrize("check", CI_CHECKS, ids=lambda c: c.key)
 def test_check_runs_the_ci_command(check) -> None:
     jobs = _jobs()
     assert check.job in jobs, f"CI job {check.job!r} not found"
@@ -136,3 +139,34 @@ def test_dashboard_check_skips_without_built_marts(tmp_path: Path, monkeypatch: 
     with duckdb.connect(str(db)) as con:
         con.execute(f"create table marts.{tables[-1]} (x int)")
     assert ci_local.skip_reason(consumer) is None
+
+
+def test_local_only_guards_are_named_and_have_a_script() -> None:
+    guards = [c for c in ci_local.CHECKS if not c.job]
+    assert {c.key for c in guards} >= {"new-sources", "fault-control"}
+    for check in guards:
+        assert not check.step
+        files = [a.split("::")[0] for a in shlex.split(check.run) if ".py" in a]
+        assert files, check.key
+        for f in files:
+            assert (ROOT / f).is_file(), f"{check.key}: {f} not found"
+
+
+def test_fault_control_runs_a_real_scenario_in_a_path_ci_runs() -> None:
+    check = next(c for c in ci_local.CHECKS if c.key == "fault-control")
+    ci_run = next(s["run"] for s in _jobs()["fault-injection"]["steps"] if s.get("name") == "pytest fault_injection")
+    assert "fault_injection" in ci_run and "fault_injection/test_faults.py" in check.run
+    from fault_injection.scenarios import SCENARIOS
+
+    assert any(s.name == "clean_month" and s.expected == () for s in SCENARIOS), "-k clean_month matches no control"
+    assert check.when_changed and all((ROOT / p).is_dir() for p in check.when_changed)
+
+
+def test_fault_control_runs_only_when_its_paths_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    check = next(c for c in ci_local.CHECKS if c.key == "fault-control")
+    monkeypatch.setattr(ci_local, "changed_paths", lambda: ["README.md", "docs/DECISIONS.md"])
+    assert "nothing changed" in (ci_local.skip_reason(check) or "")
+    monkeypatch.setattr(ci_local, "changed_paths", lambda: ["transform/models/marts/fct_orders.sql"])
+    assert ci_local.skip_reason(check) is None
+    monkeypatch.setattr(ci_local, "changed_paths", lambda: None)  # no origin/main: run it
+    assert ci_local.skip_reason(check) is None
