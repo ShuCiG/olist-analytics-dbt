@@ -151,6 +151,15 @@ uv run pytest tsql_parity                                       # one test per s
 Needs Java 17 or 21. On Windows Spark also needs `winutils`: run `bash tsql_parity/docker_run.sh run|pytest`
 instead (a Linux container reaches SQL Server through `host.docker.internal`). Differences: `docs/tsql-spark-differences.md`.
 
+## Privacy demo
+
+```bash
+uv run python -m privacy.demo --csv-dir <folder with the Olist CSVs>   # review score per state and order band, k = 5
+uv run pytest tests/test_privacy.py                                    # attack tests (seconds)
+```
+
+k and l: `privacy/config.toml`. Salts: `PRIVACY_LINKAGE_SALT`, `PRIVACY_SALT_ORDERS`, `PRIVACY_SALT_REVIEWS` (hex, 32+ bytes), random per run when unset.
+
 ## Spark tuning benchmark
 
 ```bash

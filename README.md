@@ -736,6 +736,18 @@ check, follow the job, read its result. It carries no business logic; it shows h
 
 How to call it: [`api/README.md`](api/README.md).
 
+## Privacy: matching without identifiers
+
+[`privacy/`](privacy/) models analysis across two parties without exposing individuals (a demo, not a certified
+privacy system). The part worth reading is the attack tests:
+
+- **Salted HMAC tokens:** same person, same token on both sides; a brute force over a known identifier schema finds
+  nothing without the secret salt, and each party has its own salt for its pseudonyms.
+- **Release checks:** groups under k = 5 people are dropped, l-diversity on a sensitive column, no totals.
+- **Differencing guard:** a query is refused when it and an earlier answer differ by 1 to k-1 people.
+- Demo on Olist: review score by state and order band over orders x reviews, 50 groups released, 4 suppressed.
+- Threat model and what is out of scope (leaked salt, differential privacy, tracker attacks): [`privacy/README.md`](privacy/README.md).
+
 ## T-SQL to Spark migration parity
 
 Porting legacy T-SQL to Spark is a different problem from running one dbt project on four warehouses: the source is
@@ -832,6 +844,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
 ├── api/                         # FastAPI job-control service: HMAC-signed requests, idempotency keys, job state machine, OpenAPI checked in CI
+├── privacy/                     # salted HMAC tokenisation, matching across two parties, k-anonymity / l-diversity, differencing guard, attack tests
 ├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
 ├── spark_bench/                 # Spark tuning measured on skewed order items: salting, broadcast, AQE, repartition vs coalesce, with negative results
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
