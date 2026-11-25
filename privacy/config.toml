@@ -1,0 +1,3 @@
+# Release thresholds for every grouped output (see privacy/README.md)
+k = 5  # smallest group, counted in distinct people
+l = 2  # distinct values of a sensitive column a group must show
