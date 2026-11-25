@@ -139,6 +139,17 @@ uv run pytest tsql_parity                                       # one test per s
 Needs Java 17 or 21. On Windows Spark also needs `winutils`: run `bash tsql_parity/docker_run.sh run|pytest`
 instead (a Linux container reaches SQL Server through `host.docker.internal`). Differences: `docs/tsql-spark-differences.md`.
 
+## Spark tuning benchmark
+
+```bash
+OLIST_CSV_DIR=<folder with the Olist CSVs> bash spark_bench/docker_run.sh                 # ~25 min, writes spark_bench/results.json
+OLIST_CSV_DIR=<folder> bash spark_bench/docker_run.sh --scale 2 --only skew            # quick check (one experiment, small data)
+```
+
+Runs in a Linux container (Spark on Windows needs `winutils`). Stop other heavy work first (for example the local
+Airflow stack: `docker compose -f airflow/docker-compose.yml stop`, later `start`): timings on a shared 4-core
+machine are noisy. Results and verdicts: `docs/spark-benchmarks.md`. Not part of CI: too long and too noisy.
+
 ## Deletion requests (GDPR)
 
 A person's erasure request (D105). In prod it is two actions:
