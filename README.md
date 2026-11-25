@@ -816,6 +816,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
 ├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
+├── spark_bench/                 # Spark tuning measured on skewed order items: salting, broadcast, AQE, repartition vs coalesce, with negative results
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
 ├── infra/                       # Terraform: BigQuery datasets, service accounts, IAM, GitHub OIDC (WIF), budget, quota

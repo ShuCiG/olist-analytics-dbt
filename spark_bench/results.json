@@ -1,0 +1,478 @@
+[
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "agg plain",
+  "seconds": 2.4552945840000575,
+  "shuffle_read_mb": 0.6,
+  "spill_mb": 0.0,
+  "runs": [
+   3.68,
+   2.46,
+   2.45
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "agg salted",
+  "seconds": 7.509615679000035,
+  "shuffle_read_mb": 11.4,
+  "spill_mb": 0.0,
+  "runs": [
+   10.57,
+   7.51,
+   6.41
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "join sort-merge",
+  "seconds": 6.07092058499984,
+  "shuffle_read_mb": 37.4,
+  "spill_mb": 0.0,
+  "runs": [
+   6.07,
+   6.04,
+   7.76
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "join salted",
+  "seconds": 5.264428557999963,
+  "shuffle_read_mb": 87.9,
+  "spill_mb": 0.0,
+  "runs": [
+   7.71,
+   5.26,
+   5.2
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "join AQE skew handling",
+  "seconds": 3.31173772000011,
+  "shuffle_read_mb": 37.3,
+  "spill_mb": 0.0,
+  "runs": [
+   3.87,
+   3.31,
+   3.09
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items",
+  "variant": "join broadcast",
+  "seconds": 1.4753877289999764,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   1.53,
+   1.4,
+   1.48
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "agg plain",
+  "seconds": 1.2036956229999305,
+  "shuffle_read_mb": 0.6,
+  "spill_mb": 0.0,
+  "runs": [
+   1.2,
+   1.2,
+   1.33
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "agg salted",
+  "seconds": 5.110913617999813,
+  "shuffle_read_mb": 10.7,
+  "spill_mb": 0.0,
+  "runs": [
+   5.11,
+   6.41,
+   4.83
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "join sort-merge",
+  "seconds": 4.089530261000164,
+  "shuffle_read_mb": 39.1,
+  "spill_mb": 0.0,
+  "runs": [
+   4.44,
+   4.09,
+   3.95
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "join salted",
+  "seconds": 4.972602813999856,
+  "shuffle_read_mb": 73.3,
+  "spill_mb": 0.0,
+  "runs": [
+   4.84,
+   4.97,
+   6.06
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "join AQE skew handling",
+  "seconds": 2.8805524180002067,
+  "shuffle_read_mb": 39.0,
+  "spill_mb": 0.0,
+  "runs": [
+   2.83,
+   2.88,
+   3.12
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "skew",
+  "dataset": "items_hot",
+  "variant": "join broadcast",
+  "seconds": 1.2882386199999019,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   1.95,
+   1.24,
+   1.29
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 3,000 rows",
+  "variant": "broadcast",
+  "seconds": 5.800286867000068,
+  "shuffle_read_mb": 187.2,
+  "spill_mb": 0.0,
+  "runs": [
+   5.8,
+   5.82,
+   5.72
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 3,000 rows",
+  "variant": "sort-merge",
+  "seconds": 11.195535368000037,
+  "shuffle_read_mb": 413.1,
+  "spill_mb": 0.0,
+  "runs": [
+   11.2,
+   12.01,
+   9.47
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 3,000 rows",
+  "variant": "shuffle hash",
+  "seconds": 10.579907419000847,
+  "shuffle_read_mb": 413.1,
+  "spill_mb": 0.0,
+  "runs": [
+   10.58,
+   8.52,
+   11.69
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 100,000 rows",
+  "variant": "broadcast",
+  "seconds": 9.925801727999897,
+  "shuffle_read_mb": 187.2,
+  "spill_mb": 0.0,
+  "runs": [
+   9.93,
+   7.98,
+   11.56
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 100,000 rows",
+  "variant": "sort-merge",
+  "seconds": 15.018695767000281,
+  "shuffle_read_mb": 416.4,
+  "spill_mb": 0.0,
+  "runs": [
+   15.02,
+   15.46,
+   12.27
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 100,000 rows",
+  "variant": "shuffle hash",
+  "seconds": 13.102965312999913,
+  "shuffle_read_mb": 416.4,
+  "spill_mb": 0.0,
+  "runs": [
+   12.42,
+   14.86,
+   13.1
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 1,000,000 rows",
+  "variant": "broadcast",
+  "seconds": 9.966818496000087,
+  "shuffle_read_mb": 187.2,
+  "spill_mb": 0.0,
+  "runs": [
+   9.68,
+   9.99,
+   9.97
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 1,000,000 rows",
+  "variant": "sort-merge",
+  "seconds": 14.82120008199945,
+  "shuffle_read_mb": 447.6,
+  "spill_mb": 0.0,
+  "runs": [
+   14.82,
+   13.0,
+   15.38
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 1,000,000 rows",
+  "variant": "shuffle hash",
+  "seconds": 11.77777218599931,
+  "shuffle_read_mb": 447.6,
+  "spill_mb": 0.0,
+  "runs": [
+   12.44,
+   11.78,
+   10.04
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 4,000,000 rows",
+  "variant": "broadcast",
+  "seconds": 12.037955621000037,
+  "shuffle_read_mb": 187.2,
+  "spill_mb": 0.0,
+  "runs": [
+   12.04,
+   11.88,
+   13.41
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 4,000,000 rows",
+  "variant": "sort-merge",
+  "seconds": 23.929634242000247,
+  "shuffle_read_mb": 722.7,
+  "spill_mb": 0.0,
+  "runs": [
+   24.39,
+   16.15,
+   23.93
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "broadcast",
+  "dataset": "dim 4,000,000 rows",
+  "variant": "shuffle hash",
+  "seconds": 23.631219842000064,
+  "shuffle_read_mb": 608.7,
+  "spill_mb": 0.0,
+  "runs": [
+   24.87,
+   18.43,
+   23.63
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "aqe",
+  "dataset": "items",
+  "variant": "AQE off, 200 partitions",
+  "seconds": 4.6073852180006725,
+  "shuffle_read_mb": 37.4,
+  "spill_mb": 0.0,
+  "runs": [
+   5.07,
+   4.61,
+   4.47
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "aqe",
+  "dataset": "items",
+  "variant": "AQE off, 8 partitions (hand-tuned)",
+  "seconds": 4.034856178000155,
+  "shuffle_read_mb": 86.3,
+  "spill_mb": 0.0,
+  "runs": [
+   5.67,
+   4.03,
+   3.41
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "aqe",
+  "dataset": "items",
+  "variant": "AQE on, 200 partitions",
+  "seconds": 3.2212399119998736,
+  "shuffle_read_mb": 37.3,
+  "spill_mb": 0.0,
+  "runs": [
+   3.44,
+   3.22,
+   3.12
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "aqe",
+  "dataset": "items",
+  "variant": "AQE off, 2000 partitions (too many)",
+  "seconds": 19.0805889810008,
+  "shuffle_read_mb": 27.7,
+  "spill_mb": 0.0,
+  "runs": [
+   19.55,
+   19.08,
+   18.36
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "aqe",
+  "dataset": "items",
+  "variant": "AQE on, 2000 partitions",
+  "seconds": 3.1942101919994457,
+  "shuffle_read_mb": 27.5,
+  "spill_mb": 0.0,
+  "runs": [
+   3.19,
+   3.17,
+   3.22
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "write",
+  "dataset": "items + sha2",
+  "variant": "no reduction (32 files)",
+  "seconds": 8.750157744000717,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   9.43,
+   8.75,
+   8.58
+  ],
+  "note": "4 files, 544 MB"
+ },
+ {
+  "experiment": "write",
+  "dataset": "items + sha2",
+  "variant": "coalesce(4)",
+  "seconds": 9.04506107799989,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   9.05,
+   8.53,
+   9.52
+  ],
+  "note": "4 files, 544 MB"
+ },
+ {
+  "experiment": "write",
+  "dataset": "items + sha2",
+  "variant": "repartition(4)",
+  "seconds": 30.1206900090001,
+  "shuffle_read_mb": 677.0,
+  "spill_mb": 0.0,
+  "runs": [
+   26.71,
+   30.12,
+   33.62
+  ],
+  "note": "4 files, 549 MB"
+ },
+ {
+  "experiment": "write",
+  "dataset": "items + sha2",
+  "variant": "coalesce(1)",
+  "seconds": 21.20408570499967,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   17.85,
+   21.2,
+   22.51
+  ],
+  "note": "1 files, 544 MB"
+ },
+ {
+  "experiment": "write",
+  "dataset": "items + sha2",
+  "variant": "repartition(1)",
+  "seconds": 39.42186080200008,
+  "shuffle_read_mb": 675.6,
+  "spill_mb": 0.0,
+  "runs": [
+   29.75,
+   39.42,
+   40.15
+  ],
+  "note": "1 files, 544 MB"
+ }
+]

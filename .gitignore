@@ -68,3 +68,4 @@ tsql_parity/.spark-warehouse/
 metastore_db/
 derby.log
 spark-warehouse/
+spark_bench/run.log
