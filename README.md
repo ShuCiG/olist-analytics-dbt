@@ -720,6 +720,22 @@ DuckDB (all three sizes) and BigQuery (1x and 10x measured, 100x projected)
 The first limit on BigQuery is the 1 GB per-query cap (about 21x), the second the daily quota (about 29x); on DuckDB
 the Python RFM model ran out of memory at 100x and was vectorized (#317).
 
+## Job-control API
+
+[`api/`](api/) is a small FastAPI service in front of the pipelines: start a pipeline run, a dbt build or the parity
+check, follow the job, read its result. It carries no business logic; it shows how a service API treats requests:
+
+- **Signed requests:** HMAC-SHA256 over timestamp, nonce, method, path and body; 5 minute window, a nonce works once,
+  constant-time comparison, secret from the environment.
+- **Idempotency keys:** same key and body returns the same job, same key with another body is a 409, two requests at
+  once with one key make one job (SQLite write lock).
+- **Job state machine:** `queued` -> `running` -> `succeeded` / `failed`, forward only, final states stay final.
+- **Errors** as RFC 7807 `problem+json`; the **OpenAPI schema** is checked in and CI fails a breaking change.
+- Typed end to end: pyright strict, ruff, 40+ tests with httpx `AsyncClient` (replay, conflict, expired timestamp,
+  forged signature, race, illegal transition).
+
+How to call it: [`api/README.md`](api/README.md).
+
 ## T-SQL to Spark migration parity
 
 Porting legacy T-SQL to Spark is a different problem from running one dbt project on four warehouses: the source is
@@ -815,6 +831,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── alerting/                    # alert emails shared by Airflow and CI
 ├── lineage/                     # column lineage (sqlglot), exposure jobs for the OpenLineage events, PR column impact
 ├── fault_injection/             # corrupted dumps through loader and dbt: which defects the checks catch
+├── api/                         # FastAPI job-control service: HMAC-signed requests, idempotency keys, job state machine, OpenAPI checked in CI
 ├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
 ├── spark_bench/                 # Spark tuning measured on skewed order items: salting, broadcast, AQE, repartition vs coalesce, with negative results
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
