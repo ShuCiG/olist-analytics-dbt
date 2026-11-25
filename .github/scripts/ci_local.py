@@ -97,6 +97,13 @@ CHECKS: tuple[Check, ...] = (
         lane="light",
     ),
     Check(
+        "api-schema",
+        "python-tests",
+        "API schema breaking changes (vs main)",
+        "uv run python api/check_openapi.py origin/main",
+        lane="light",
+    ),
+    Check(
         "terraform-fmt",
         "terraform",
         "terraform fmt",

@@ -16,6 +16,12 @@ dependencies = [
 ]
 
 [dependency-groups]
+# Job-control service (api/, #358); uvicorn is the server, httpx drives the tests
+api = [
+    "fastapi>=0.140.0",
+    "httpx>=0.28.1",
+    "uvicorn>=0.54.0",
+]
 dashboard = [
     "altair>=6.3.0",
     "streamlit>=1.66.1",  # allows pillow 13 (D59)
@@ -45,7 +51,7 @@ tsql = [
 
 # `uv sync` installs the dashboard too (CI type-checks and smoke-tests it)
 [tool.uv]
-default-groups = ["dev", "dashboard", "metricflow", "tsql"]
+default-groups = ["dev", "dashboard", "metricflow", "tsql", "api"]
 
 # Python unit tests (tests/): `uv run pytest`. The dashboard smoke test needs built
 # marts and runs separately (`uv run pytest dashboard`)
@@ -55,12 +61,12 @@ pythonpath = ["."]  # tests import the repo's packages: ingestion, alerting, lin
 
 # Pylance in VS Code reads the same section, so editor and CI agree
 [tool.pyright]
-include = ["ingestion", "tsql_parity", "spark_bench", "dashboard", "alerting", "lineage", "metrics_mcp", "tests", "fault_injection", "data-product", ".github/scripts", ".claude/skills/audit", "airflow/reset_dbt_cache.py", "airflow/patches"]
+include = ["ingestion", "api", "tsql_parity", "spark_bench", "dashboard", "alerting", "lineage", "metrics_mcp", "tests", "fault_injection", "data-product", ".github/scripts", ".claude/skills/audit", "airflow/reset_dbt_cache.py", "airflow/patches"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "standard"
-strict = ["alerting", "data-product", "tsql_parity"]
+strict = ["alerting", "data-product", "tsql_parity", "api"]
 
 # airflow/ runs in the Docker image (Airflow + Cosmos aren't in this venv, by
 # design: dependency clash with dbt). Pylance still analyses open files there;

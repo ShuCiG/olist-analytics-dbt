@@ -127,6 +127,18 @@ DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defec
 `fault_injection/scenarios.py`, a row in the README table. `fault_injection/test_deletion.py` (a deletion request
 end to end, D105) shares the baseline: `uv run pytest fault_injection/test_deletion.py`, ~5 min.
 
+## Job-control API
+
+```bash
+export API_HMAC_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+uv run uvicorn api.app:create_app --factory       # http://127.0.0.1:8000/docs
+uv run pytest tests/test_api.py                   # ~25 s, no pipeline or dbt process starts
+uv run python -m api.openapi                      # regenerate api/openapi.json after an API change
+uv run python api/check_openapi.py origin/main    # breaking-change check (CI runs it on PRs)
+```
+
+Signing and the calls: `api/README.md`. A breaking schema change needs a new major `info.version` (`API_VERSION` in `api/app.py`).
+
 ## T-SQL to Spark parity
 
 ```bash
