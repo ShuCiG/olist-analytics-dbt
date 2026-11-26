@@ -46,4 +46,4 @@ Attacker: the analyst who receives the released tables, and anyone who gets the 
 - **Quasi-identifiers in the data.** k counts people in a group of the chosen columns; it does not look at which
   columns are rare in combination elsewhere, and k-anonymity is not a defence against background knowledge.
 - **Free-text columns, timing and side channels.**
-- **Column-level access control**: #363.
+- **Column-level access control**: Trino rules over the Delta tables, `trino_lakehouse/` (D136).

@@ -1,0 +1,36 @@
+# Trino + Hive Metastore over Delta tables (#363). Spark writes the tables into ./warehouse, Trino reads
+# them through the metastore, with column-level access rules (rules.json).
+#   docker compose -f trino_lakehouse/docker-compose.yml up -d --wait
+# Trino 470 on purpose: images from 480 on need a CPU with x86-64-v3 and die with a glibc error elsewhere.
+services:
+  metastore:
+    image: apache/hive:4.0.1
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: derby
+    volumes:
+      - ./warehouse:/lake
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9083"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+  trino:
+    image: trinodb/trino:470
+    depends_on:
+      metastore:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - ./warehouse:/lake
+      - ./etc/catalog:/etc/trino/catalog:ro
+      - ./etc/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./etc/rules.json:/etc/trino/rules.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 5s
+      timeout: 5s
+      retries: 80
+      start_period: 30s
