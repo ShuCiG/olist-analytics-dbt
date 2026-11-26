@@ -520,3 +520,31 @@ def test_databricks_skips_when_the_warehouse_is_unavailable() -> None:
     assert probe < names.index("Ingest raw data (dlt → Databricks)")
     for step in job["steps"][probe + 1:]:
         assert "steps.warehouse.outputs.available == 'true'" in step.get("if", ""), f"runs without a warehouse: {step['name']}"
+
+
+def test_cleanup_runs_as_the_janitor_from_main_only() -> None:
+    # dataset-janitor is trusted only for environment janitor from main (infra/wif.tf, D137)
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "cleanup.yml").read_text(encoding="utf-8"))
+    assert set(workflow[True]) == {"schedule", "workflow_dispatch"}
+    assert workflow[True]["workflow_dispatch"]["inputs"]["apply"]["default"] is False
+    jobs = workflow["jobs"]
+    job = jobs["drop-datasets"]
+    assert job["environment"] == "janitor"
+    assert MAIN_ONLY in job["if"]
+    assert job["permissions"].get("id-token") == "write"
+    (auth,) = _gcp_auth(job)
+    assert auth["with"]["service_account"].startswith("dataset-janitor@")
+    assert auth["with"]["workload_identity_provider"] == "${{ env.GCP_WIF_PROVIDER }}"
+    assert "credentials_json" not in auth["with"]
+    assert (
+        workflow["env"]["GCP_WIF_PROVIDER"]
+        == yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["env"]["GCP_WIF_PROVIDER"]
+    )
+    # Only the cleanup holds the janitor, and it never holds another identity
+    text = yaml.safe_dump(job)
+    assert PROD_SA not in text and "olist-ci@" not in text and "terraform-plan@" not in text
+    assert "dataset-janitor@" not in yaml.safe_dump(_jobs())
+    # A manual run drops only when asked; the schedule always drops
+    run = next(s for s in job["steps"] if s.get("name") == "List and drop")
+    assert run["env"]["APPLY"] == "${{ github.event_name == 'schedule' || inputs.apply }}"
+    assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}

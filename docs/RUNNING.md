@@ -815,6 +815,22 @@ A failed execution (`state: FAILED`) shows GitHub's answer in `gcloud workflows 
 401 = token expired or revoked (new token, step 2), 404 = token lacks access to the repository, 422 = workflow file
 or `workflow_dispatch` trigger missing on main.
 
+## Throwaway datasets (weekly drop)
+
+Drill (`dr*`), scale-test (`scale*`) and leftover CI (`ci_pr_*`) datasets are dropped by `.github/workflows/cleanup.yml` (D137): Mondays 07:23 UTC, or by hand under Actions with `apply` ticked (unticked = list only). The account `dataset-janitor` can delete only datasets with those prefixes (IAM condition, `infra/janitor.tf`); a dataset younger than 8 days (1 day for `ci_pr_*`) or labelled `keep` is left alone.
+
+One-time setup, in PowerShell (the first two steps are the owner's: they change prod):
+
+```powershell
+# 1. GitHub environment, main only (the GCP provider also requires main)
+gh api -X PUT repos/ShuCiG/olist-analytics-dbt/environments/janitor -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"
+gh api -X POST repos/ShuCiG/olist-analytics-dbt/environments/janitor/deployment-branches -f name=main
+# 2. Terraform: new account, role, conditional grant, federation binding
+cd infra; terraform plan -out tfplan; terraform apply tfplan; terraform plan   # ends at "No changes"
+```
+
+Then run the workflow once without `apply` (the job summary lists what it would drop) and once with it. To keep a dataset: `ALTER SCHEMA dataset SET OPTIONS (labels = [("keep", "true")])` in the BigQuery console.
+
 ## Service account keys
 
 GitHub Actions needs no keys (D57). Three accounts keep a JSON key made in the console, listed in

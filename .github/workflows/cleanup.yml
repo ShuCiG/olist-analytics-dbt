@@ -1,0 +1,91 @@
+name: Drop throwaway datasets
+
+# Drops the BigQuery datasets that drills (dr*), scale tests (scale*) and failed CI
+# cleanups (ci_pr_*) leave behind, weekly and on demand (#343, D137). The script
+# (.github/scripts/drop_temp_datasets.py) lists by name and age; the account can't delete
+# anything else even if the script asked: GCP binds its delete role to those name
+# prefixes (infra/janitor.tf). It runs as dataset-janitor, trusted only for the
+# `janitor` environment's OIDC subject from main (infra/wif.tf). A manual run drops
+# only if `apply` is ticked; the scheduled run always drops. GitHub's schedule is late
+# by hours (D95), which doesn't matter for a weekly cleanup.
+on:
+  schedule:
+    - cron: "23 7 * * 1" # Mondays 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Drop the datasets (unticked: list only)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # GitHub OIDC -> GCP (D57), the same provider as in ci-cd.yml
+  GCP_WIF_PROVIDER: projects/456327248425/locations/global/workloadIdentityPools/github/providers/olist-analytics-dbt
+
+jobs:
+  drop-datasets:
+    name: Drop throwaway datasets
+    if: github.ref == 'refs/heads/main'
+    # GCP trusts dataset-janitor only for this environment's OIDC subject from main
+    # (infra/wif.tf); the environment's deployment rule admits only main as well
+    environment: janitor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # OIDC token for Workload Identity Federation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: dataset-janitor@olist-analytics-dbt-472315.iam.gserviceaccount.com
+
+      - name: List and drop
+        env:
+          APPLY: ${{ github.event_name == 'schedule' || inputs.apply }}
+        run: |
+          if [ "$APPLY" = "true" ]; then
+            uv run python .github/scripts/drop_temp_datasets.py --apply
+          else
+            uv run python .github/scripts/drop_temp_datasets.py
+          fi
+
+  notify-failure:
+    name: Email on failure
+    needs: [drop-datasets]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # job list + logs of this run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Send email
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SMTP_CONN: ${{ secrets.SMTP_CONN }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          EVENT_TITLE: "Dataset cleanup: ${{ github.event_name }} on ${{ github.ref_name }}"
+        run: python3 .github/scripts/notify_failure.py

@@ -27,6 +27,15 @@ override_resource {
   }
 }
 override_resource {
+  target          = google_service_account.dataset_janitor
+  override_during = plan
+  values = {
+    name   = "projects/olist-analytics-dbt-472315/serviceAccounts/dataset-janitor@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    email  = "dataset-janitor@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+    member = "serviceAccount:dataset-janitor@olist-analytics-dbt-472315.iam.gserviceaccount.com"
+  }
+}
+override_resource {
   target          = google_service_account.github_dispatch
   override_during = plan
   values = {
@@ -160,8 +169,8 @@ run "github_federation" {
   # from pull requests, the drift check's reader from its environment. Nothing
   # else may impersonate any of them.
   assert {
-    condition     = toset(keys(google_service_account_iam_member.github)) == toset(["dbt-runner", "olist-ci", "terraform-plan"])
-    error_message = "Only dbt-runner, olist-ci and terraform-plan are reachable from GitHub Actions."
+    condition     = toset(keys(google_service_account_iam_member.github)) == toset(["dbt-runner", "olist-ci", "terraform-plan", "dataset-janitor"])
+    error_message = "Only dbt-runner, olist-ci, terraform-plan and dataset-janitor are reachable from GitHub Actions."
   }
 
   assert {
@@ -175,8 +184,9 @@ run "github_federation" {
       local.github_identities["dbt-runner"] == "${local.github_subject_prefix}:environment:prod"
       && local.github_identities["olist-ci"] == "${local.github_subject_prefix}:pull_request"
       && local.github_identities["terraform-plan"] == "${local.github_subject_prefix}:environment:drift-check"
+      && local.github_identities["dataset-janitor"] == "${local.github_subject_prefix}:environment:janitor"
     )
-    error_message = "dbt-runner binds to the prod environment only, olist-ci to pull requests only, terraform-plan to drift-check only."
+    error_message = "dbt-runner binds to the prod environment only, olist-ci to pull requests only, terraform-plan to drift-check only, dataset-janitor to janitor only."
   }
 
   # Environment subjects are accepted from main only
@@ -229,6 +239,53 @@ run "job_history" {
   assert {
     condition     = google_project_iam_member.job_history_viewer.member == google_service_account.this["dbt-runner"].member
     error_message = "Only dbt-runner holds jobHistoryViewer."
+  }
+}
+
+run "janitor" {
+  command = plan
+
+  # The janitor deletes datasets by name prefix and nothing else (D137): the delete role
+  # is bound with a condition on the dataset name, no managed dataset starts with one of
+  # the prefixes, and the role can't read or write table data.
+  assert {
+    condition     = length(google_project_iam_member.dataset_janitor_delete.condition) == 1
+    error_message = "The delete role must carry the name condition."
+  }
+
+  assert {
+    condition = alltrue([
+      for p in local.janitor_prefixes :
+      strcontains(google_project_iam_member.dataset_janitor_delete.condition[0].expression, "/datasets/${p}\")")
+    ])
+    error_message = "The condition must name every janitor prefix."
+  }
+
+  assert {
+    condition = alltrue([
+      for p in local.janitor_prefixes :
+      alltrue([for ds in local.datasets : !startswith(ds, p)])
+    ])
+    error_message = "A managed dataset starts with a janitor prefix: the janitor could delete it."
+  }
+
+  assert {
+    condition = alltrue([
+      for perm in google_project_iam_custom_role.dataset_janitor.permissions :
+      !strcontains(perm, "getData") && !strcontains(perm, "updateData") && !strcontains(perm, "create")
+    ])
+    error_message = "datasetJanitor deletes and lists; it can't read, write or create data."
+  }
+
+  assert {
+    condition     = google_project_iam_member.dataset_janitor_lister.role == "roles/bigquery.metadataViewer"
+    error_message = "The janitor lists datasets with metadataViewer (no table data)."
+  }
+
+  # Only the janitor holds the delete role
+  assert {
+    condition     = google_project_iam_member.dataset_janitor_delete.member == google_service_account.dataset_janitor.member
+    error_message = "Only dataset-janitor holds datasetJanitor."
   }
 }
 

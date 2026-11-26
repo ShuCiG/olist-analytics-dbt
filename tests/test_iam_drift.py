@@ -242,3 +242,43 @@ def test_allowlist_entries_are_explained() -> None:
 
     for entry in yaml.safe_load(iam_drift.ALLOWLIST.read_text(encoding="utf-8")):
         assert set(entry) == {"scope", "role", "member", "why"} and entry["why"].strip()
+
+
+def _conditional_case(live_condition: dict[str, str] | None) -> list[str]:
+    """The janitor's conditional grant (D137) in the state, and live with the given condition."""
+    janitor = f"serviceAccount:dataset-janitor@{P}.iam.gserviceaccount.com"
+    state = {
+        "values": {
+            "root_module": {
+                "resources": [
+                    *STATE["values"]["root_module"]["resources"],
+                    resource(
+                        "google_project_iam_member",
+                        project=P,
+                        role=f"projects/{P}/roles/datasetJanitor",
+                        member=janitor,
+                        condition=[{"title": "throwaway-datasets-only", "expression": "x"}],
+                    ),
+                ]
+            }
+        }
+    }
+    responses = api()
+    url = f"https://cloudresourcemanager.googleapis.com/v1/projects/{P}:getIamPolicy"
+    binding: dict[str, Any] = {"role": f"projects/{P}/roles/datasetJanitor", "members": [janitor]}
+    if live_condition:
+        binding["condition"] = live_condition
+    responses[url]["bindings"].append(binding)
+    m = iam_drift.managed(state)
+    entries = iam_drift.allowlist(iam_drift.ALLOWLIST, {"OWNER": OWNER, "PROJECT": m.project, "PROJECT_NUMBER": m.project_number})
+    return iam_drift.findings(m, iam_drift.read_live(FakeSession(responses), m), entries)
+
+
+def test_terraform_conditional_binding_matches_the_live_one() -> None:
+    assert _conditional_case({"title": "throwaway-datasets-only", "expression": "x"}) == []
+
+
+def test_conditional_binding_widened_to_unconditional_is_reported() -> None:
+    # The condition removed in the console: the janitor could delete any dataset
+    found = _conditional_case(None)
+    assert any("datasetJanitor" in line and "condition" not in line for line in found), found
