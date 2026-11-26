@@ -824,7 +824,7 @@ One-time setup, in PowerShell (the first two steps are the owner's: they change 
 ```powershell
 # 1. GitHub environment, main only (the GCP provider also requires main)
 gh api -X PUT repos/ShuCiG/olist-analytics-dbt/environments/janitor -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"
-gh api -X POST repos/ShuCiG/olist-analytics-dbt/environments/janitor/deployment-branches -f name=main
+gh api -X POST repos/ShuCiG/olist-analytics-dbt/environments/janitor/deployment-branch-policies -f name=main
 # 2. Terraform: new account, role, conditional grant, federation binding
 cd infra; terraform plan -out tfplan; terraform apply tfplan; terraform plan   # ends at "No changes"
 ```
