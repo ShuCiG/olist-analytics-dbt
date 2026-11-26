@@ -160,7 +160,8 @@ uv run python -m trino_lakehouse.lake --csv-dir "$OLIST_CSV_DIR"     # Spark wri
 uv run pytest trino_lakehouse                                       # paid total = dbt / CSV; analyst denied the PII columns
 ```
 
-Spark needs Java 17 or 21; on Windows write the tables in a Linux container as in the parity section (`--skip-spark`
+On Linux create the folder first (`mkdir -p trino_lakehouse/warehouse && chmod 777 trino_lakehouse/warehouse`): Docker would
+create it owned by root. Spark needs Java 17 or 21; on Windows write the tables in a Linux container as in the parity section (`--skip-spark`
 afterwards registers them from the host, `TRINO_URL=http://host.docker.internal:8090` from inside a container). Rules:
 `trino_lakehouse/etc/rules.json`; try them with `docker exec trino_lakehouse-trino-1 trino --user analyst --execute "..."`.
 Detail: `trino_lakehouse/README.md`.

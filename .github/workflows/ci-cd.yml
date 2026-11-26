@@ -391,7 +391,10 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
 
       - name: Trino and Hive Metastore
-        run: docker compose -f trino_lakehouse/docker-compose.yml up -d --wait
+        # the folder is created here: Docker would create it owned by root, and Spark (this user) could not write
+        run: |
+          mkdir -p trino_lakehouse/warehouse && chmod 777 trino_lakehouse/warehouse
+          docker compose -f trino_lakehouse/docker-compose.yml up -d --wait
 
       - name: Write the Delta tables with Spark and register them in Trino
         run: uv run python -m trino_lakehouse.lake --csv-dir "$OLIST_CSV_DIR"
