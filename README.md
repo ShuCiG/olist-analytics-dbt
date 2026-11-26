@@ -846,6 +846,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── api/                         # FastAPI job-control service: HMAC-signed requests, idempotency keys, job state machine, OpenAPI checked in CI
 ├── privacy/                     # salted HMAC tokenisation, matching across two parties, k-anonymity / l-diversity, differencing guard, attack tests
 ├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
+├── trino_lakehouse/             # Trino + Hive Metastore over Delta tables, column-level access rules, metric parity test
 ├── spark_bench/                 # Spark tuning measured on skewed order items: salting, broadcast, AQE, repartition vs coalesce, with negative results
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards

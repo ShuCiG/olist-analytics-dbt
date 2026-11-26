@@ -151,6 +151,21 @@ uv run pytest tsql_parity                                       # one test per s
 Needs Java 17 or 21. On Windows Spark also needs `winutils`: run `bash tsql_parity/docker_run.sh run|pytest`
 instead (a Linux container reaches SQL Server through `host.docker.internal`). Differences: `docs/tsql-spark-differences.md`.
 
+## Trino over Delta tables
+
+```bash
+export OLIST_CSV_DIR=<folder with the Olist CSVs>
+docker compose -f trino_lakehouse/docker-compose.yml up -d --wait   # Trino 470 (127.0.0.1:8090) + Hive Metastore, first start ~5 min
+uv run python -m trino_lakehouse.lake --csv-dir "$OLIST_CSV_DIR"     # Spark writes Delta into trino_lakehouse/warehouse, Trino registers it
+uv run pytest trino_lakehouse                                       # paid total = dbt / CSV; analyst denied the PII columns
+```
+
+On Linux create the folder first (`mkdir -p trino_lakehouse/warehouse && chmod 777 trino_lakehouse/warehouse`): Docker would
+create it owned by root. Spark needs Java 17 or 21; on Windows write the tables in a Linux container as in the parity section (`--skip-spark`
+afterwards registers them from the host, `TRINO_URL=http://host.docker.internal:8090` from inside a container). Rules:
+`trino_lakehouse/etc/rules.json`; try them with `docker exec trino_lakehouse-trino-1 trino --user analyst --execute "..."`.
+Detail: `trino_lakehouse/README.md`.
+
 ## Privacy demo
 
 ```bash

@@ -1,0 +1,29 @@
+{
+  "catalogs": [{"allow": "all"}],
+  "schemas": [
+    {"user": "admin", "owner": true},
+    {"user": "analyst", "owner": false}
+  ],
+  "procedures": [
+    {"user": "admin", "privileges": ["EXECUTE"]}
+  ],
+  "tables": [
+    {"user": "admin", "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP"]},
+    {
+      "user": "analyst", "catalog": "delta", "schema": "olist", "table": "customers", "privileges": ["SELECT"],
+      "columns": [
+        {"name": "customer_id", "allow": false},
+        {"name": "customer_unique_id", "allow": false},
+        {"name": "customer_zip_code_prefix", "allow": false},
+        {"name": "customer_city", "allow": false},
+        {"name": "customer_state", "allow": false}
+      ]
+    },
+    {
+      "user": "analyst", "catalog": "delta", "schema": "olist", "table": "orders", "privileges": ["SELECT"],
+      "columns": [{"name": "customer_id", "allow": false}]
+    },
+    {"user": "analyst", "catalog": "delta", "schema": "olist", "table": "order_payments", "privileges": ["SELECT"]},
+    {"user": "analyst", "catalog": "system", "privileges": ["SELECT"]}
+  ]
+}

@@ -69,3 +69,4 @@ metastore_db/
 derby.log
 spark-warehouse/
 spark_bench/run.log
+trino_lakehouse/warehouse/

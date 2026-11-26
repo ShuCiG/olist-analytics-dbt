@@ -361,6 +361,47 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh pr comment "${{ github.event.pull_request.number }}" --body-file tsql_parity/report.md
 
+  # Trino + Hive Metastore over Delta tables (#363, D136): Spark writes the tables, Trino reads them;
+  # the paid total equals the dump's, and the analyst role is denied the PII columns.
+  trino-lakehouse:
+    name: Trino lakehouse
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    needs: [changes, python-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache Kaggle dataset
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/kagglehub
+          key: kagglehub-olistbr-brazilian-ecommerce-v2
+
+      - name: Locate the Olist CSVs
+        run: |
+          echo "OLIST_CSV_DIR=$(uv run python -c 'import kagglehub; print(kagglehub.dataset_download("olistbr/brazilian-ecommerce"))')" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+
+      - name: Trino and Hive Metastore
+        # the folder is created here: Docker would create it owned by root, and Spark (this user) could not write
+        run: |
+          mkdir -p trino_lakehouse/warehouse && chmod 777 trino_lakehouse/warehouse
+          docker compose -f trino_lakehouse/docker-compose.yml up -d --wait
+
+      - name: Write the Delta tables with Spark and register them in Trino
+        run: uv run python -m trino_lakehouse.lake --csv-dir "$OLIST_CSV_DIR"
+
+      - name: Metric parity and access rules
+        run: uv run pytest trino_lakehouse -q
+
   # Required check: gating it on pyright and the Python tests blocks merges with
   # type errors or failing tests. Skipped for docs-only changes (still passes)
   dbt-build:
@@ -1289,7 +1330,7 @@ jobs:
   # Dependabot PRs: they get no Actions secrets (the PR shows the failure).
   notify-failure:
     name: Email on failure
-    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, tsql-parity, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
+    needs: [changes, sqlfluff-lint, pyright, ruff, python-tests, terraform, dbt-project-evaluator, airflow-dags, fault-injection, tsql-parity, trino-lakehouse, dbt-build, dbt-build-bigquery, gdpr-deletion-bigquery, pr-comments, deploy-prod, notify-schema, notify-slo, deploy-docs, publish-airflow-image]
     if: failure() && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
