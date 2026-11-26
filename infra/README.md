@@ -56,7 +56,7 @@ terraform apply
 - dataset grants are read-only (`dataViewer`), no service account holds a basic role (`owner`, `editor`, `viewer`), and `olist-ci` has only `bigquery.user` and reads no `elementary` or `airflow_*` dataset (D45);
 - `dashboard-reader` can read the dataset that the dashboard's data usage agreement points to (consumer → contract server → dataset);
 - the daily query quota stays within the free tier, the budget has thresholds, the state bucket is versioned and private;
-- GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests) and `terraform-plan` (from the `drift-check` environment), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
+- GitHub can impersonate only `dbt-runner` (from the `prod` environment), `olist-ci` (from pull requests), `terraform-plan` (from the `drift-check` environment) and `dataset-janitor` (from the `janitor` environment, D137), by exact subjects of this repository; the provider accepts tokens of this repository only and environment tokens from `main` only; no project-level impersonation roles;
 - `terraform-plan` holds viewer-type roles only and reads only the state bucket and the billing account.
 - `jobHistoryViewer` holds `bigquery.jobs.listAll` only, and only `dbt-runner` holds it.
 - `github-dispatch` holds `workflows.invoker` and read access to its one secret; the weekly jobs run in UTC as that account.

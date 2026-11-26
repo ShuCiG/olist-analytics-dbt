@@ -64,7 +64,10 @@ def managed(state: dict[str, Any]) -> Managed:
         t, v = r["type"], r["values"]
         if t == "google_project_iam_member":
             m.project = v["project"]
-            m.bindings.add(("project", v["role"], v["member"]))
+            # a conditional binding is told apart by its title, as in policy_bindings
+            title = (v.get("condition") or [{}])[0].get("title")
+            role = v["role"] + (f" [condition: {title}]" if title else "")
+            m.bindings.add(("project", role, v["member"]))
         elif t == "google_service_account":
             m.service_accounts.add(v["email"])
         elif t == "google_service_account_iam_member":

@@ -22,13 +22,20 @@ locals {
     olist-ci = "${local.github_subject_prefix}:pull_request"
     # drift.yml: environment `drift-check`, main only (drift.tf)
     terraform-plan = "${local.github_subject_prefix}:environment:drift-check"
+    # cleanup.yml: environment `janitor`, main only (janitor.tf)
+    dataset-janitor = "${local.github_subject_prefix}:environment:janitor"
   }
 
   # Environment tokens are accepted from main only (attribute_condition below)
-  github_main_only_subjects = [local.github_identities["dbt-runner"], local.github_identities["terraform-plan"]]
+  github_main_only_subjects = [
+    local.github_identities["dbt-runner"],
+    local.github_identities["terraform-plan"],
+    local.github_identities["dataset-janitor"],
+  ]
 
   github_service_accounts = merge(google_service_account.this, {
-    terraform-plan = google_service_account.terraform_plan
+    terraform-plan  = google_service_account.terraform_plan
+    dataset-janitor = google_service_account.dataset_janitor
   })
 }
 
