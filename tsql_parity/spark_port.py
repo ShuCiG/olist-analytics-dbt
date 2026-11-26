@@ -36,6 +36,10 @@ def session(warehouse: Path, ansi: bool = True) -> SparkSession:
         .config("spark.ui.enabled", "false")
         .config("spark.sql.ansi.enabled", str(ansi).lower())
     )
+    # CI points this at a cached directory so the Delta jars are not fetched from Maven on every run
+    ivy_dir = os.environ.get("SPARK_IVY_DIR")
+    if ivy_dir:
+        builder = builder.config("spark.jars.ivy", ivy_dir)  # pyright: ignore[reportUnknownMemberType]
     return configure_spark_with_delta_pip(builder).getOrCreate()  # pyright: ignore[reportUnknownVariableType]
 
 

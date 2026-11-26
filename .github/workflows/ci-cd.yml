@@ -333,6 +333,15 @@ jobs:
         run: |
           echo "OLIST_CSV_DIR=$(uv run python -c 'import kagglehub; print(kagglehub.dataset_download("olistbr/brazilian-ecommerce"))')" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "SPARK_IVY_DIR=$HOME/.spark-ivy" >> "$GITHUB_ENV"
+
+      # Spark fetches the Delta jars from Maven at session start; one run failed on that fetch (#374)
+      - name: Cache Spark jars (Ivy)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.spark-ivy
+          key: spark-ivy-${{ hashFiles('uv.lock') }}
+          restore-keys: spark-ivy-
 
       - name: SQL Server 2022
         run: docker compose -f tsql_parity/docker-compose.yml up -d --wait
@@ -389,6 +398,15 @@ jobs:
         run: |
           echo "OLIST_CSV_DIR=$(uv run python -c 'import kagglehub; print(kagglehub.dataset_download("olistbr/brazilian-ecommerce"))')" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "SPARK_IVY_DIR=$HOME/.spark-ivy" >> "$GITHUB_ENV"
+
+      # Spark fetches the Delta jars from Maven at session start; one run failed on that fetch (#374)
+      - name: Cache Spark jars (Ivy)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.spark-ivy
+          key: spark-ivy-${{ hashFiles('uv.lock') }}
+          restore-keys: spark-ivy-
 
       - name: Trino and Hive Metastore
         # the folder is created here: Docker would create it owned by root, and Spark (this user) could not write
