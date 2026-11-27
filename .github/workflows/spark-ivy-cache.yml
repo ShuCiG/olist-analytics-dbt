@@ -1,0 +1,74 @@
+name: Warm Spark Ivy cache
+
+# The two Spark jobs of ci-cd.yml (T-SQL Spark parity, Trino lakehouse) fetch the Delta jars
+# from Maven Central at session start and cache the Ivy directory (#374). GitHub scopes a cache
+# to the ref that saved it, and those jobs run on pull requests only, so a new PR never saw
+# the cache of another PR. A cache saved on main is readable from every PR: this workflow
+# saves it there, under the same key as the jobs (#383). Caches unused for 7 days are
+# evicted, hence the weekly run.
+on:
+  push:
+    branches: [main]
+    paths:
+      - uv.lock
+      - tsql_parity/spark_port.py
+      - .github/workflows/spark-ivy-cache.yml
+  schedule:
+    - cron: "41 5 * * 1" # Mondays 05:41 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    name: Resolve the Delta jars
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Set Java and the Ivy directory
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "SPARK_IVY_DIR=$HOME/.spark-ivy" >> "$GITHUB_ENV"
+
+      # same path and key as the two jobs in ci-cd.yml: keep them identical
+      - name: Cache Spark jars (Ivy)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.spark-ivy
+          key: spark-ivy-${{ hashFiles('uv.lock') }}
+          restore-keys: spark-ivy-
+
+      # Starting the session is what makes Spark resolve the jars. Maven Central has failed with
+      # "not found" for an artifact that exists (#374): try a few times before giving up.
+      - name: Start a Spark session
+        run: |
+          for attempt in 1 2 3; do
+            if uv run python -c "
+          import sys, tempfile
+          from pathlib import Path
+          from tsql_parity.spark_port import session
+          spark = session(Path(tempfile.mkdtemp()))
+          print('Spark', spark.version)
+          spark.stop()
+          "; then
+              exit 0
+            fi
+            echo "attempt $attempt failed"; sleep 20
+          done
+          exit 1
