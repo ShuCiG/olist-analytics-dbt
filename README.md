@@ -375,7 +375,7 @@ flowchart LR
 | **Data contracts** | 577 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
-| **Fault injection** | 17 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
+| **Fault injection** | 21 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
 | **T-SQL to Spark parity** | 4 legacy procedures on SQL Server 2022 vs a PySpark/Delta port on the same data, 8 documented semantic differences ([`docs/tsql-spark-differences.md`](docs/tsql-spark-differences.md)) | CI, every PR with code |
 | **666 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
@@ -423,6 +423,10 @@ change that removes a reaction fails CI; a control month with no defect must sta
 | Feed delivers 5 % of the orders | Elementary volume and freshness anomalies | warning |
 | Well-formed but impossible purchase time | cast error in the first test that reads staging | build fails |
 | Review score out of range | `accepted_values` on staging | build fails |
+| All holidays sources down | loader (`HolidaysError` names each source) | load stops, raw unchanged |
+| Weather feed rate limited | loader (`WeatherError`) | load stops, raw unchanged |
+| FX rates: every source down | loader (`FxError` names each source) | load stops, raw unchanged |
+| Primary holidays source down | fallback source | absorbed, rows tagged `nager` |
 | Identical duplicate orders | nothing: the loader's merge collapses them, no harm | absorbed |
 | Late status change of a loaded order | **nothing: known gap** | raw keeps the old status |
 

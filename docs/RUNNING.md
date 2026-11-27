@@ -124,7 +124,7 @@ uv run pytest fault_injection -k missing_payments   # one scenario: baseline + i
 ```
 
 DuckDB in a temp dir, no network. Not part of plain `uv run pytest`. A new defect: a function and a `Scenario` in
-`fault_injection/scenarios.py`, a row in the README table. `fault_injection/test_deletion.py` (a deletion request
+`fault_injection/scenarios.py`, a row in the README table. A REST feed outage is a `Scenario(outage=...)` (a key of `feeds.OUTAGES`). `fault_injection/test_deletion.py` (a deletion request
 end to end, D105) shares the baseline: `uv run pytest fault_injection/test_deletion.py`, ~5 min.
 
 ## Job-control API

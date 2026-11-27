@@ -4,6 +4,9 @@ that loads them sees what a good answer of the real feed would give."""
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
+import requests
+
 from fault_injection import feeds
 from ingestion import fx_feed, holidays_feed, weather_feed
 
@@ -40,3 +43,25 @@ def test_install_replaces_the_network_calls() -> None:
     assert holidays.fetch_years([2018])[0]["source"] == "brasilapi"
     assert {r["state"] for r in weather.fetch_range(START, END)} == {"SP"}
     assert fx.fetch_range(START, END)[0]["source"] == "bcb-ptax"
+
+
+def test_outage_session_refuses_rate_limits_or_answers_like_nager() -> None:
+    session = feeds.OutageSession({"brasilapi.com.br": feeds.DOWN, "api.frankfurter.dev": feeds.RATE_LIMITED})
+    with pytest.raises(requests.ConnectionError):
+        session.get(holidays_feed.BRASILAPI_URL.format(year=2018))
+    limited = session.get("https://api.frankfurter.dev/v1/2018-01-01..2018-01-31")
+    with pytest.raises(requests.HTTPError):
+        limited.raise_for_status()
+    rows = holidays_feed.from_nager(session.get(holidays_feed.NAGER_URL.format(year=2018)).json())
+    assert len(holidays_feed.check_year(rows, 2018)) == len(feeds.HOLIDAYS)
+
+
+def test_holidays_outage_runs_the_real_fallback_and_the_real_error() -> None:
+    holidays = SimpleNamespace(make_session=None)
+    feeds.install(holidays, SimpleNamespace(STATES=()), SimpleNamespace(), outage="holidays_primary")
+    session = holidays.make_session()
+    rows = holidays_feed.fetch_year(2018, session)
+    assert {r["source"] for r in rows} == {"nager"}
+    session = feeds.OutageSession(feeds.OUTAGES["holidays_all"])
+    with pytest.raises(holidays_feed.HolidaysError, match="brasilapi: ConnectionError.*nager: HTTPError"):
+        holidays_feed.fetch_year(2018, session)  # type: ignore[arg-type]
