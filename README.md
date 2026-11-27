@@ -32,7 +32,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
 ## Highlights
 
 - **Data product with enforced contracts.** Descriptor in the Open Data Product Standard (owner, input and output
-  ports), an ODCS data contract per port, 577 contract checks on the data in every CI run. The dashboard's usage
+  ports), an ODCS data contract per port, 708 contract checks on the data in every CI run. The dashboard's usage
   agreement is checked against the SQL it actually sends, and a breaking contract change needs a new major version.
   → [Data product](#data-product)
 - **What customers write, labelled by an LLM.** 42k Portuguese review texts get a sentiment, a topic and an English
@@ -154,7 +154,7 @@ channel, what it is for and its limits, and its ports. Every port with data is b
 **dbt is the implementation, the contract is the promise, and CI holds them together:**
 
 - the input contract is tested right after the ingest (a broken source stops the build before dbt), the output
-  contract after `dbt build`: `datacontract ci`, 172 + 28 + 377 checks on the data;
+  contract after `dbt build`: `datacontract ci`, 172 + 28 + 22 + 17 + 15 checks on the five inputs and 454 on the marts;
 - the output contract equals the public dbt models column for column (names, types, keys), so changing a mart
   without changing its contract fails the PR;
 - the dashboard's agreement is verified, not trusted: a test records every SQL query the pages send and resolves
@@ -371,7 +371,7 @@ flowchart LR
 | **221 dbt data tests** | keys, relationships, accepted values, ranges, composite keys, row-count parity, non-overlapping SCD2 ranges, chronology (custom generic test `is_not_before`), 5 singular tests (one checks the distance formula on known city pairs); 9 more on the cost mart in prod, 38 on the BigQuery ML models | every `dbt build` |
 | **13 dbt unit tests** | transformation logic on hand-made fixtures: payment pivot, lateness rules, lifetime value, latest location, the incremental filter, SCD2 validity ranges, the point-in-time seller join, cohort months and retention, shipments and distance bands, order stages and stage lags, SLO event counts | every `dbt build` |
 | **Model contracts** | every mart column declared with its type; the build fails if the SQL returns anything else | marts |
-| **Data contracts** | 577 checks of the input and output promises on the data | CI, after ingest and build |
+| **Data contracts** | 708 checks of the input and output promises on the data | CI, after ingest and build |
 | **Source freshness** | `_loaded_at` of the raw tables (warn after a day) | CI, CD, every Airflow run |
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 21 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
