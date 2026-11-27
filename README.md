@@ -58,7 +58,7 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   dashboard's KPI tiles equal them. An MCP server lets an agent query them with no way to write SQL or see a person's id: 38 of 40
   evaluation questions right, 0 wrong numbers; alerts and the agent say which states, segments, sellers and product
   categories drove a metric's change. → [Semantic layer](#semantic-layer)
-- **Data quality at every layer.** 221 data tests, 13 unit tests, enforced model contracts, 666 Python tests, 17 injected data defects; known
+- **Data quality at every layer.** 278 data tests, 14 unit tests, enforced model contracts, 785 Python tests, 17 injected data defects; known
   source defects are surfaced as warn tests, not hidden. → [Quality](#data-quality)
 - **Migration parity: legacy T-SQL to Spark.** Four stored procedures on SQL Server 2022 and the same logic in
   PySpark on Delta Lake run on the same raw data, and a runner compares the outputs row by row. A faithful port
@@ -376,7 +376,7 @@ flowchart LR
 | **13 observability tests** | anomalies over time and source schema changes (Elementary, [below](#data-observability)) | every `dbt build` |
 | **Fault injection** | 21 defects injected into a fake feed, the expected reaction of each checked ([below](#fault-injection)) | CI, every PR with code |
 | **T-SQL to Spark parity** | 4 legacy procedures on SQL Server 2022 vs a PySpark/Delta port on the same data, 8 documented semantic differences ([`docs/tsql-spark-differences.md`](docs/tsql-spark-differences.md)) | CI, every PR with code |
-| **666 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
+| **785 Python tests** | dlt pipeline end to end on a fake dump, generated months after the dump, review label files and the API labelling path, alert decisions, dbt summary parser, CI workflow and Terraform guards, Databricks warehouse probe, IAM drift and key age logic, supply-chain pins, PR comment rendering (cost, data diff), column impact, dashboard pages, KPI = metric, dashboard SQL = usage agreement, data product consistency, the MCP server's refusals and answers, metric-change decomposition, SLO budget and burn rate | CI |
 
 Known defects in the source data are **surfaced as `warn` tests, not hidden**, each with a business description
 that the alert emails quote:
@@ -849,6 +849,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 ├── privacy/                     # salted HMAC tokenisation, matching across two parties, k-anonymity / l-diversity, differencing guard, attack tests
 ├── tsql_parity/                 # legacy T-SQL procedures on SQL Server vs the PySpark/Delta port: parity report, 8 semantic differences
 ├── trino_lakehouse/             # Trino + Hive Metastore over Delta tables, column-level access rules, metric parity test
+├── scale_test/                  # cost guard of the BigQuery scale test: dry-run bytes of a dbt layer before it runs (D118)
 ├── spark_bench/                 # Spark tuning measured on skewed order items: salting, broadcast, AQE, repartition vs coalesce, with negative results
 ├── metrics_mcp/                 # MCP server over the semantic layer (no SQL tool), accuracy evaluation
 ├── tests/                       # pytest: pipeline, dbt summary, alert decisions, CI / Terraform / supply-chain guards
@@ -856,7 +857,7 @@ More — month-by-month loads, the SCD2 demo, data contract and metric queries, 
 │   └── snowflake/               #   Snowflake account: warehouse, resource monitor, roles, key-pair users, email
 ├── snowflake/                   # dbt Projects on Snowflake: deploy script, task graph
 ├── .github/                     # workflows: ci-cd.yml (CI on PRs, CD on merge), databricks.yml (weekly), drift.yml (daily);
-│                                #   snowflake.yml (weekly); scripts/ (PR comments, alert emails, IAM and key checks), issue forms, PR template
+│                                #   cleanup.yml (weekly), spark-ivy-cache.yml, snowflake.yml (manual since the trial, D139); scripts/ (PR comments, alert emails, IAM and key checks), issue forms, PR template
 ├── .claude/                     # Claude Code agents + /audit skill: security review by four agents (D39)
 └── docs/                        # DECISIONS.md (decision log), RUNNING.md, screenshots
 ```
