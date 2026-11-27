@@ -474,5 +474,355 @@
    40.15
   ],
   "note": "1 files, 544 MB"
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 2 partitions",
+  "seconds": 7.807640960003482,
+  "shuffle_read_mb": 127.3,
+  "spill_mb": 0.0,
+  "runs": [
+   10.41,
+   7.81,
+   7.24
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 2 partitions",
+  "seconds": 8.234002985002007,
+  "shuffle_read_mb": 127.3,
+  "spill_mb": 0.0,
+  "runs": [
+   7.98,
+   8.23,
+   13.38
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 4 partitions",
+  "seconds": 6.65527992999705,
+  "shuffle_read_mb": 105.9,
+  "spill_mb": 0.0,
+  "runs": [
+   6.66,
+   7.58,
+   5.69
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 4 partitions",
+  "seconds": 5.630774523000582,
+  "shuffle_read_mb": 105.9,
+  "spill_mb": 0.0,
+  "runs": [
+   5.05,
+   5.63,
+   7.62
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 8 partitions",
+  "seconds": 6.206163935996301,
+  "shuffle_read_mb": 86.3,
+  "spill_mb": 0.0,
+  "runs": [
+   6.21,
+   5.32,
+   8.91
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 8 partitions",
+  "seconds": 5.9567747640030575,
+  "shuffle_read_mb": 86.3,
+  "spill_mb": 0.0,
+  "runs": [
+   8.57,
+   5.96,
+   5.91
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 16 partitions",
+  "seconds": 5.901834668999072,
+  "shuffle_read_mb": 69.8,
+  "spill_mb": 0.0,
+  "runs": [
+   5.89,
+   6.44,
+   5.9
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 16 partitions",
+  "seconds": 5.767530086995976,
+  "shuffle_read_mb": 69.8,
+  "spill_mb": 0.0,
+  "runs": [
+   4.88,
+   5.77,
+   13.65
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 32 partitions",
+  "seconds": 7.637228717998369,
+  "shuffle_read_mb": 56.8,
+  "spill_mb": 0.0,
+  "runs": [
+   7.64,
+   8.64,
+   6.3
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 32 partitions",
+  "seconds": 4.678686544997618,
+  "shuffle_read_mb": 56.8,
+  "spill_mb": 0.0,
+  "runs": [
+   4.69,
+   4.68,
+   4.44
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 64 partitions",
+  "seconds": 4.971514429002127,
+  "shuffle_read_mb": 47.2,
+  "spill_mb": 0.0,
+  "runs": [
+   5.22,
+   4.97,
+   4.95
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 64 partitions",
+  "seconds": 3.9848934119945625,
+  "shuffle_read_mb": 47.2,
+  "spill_mb": 0.0,
+  "runs": [
+   3.98,
+   3.95,
+   4.5
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 200 partitions",
+  "seconds": 7.2759047689978615,
+  "shuffle_read_mb": 37.4,
+  "spill_mb": 0.0,
+  "runs": [
+   6.91,
+   7.28,
+   11.95
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 200 partitions",
+  "seconds": 5.414043766999384,
+  "shuffle_read_mb": 37.3,
+  "spill_mb": 0.0,
+  "runs": [
+   6.8,
+   5.41,
+   5.2
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 800 partitions",
+  "seconds": 19.84420483699796,
+  "shuffle_read_mb": 30.2,
+  "spill_mb": 0.0,
+  "runs": [
+   19.84,
+   20.38,
+   14.49
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 800 partitions",
+  "seconds": 5.877257020001707,
+  "shuffle_read_mb": 30.1,
+  "spill_mb": 0.0,
+  "runs": [
+   5.21,
+   5.88,
+   6.07
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE off, 2000 partitions",
+  "seconds": 29.807715940005437,
+  "shuffle_read_mb": 27.7,
+  "spill_mb": 0.0,
+  "runs": [
+   31.39,
+   29.81,
+   26.63
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "shuffle",
+  "dataset": "items",
+  "variant": "AQE on, 2000 partitions",
+  "seconds": 5.011135799002659,
+  "shuffle_read_mb": 27.5,
+  "spill_mb": 0.0,
+  "runs": [
+   4.42,
+   5.01,
+   5.66
+  ],
+  "note": ""
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "no reduction (32 partitions)",
+  "seconds": 12.513330152003618,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   15.84,
+   11.64,
+   12.51
+  ],
+  "note": "32 files, 546 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "coalesce(4)",
+  "seconds": 11.742324790000566,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   12.87,
+   10.28,
+   11.74
+  ],
+  "note": "4 files, 544 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "repartition(4)",
+  "seconds": 22.267708923995087,
+  "shuffle_read_mb": 677.2,
+  "spill_mb": 0.0,
+  "runs": [
+   21.93,
+   22.94,
+   22.27
+  ],
+  "note": "4 files, 549 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "coalesce(2)",
+  "seconds": 12.977392843997222,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   12.04,
+   12.98,
+   13.53
+  ],
+  "note": "2 files, 544 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "repartition(2)",
+  "seconds": 18.927658658001747,
+  "shuffle_read_mb": 677.2,
+  "spill_mb": 0.0,
+  "runs": [
+   16.67,
+   22.96,
+   18.93
+  ],
+  "note": "2 files, 549 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "coalesce(1)",
+  "seconds": 19.600563734995376,
+  "shuffle_read_mb": 0.0,
+  "spill_mb": 0.0,
+  "runs": [
+   19.6,
+   20.35,
+   19.29
+  ],
+  "note": "1 files, 544 MB, source 32 partitions"
+ },
+ {
+  "experiment": "write_split",
+  "dataset": "items + sha2",
+  "variant": "repartition(1)",
+  "seconds": 24.072197280998807,
+  "shuffle_read_mb": 675.5,
+  "spill_mb": 0.0,
+  "runs": [
+   24.58,
+   24.07,
+   21.86
+  ],
+  "note": "1 files, 544 MB, source 32 partitions"
  }
 ]

@@ -24,6 +24,7 @@ from pyspark.sql import functions as F
 HOT_SHARE = 0.4  # share of rows given to one seller in the "hot" dataset
 SALT = 16
 RUNS = 3
+SWEEP = (2, 4, 8, 16, 32, 64, 200, 800, 2000)
 MB = 1024 * 1024
 
 
@@ -47,6 +48,7 @@ def session(driver_memory: str) -> SparkSession:
         .config("spark.ui.enabled", "true")
         .config("spark.ui.showConsoleProgress", "false")
         .config("spark.sql.shuffle.partitions", "200")
+        .config("spark.ui.retainedStages", "300")
         .getOrCreate()
     )
 
@@ -55,9 +57,16 @@ def stage_metrics(spark: SparkSession) -> dict[int, tuple[int, int]]:
     """stage id -> (shuffle read bytes, disk spilled bytes) of all completed stages."""
     sc = spark.sparkContext
     url = f"{sc.uiWebUrl}/api/v1/applications/{sc.applicationId}/stages?status=complete&details=false"
-    with urllib.request.urlopen(url) as resp:
-        stages: list[dict[str, Any]] = json.load(resp)
-    return {s["stageId"]: (s["shuffleReadBytes"], s["diskBytesSpilled"]) for s in stages}
+    for attempt in range(5):  # the UI server drops a response when the CPU is saturated
+        try:
+            with urllib.request.urlopen(url) as resp:
+                stages: list[dict[str, Any]] = json.load(resp)
+            return {s["stageId"]: (s["shuffleReadBytes"], s["diskBytesSpilled"]) for s in stages}
+        except (json.JSONDecodeError, OSError):
+            if attempt == 4:
+                raise
+            time.sleep(2)
+    raise AssertionError("unreachable")
 
 
 def prepare(spark: SparkSession, csv_dir: Path, data: Path, scale: int) -> None:
@@ -224,53 +233,72 @@ def experiments(
         ("items", "AQE off, 2000 partitions (too many)", {**aqe_off, "spark.sql.shuffle.partitions": "2000"}, query),
         ("items", "AQE on, 2000 partitions", {**aqe_on, "spark.sql.shuffle.partitions": "2000"}, query),
     ]
+
+    # 4. shuffle partitions sweep (#376): same query, AQE off and on, 2 .. 2000 partitions
+    sweep: list[tuple[str, str, dict[str, str], Callable[[], DataFrame]]] = []
+    for n in SWEEP:
+        for label, aqe in (("AQE off", aqe_off), ("AQE on", aqe_on)):
+            sweep.append(("items", f"{label}, {n} partitions", {**aqe, "spark.sql.shuffle.partitions": str(n)}, query))
+    out["shuffle"] = sweep
     return out
 
 
-def write_bench(spark: SparkSession, data: Path) -> list[Result]:
-    """repartition vs coalesce before a Parquet write; sizes of the written output are kept."""
+def write_bench(
+    spark: SparkSession, data: Path, experiment: str, split_bytes: str | None, targets: tuple[int, ...]
+) -> list[Result]:
+    """repartition vs coalesce before a Parquet write; sizes of the written output are kept.
+
+    `split_bytes` sets spark.sql.files.maxPartitionBytes for the read: a small value splits the
+    source into many partitions, so the heavy step has more tasks than the cluster has cores.
+    """
     out_dir = data / "out"
-    items = spark.read.parquet(str(data / "items"))  # 32 partitions
-    target = 4
-    # expensive per-row work BEFORE the reduction: coalesce pulls it down to `target` tasks
-    heavy = items.withColumn("h", F.sha2(F.sha2(F.col("order_id"), 256), 256)).select("order_id", "seller_id", "h")
-    variants: list[tuple[str, Callable[[], DataFrame]]] = [
-        ("no reduction (32 files)", lambda: heavy),
-        (f"coalesce({target})", lambda: heavy.coalesce(target)),
-        (f"repartition({target})", lambda: heavy.repartition(target)),
-        ("coalesce(1)", lambda: heavy.coalesce(1)),
-        ("repartition(1)", lambda: heavy.repartition(1)),
-    ]
-    results: list[Result] = []
-    for name, build in variants:
-        times: list[float] = []
-        files = 0
-        size = 0
-        before = stage_metrics(spark)
-        for i in range(RUNS + 1):  # first run = warm-up
-            shutil.rmtree(out_dir, ignore_errors=True)
-            start = time.perf_counter()
-            build().write.mode("overwrite").parquet(str(out_dir))
-            if i:
-                times.append(time.perf_counter() - start)
-            files = len(list(out_dir.glob("*.parquet")))
-            size = sum(f.stat().st_size for f in out_dir.glob("*.parquet"))
-        after = stage_metrics(spark)
-        new = [after[s] for s in after if s not in before]
-        results.append(
-            Result(
-                "write",
-                "items + sha2",
-                name,
-                statistics.median(times),
-                round(sum(r for r, _ in new) / (RUNS + 1) / MB, 1),
-                round(sum(s for _, s in new) / (RUNS + 1) / MB, 1),
-                [round(t, 2) for t in times],
-                f"{files} files, {size / MB:.0f} MB",
+    if split_bytes:
+        spark.conf.set("spark.sql.files.maxPartitionBytes", split_bytes)
+    try:
+        items = spark.read.parquet(str(data / "items"))
+        source_parts = items.rdd.getNumPartitions()
+        # expensive per-row work BEFORE the reduction: coalesce pulls it down to `target` tasks
+        heavy = items.withColumn("h", F.sha2(F.sha2(F.col("order_id"), 256), 256)).select("order_id", "seller_id", "h")
+        variants: list[tuple[str, Callable[[], DataFrame]]] = [
+            (f"no reduction ({source_parts} partitions)", lambda: heavy)
+        ]
+        for t in targets:
+            variants += [
+                (f"coalesce({t})", lambda t=t: heavy.coalesce(t)),
+                (f"repartition({t})", lambda t=t: heavy.repartition(t)),
+            ]
+        results: list[Result] = []
+        for name, build in variants:
+            times: list[float] = []
+            files = 0
+            size = 0
+            before = stage_metrics(spark)
+            for i in range(RUNS + 1):  # first run = warm-up
+                shutil.rmtree(out_dir, ignore_errors=True)
+                start = time.perf_counter()
+                build().write.mode("overwrite").parquet(str(out_dir))
+                if i:
+                    times.append(time.perf_counter() - start)
+                files = len(list(out_dir.glob("*.parquet")))
+                size = sum(f.stat().st_size for f in out_dir.glob("*.parquet"))
+            after = stage_metrics(spark)
+            new = [after[s] for s in after if s not in before]
+            results.append(
+                Result(
+                    experiment,
+                    "items + sha2",
+                    name,
+                    statistics.median(times),
+                    round(sum(r for r, _ in new) / (RUNS + 1) / MB, 1),
+                    round(sum(s for _, s in new) / (RUNS + 1) / MB, 1),
+                    [round(t, 2) for t in times],
+                    f"{files} files, {size / MB:.0f} MB, source {source_parts} partitions",
+                )
             )
-        )
-    shutil.rmtree(out_dir, ignore_errors=True)
-    return results
+        return results
+    finally:
+        spark.conf.unset("spark.sql.files.maxPartitionBytes")
+        shutil.rmtree(out_dir, ignore_errors=True)
 
 
 def markdown(results: list[Result]) -> str:
@@ -291,7 +319,7 @@ def main() -> None:
     parser.add_argument("--scale", type=int, default=50, help="copies of the 112,650 order items")
     parser.add_argument("--memory", default="3g")
     parser.add_argument("--data", type=Path, default=Path("/tmp/spark_bench_data"))
-    parser.add_argument("--only", choices=["skew", "broadcast", "aqe", "write"])
+    parser.add_argument("--only", choices=["skew", "broadcast", "aqe", "shuffle", "write", "write_split"])
     parser.add_argument("--out", type=Path, default=Path("spark_bench/results.json"))
     args = parser.parse_args()
 
@@ -310,7 +338,9 @@ def main() -> None:
             )
             results.append(r)
     if args.only in (None, "write"):
-        results += write_bench(spark, args.data)
+        results += write_bench(spark, args.data, "write", None, (4, 1))
+    if args.only in (None, "write_split"):
+        results += write_bench(spark, args.data, "write_split", "16m", (4, 2, 1))
     args.out.write_text(json.dumps([asdict(r) for r in results], indent=1), encoding="utf-8", newline="\n")
     print(markdown(results))
 
