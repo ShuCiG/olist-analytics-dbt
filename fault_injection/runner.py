@@ -21,10 +21,11 @@ from fault_injection.scenarios import Scenario
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "data-product" / "contracts" / "olist-raw.odcs.yaml"
 INGEST = """
+import os
 import sys
 from fault_injection import feeds
 from ingestion import pipeline
-feeds.install(pipeline.holidays_feed, pipeline.weather_feed, pipeline.fx_feed)
+feeds.install(pipeline.holidays_feed, pipeline.weather_feed, pipeline.fx_feed, os.environ.get("FEED_OUTAGE", ""))
 dump = sys.argv.pop(1)
 pipeline.kagglehub.dataset_download = lambda _: dump
 pipeline.main()
@@ -37,7 +38,7 @@ def db_path(work: Path) -> Path:
     return work / "data" / "olist.duckdb"  # the contract's `local` server reads data/olist.duckdb
 
 
-def env_for(work: Path, as_of: str) -> dict[str, str]:
+def env_for(work: Path, as_of: str, outage: str = "") -> dict[str, str]:
     # No API key: the loader would send unlabelled review texts to the Claude API (D92)
     env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "ANTHROPIC_API_KEY")}
     return env | {
@@ -46,16 +47,18 @@ def env_for(work: Path, as_of: str) -> dict[str, str]:
         "OLIST_AS_OF": as_of,
         "PYTHONPATH": str(ROOT),
         "PYTHONUTF8": "1",
+        "FEED_OUTAGE": outage,
     }
 
 
-def run(work: Path, as_of: str, cwd: Path, *command: str) -> subprocess.CompletedProcess[str]:
-    env = env_for(work, as_of)
+def run(work: Path, as_of: str, cwd: Path, *command: str, outage: str = "") -> subprocess.CompletedProcess[str]:
+    env = env_for(work, as_of, outage)
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
-def ingest(work: Path, dump: Path, as_of: str, *args: str) -> subprocess.CompletedProcess[str]:
-    return run(work, as_of, ROOT, sys.executable, "-c", INGEST, str(dump), "--duckdb-path", str(db_path(work)), *args)
+def ingest(work: Path, dump: Path, as_of: str, *args: str, outage: str = "") -> subprocess.CompletedProcess[str]:
+    command = (sys.executable, "-c", INGEST, str(dump), "--duckdb-path", str(db_path(work)), *args)
+    return run(work, as_of, ROOT, *command, outage=outage)
 
 
 def tool(name: str) -> str:
@@ -106,12 +109,19 @@ def copy_baseline(baseline: Path, work: Path) -> None:
 def run_scenario(baseline: Path, work: Path, scenario: Scenario) -> tuple[list[str], object]:
     """The reactions, and the value of the scenario's pinned query."""
     copy_baseline(baseline, work)
+    if scenario.forget_next_year_holidays:
+        # Next year's holidays are the one holiday request a normal run makes
+        with duckdb.connect(str(db_path(work))) as con:
+            con.execute(
+                "delete from raw.holidays where holiday_year = cast(extract(year from current_date) + 1 as varchar)"
+            )
 
-    loaded = ingest(work, corrupted_dump(scenario.corrupt, work / "kaggle"), AS_OF_NEW, "--next")
+    dump = corrupted_dump(scenario.corrupt, work / "kaggle")
+    loaded = ingest(work, dump, AS_OF_NEW, "--next", outage=scenario.outage)
     if loaded.returncode != 0:
         # The tail of the output goes into the reaction: a failed assertion shows why the loader stopped
         tail = (loaded.stdout[-1500:] + loaded.stderr[-1500:]).strip()
-        return [f"loader: {tail}"], None
+        return [f"loader: {tail}"], pinned_value(work, scenario)
     status = json.loads(loaded.stdout.strip().splitlines()[-1])
     reactions = [f"schema:new:{table}" for table in status["new_columns"]]
     reactions += [f"schema:removed:{table}" for table in status["removed_columns"]]
@@ -122,10 +132,13 @@ def run_scenario(baseline: Path, work: Path, scenario: Scenario) -> tuple[list[s
     dbt(work, AS_OF_NEW, "build", "--exclude", "package:elementary")
     reactions += dbt_reactions(work)
 
-    pinned = None
-    if scenario.pinned:
-        with duckdb.connect(str(db_path(work)), read_only=True) as con:
-            row = con.execute(scenario.pinned[0]).fetchone()
-        assert row is not None
-        pinned = row[0]
-    return reactions, pinned
+    return reactions, pinned_value(work, scenario)
+
+
+def pinned_value(work: Path, scenario: Scenario) -> object:
+    if not scenario.pinned:
+        return None
+    with duckdb.connect(str(db_path(work)), read_only=True) as con:
+        row = con.execute(scenario.pinned[0]).fetchone()
+    assert row is not None
+    return row[0]

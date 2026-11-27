@@ -38,6 +38,9 @@ def test_expected_reaction(scenario: Scenario, outcomes: dict[str, tuple[list[st
     reactions, pinned = outcomes[scenario.name]
     for expected in scenario.expected:
         assert any(r.startswith(expected) for r in reactions), f"nothing like {expected!r} in {reactions}"
+    loader = next((r for r in reactions if r.startswith("loader: ")), "")
+    for text in scenario.error_text:
+        assert text in loader, f"{text!r} not in the loader output: {loader}"
     if not scenario.expected:
         assert reactions == []
     if scenario.pinned:

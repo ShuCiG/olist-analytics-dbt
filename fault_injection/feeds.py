@@ -5,10 +5,18 @@ runner IP a rate limit or an outage there would fail a scenario that has nothing
 feeds. The fixtures keep the feeds' row shapes and the loader's own load code (range logic,
 merge, dedup); only the HTTP call is replaced. The feeds' own checks have unit tests in
 tests/ (answers cut off, implausible values, fallback source).
+
+A feed outage scenario (#375) keeps the feed's real code and replaces only the HTTP session: the
+named hosts refuse the connection or answer 429, the others answer from the fixtures. So the
+fallback source, the error text and the all-or-nothing write are the loader's own.
 """
 
+import re
 from datetime import date, timedelta
 from typing import Any
+from urllib.parse import urlparse
+
+import requests
 
 # Fixed national holidays (month, day): nine, above the feed's minimum of eight per year
 HOLIDAYS = ((1, 1), (4, 21), (5, 1), (9, 7), (10, 12), (11, 2), (11, 15), (11, 20), (12, 25))
@@ -55,8 +63,63 @@ def fx_rows(start: date, end: date) -> list[dict[str, str]]:
     ]
 
 
-def install(holidays_feed: Any, weather_feed: Any, fx_feed: Any) -> None:
+# Outage name -> {host: how it fails}. A host not listed answers like Nager.Date, from the fixtures
+DOWN, RATE_LIMITED = "refuses the connection", "answers 429"
+OUTAGES: dict[str, dict[str, str]] = {
+    "holidays_primary": {"brasilapi.com.br": DOWN},
+    "holidays_all": {"brasilapi.com.br": DOWN, "date.nager.at": RATE_LIMITED},
+    "weather": {"archive-api.open-meteo.com": RATE_LIMITED},
+    "fx_all": {"olinda.bcb.gov.br": DOWN, "api.frankfurter.dev": RATE_LIMITED},
+}
+
+
+class Answer:
+    def __init__(self, status: int, body: Any) -> None:
+        self.status_code, self.body, self.headers = status, body, {}
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} Client Error: Too Many Requests for url")
+
+    def json(self) -> Any:
+        return self.body
+
+
+class OutageSession:
+    """Stands in for the feeds' requests session (the retries live in its adapter, not replayed here)."""
+
+    def __init__(self, down: dict[str, str]) -> None:
+        self.down = down
+
+    def get(self, url: str, params: Any = None, timeout: Any = None) -> Answer:
+        host = urlparse(url).netloc
+        failure = self.down.get(host)
+        if failure == DOWN:
+            raise requests.ConnectionError(f"{host}: connection refused")
+        if failure == RATE_LIMITED:
+            return Answer(429, None)
+        found = re.search(r"/(\d{4})(?:/|$)", url)
+        assert found, url
+        year = int(found.group(1))
+        return Answer(
+            200,
+            [{"date": r["holiday_date"], "localName": r["holiday_name"], "global": True} for r in holiday_rows([year])],
+        )
+
+
+def install(holidays_feed: Any, weather_feed: Any, fx_feed: Any, outage: str = "") -> None:
+    """Fixtures for every feed; the one named by `outage` keeps its own code and meets the failure."""
     states = [state for state, _, _ in weather_feed.STATES]
-    holidays_feed.fetch_years = holiday_rows
-    weather_feed.fetch_range = lambda start, end, session=None: weather_rows(start, end, states)
-    fx_feed.fetch_range = lambda start, end, session=None: fx_rows(start, end)
+    session = OutageSession(OUTAGES[outage]) if outage else None
+    if outage.startswith("holidays"):
+        holidays_feed.make_session = lambda: session
+    else:
+        holidays_feed.fetch_years = holiday_rows
+    if outage == "weather":
+        weather_feed.make_session = lambda: session
+    else:
+        weather_feed.fetch_range = lambda start, end, session=None: weather_rows(start, end, states)
+    if outage == "fx_all":
+        fx_feed.make_session = lambda: session
+    else:
+        fx_feed.fetch_range = lambda start, end, session=None: fx_rows(start, end)

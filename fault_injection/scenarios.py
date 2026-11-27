@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from fault_injection.dump import Rows
+from fault_injection.feeds import HOLIDAYS
 
 NEW_MONTH = "2018-06"
 FIRST_ORDER_OF_LOADED_MONTH = "order00601"  # 2018-05-01
@@ -114,6 +115,23 @@ def score_out_of_range(rows: Rows) -> None:
         r["review_score"] = "50"
 
 
+# Feed outages (#375): the data is clean, a REST feed is not. The outage itself is the Scenario's `outage`
+def holidays_primary_source_down(rows: Rows) -> None:
+    pass
+
+
+def holidays_all_sources_down(rows: Rows) -> None:
+    pass
+
+
+def weather_rate_limited(rows: Rows) -> None:
+    pass
+
+
+def fx_all_sources_down(rows: Rows) -> None:
+    pass
+
+
 @dataclass(frozen=True)
 class Scenario:
     defect: str  # the row in the README's coverage table
@@ -121,6 +139,9 @@ class Scenario:
     expected: tuple[str, ...] = ()
     pinned: tuple[str, object] | None = None  # query on the warehouse, its single value
     contract: bool = False  # also run the input data contract (a slow step)
+    outage: str = ""  # a REST feed fails (a key of feeds.OUTAGES); the dump stays clean
+    forget_next_year_holidays: bool = False  # raw lacks next year's holidays, so the loader asks the feed
+    error_text: tuple[str, ...] = ()  # what the loader's output must say when it stops
 
     @property
     def name(self) -> str:
@@ -187,5 +208,42 @@ SCENARIOS = [
         ("error:not_null_stg_olist__orders_purchased_at",),
     ),
     Scenario("Orders without payments", missing_payments, ("warn:assert_payments_match_order_amount",)),
-    Scenario("Review score out of range", score_out_of_range, ("fail:accepted_values_stg_olist__order_reviews_review_score",)),
+    Scenario(
+        "Review score out of range", score_out_of_range, ("fail:accepted_values_stg_olist__order_reviews_review_score",)
+    ),
+    Scenario(
+        "Primary holidays source down",
+        holidays_primary_source_down,
+        pinned=("select count(*) from raw.holidays where source = 'nager'", len(HOLIDAYS)),
+        outage="holidays_primary",
+        forget_next_year_holidays=True,
+    ),
+    Scenario(
+        "All holidays sources down",
+        holidays_all_sources_down,
+        ("loader",),
+        pinned=(
+            "select count(*) from raw.holidays where holiday_year = cast(extract(year from current_date) + 1 as varchar)",
+            0,
+        ),
+        outage="holidays_all",
+        forget_next_year_holidays=True,
+        error_text=("HolidaysError", "brasilapi: ConnectionError", "nager: HTTPError"),
+    ),
+    Scenario(
+        "Weather feed rate limited",
+        weather_rate_limited,
+        ("loader",),
+        pinned=("select count(distinct _loaded_at) from raw.weather_daily", 1),
+        outage="weather",
+        error_text=("WeatherError", "HTTPError", "429"),
+    ),
+    Scenario(
+        "FX rates: every source down",
+        fx_all_sources_down,
+        ("loader",),
+        pinned=("select count(distinct _loaded_at) from raw.fx_rates_daily", 1),
+        outage="fx_all",
+        error_text=("FxError", "bcb-ptax: ConnectionError", "frankfurter: HTTPError"),
+    ),
 ]
