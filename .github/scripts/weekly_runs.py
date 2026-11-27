@@ -1,6 +1,6 @@
 """Missed weekly engine runs (job `weekly-runs` in drift.yml, D95).
 
-Cloud Scheduler dispatches databricks.yml and snowflake.yml every Monday
+Cloud Scheduler dispatches databricks.yml every Monday
 (infra/scheduler.tf). A dispatch can fail without any GitHub run to send the failure
 email: an expired token, a disabled job, a workflow error. This fails when a weekly
 workflow has no successful run on main within MAX_AGE, whatever started it
@@ -18,7 +18,7 @@ import sys
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
-WORKFLOWS = ["databricks.yml", "snowflake.yml"]
+WORKFLOWS = ["databricks.yml"]
 # A week plus 12 h: on Monday last week's run still counts until 18:17 UTC (the
 # drift check itself starts hours late), a missed Monday fails on Tuesday
 MAX_AGE = timedelta(days=7, hours=12)

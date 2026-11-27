@@ -6,7 +6,7 @@ main:
   steps:
     - check:
         switch:
-          - condition: ${not(args.workflow in ["databricks.yml", "snowflake.yml"])}
+          - condition: ${not(args.workflow in ["databricks.yml"])}
             raise: '${"workflow not allowed: " + args.workflow}'
     - token:
         call: googleapis.secretmanager.v1.projects.secrets.versions.accessString

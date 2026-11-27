@@ -2,7 +2,6 @@
 
 [![CI/CD](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/ci-cd.yml)
 [![Databricks](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/databricks.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/databricks.yml)
-[![Snowflake](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/snowflake.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/snowflake.yml)
 [![Terraform drift](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/drift.yml/badge.svg)](https://github.com/ShuCiG/olist-analytics-dbt/actions/workflows/drift.yml)
 [![dbt docs](https://img.shields.io/badge/dbt_docs-lineage-FF694B?logo=dbt&logoColor=white)](https://shucig.github.io/olist-analytics-dbt/)
 [![Data product](https://img.shields.io/badge/data_product-contracts-2F6FDE)](https://shucig.github.io/olist-analytics-dbt/data-product/)
@@ -13,7 +12,7 @@
 End-to-end analytics engineering on the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (~100k orders, 2016–2018, 8 related tables), run as a **data product**: an owner, data contracts on its input and
 output, declared consumers, and CI that enforces all of it. **dlt** loads the data, **dbt Core** models it into a
-tested star schema and a semantic layer on **DuckDB** (local), **BigQuery** (prod), **Databricks** and **Snowflake** (also inside it, as *dbt Projects on Snowflake* with a task graph), **Airflow + Cosmos** replays
+tested star schema and a semantic layer on **DuckDB** (local), **BigQuery** (prod), **Databricks** (and, on a 30-day trial, **Snowflake**, also inside it as *dbt Projects on Snowflake*), **Airflow + Cosmos** replays
 it month by month as a live feed, and a **Streamlit** dashboard reads the result.
 
 | | |
@@ -42,10 +41,10 @@ The reasoning behind each choice is in the [decision log](docs/DECISIONS.md).
   get labelled by the ingest through the Claude API ($0 on the static dump). The labels check out against delivery
   dates they never saw: negative reviews about delivery are on late orders 60 % of the time, positive ones 1 %.
   → [Review topics](#review-topics)
-- **One codebase, four warehouses.** The same dbt models run on DuckDB, BigQuery, Databricks and Snowflake with identical
-  mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
-  Databricks serverless and DuckDB. On Snowflake the project also runs inside the warehouse (dbt Projects on
-  Snowflake), scheduled by a Snowflake task graph that emails its failures. → [Snowflake](#snowflake-inside-the-warehouse),
+- **One codebase, four warehouses.** The same dbt models ran on DuckDB, BigQuery, Databricks and Snowflake (a 30-day
+  trial, unused after it, [D139](docs/DECISIONS.md)) with identical mart numbers, through cross-database macros and per-adapter dispatch; one Python model (RFM segments) runs on
+  Databricks serverless and DuckDB. On the Snowflake trial the project also ran inside the warehouse (dbt Projects on
+  Snowflake), scheduled by a Snowflake task graph that emailed its failures. → [Snowflake](#snowflake-inside-the-warehouse),
   [time and cost per engine](#same-project-four-engines)
 - **Team-grade CI/CD.** Every PR: lint, type check, tests, a full build on DuckDB and slim CI on BigQuery
   (`state:modified+ --defer` to prod) in throwaway datasets, with PR comments on what the change does to the marts
@@ -126,7 +125,7 @@ flowchart LR
 | Layer | Tool |
 |---|---|
 | Ingestion | [dlt](https://dlthub.com/): Kaggle CSV → DuckDB / BigQuery / Databricks / Snowflake `raw`, order tables in monthly chunks (`merge`, cursor in dlt state) |
-| Warehouse | DuckDB (local dev), BigQuery (EU): `prod` (CD), `ci` (per-PR datasets), `airflow` (live feed); Databricks Free Edition: catalog `olist` (local), `olist_ci` (weekly CI); Snowflake (trial): database `OLIST`, dbt Core and native (`native_*`) schemas |
+| Warehouse | DuckDB (local dev), BigQuery (EU): `prod` (CD), `ci` (per-PR datasets), `airflow` (live feed); Databricks Free Edition: catalog `olist` (local), `olist_ci` (weekly CI); Snowflake (30-day trial, ended, D139) |
 | Transformation | dbt Core 1.12, `dbt_utils`, `dbt_expectations`, `dbt_date`, `audit_helper` |
 | Data product | ODPS v1.1 descriptor, ODCS v3.1 contracts, `datacontract-cli`, data usage agreements |
 | Semantic layer | dbt Semantic Layer / MetricFlow |
@@ -636,10 +635,9 @@ Weekly and on demand, a separate workflow loads a few months into Databricks and
 service principal limited to its own catalog, tests both data contracts on those tables, then drops the run's schemas and the Python model's notebooks
 ([D58](docs/DECISIONS.md), [D64](docs/DECISIONS.md), [D81](docs/DECISIONS.md)). When Free Edition can't start the warehouse, the run waits up to
 20 minutes, then ends as skipped with a warning instead of a failure email ([D78](docs/DECISIONS.md)).
-A third workflow does the same on Snowflake every week (full load into per-run schemas, dropped after), then
-redeploys the in-warehouse project and its task graph from main ([D85](docs/DECISIONS.md)). Cloud Scheduler starts
-both weekly workflows on time through GitHub's dispatch API (GitHub's own `schedule` fired hours late), and the daily
-drift check fails when a week was missed ([D95](docs/DECISIONS.md)).
+Cloud Scheduler starts it on time through GitHub's dispatch API (GitHub's own `schedule` fired hours late), and the
+daily drift check fails when a week was missed ([D95](docs/DECISIONS.md)). A weekly Snowflake workflow ran the same way
+during the trial ([D85](docs/DECISIONS.md)); since it ended it is manual and skips without its secret ([D139](docs/DECISIONS.md)).
 
 Three PR comments, updated on each push, come from the BigQuery build. The **column impact** names who a change
 reaches: per changed column (added, removed, retyped, computed differently) the downstream columns, metrics, contract
@@ -672,8 +670,8 @@ fails on a service account key older than 90 days or on an account that should h
 
 ### Snowflake: inside the warehouse
 
-On a Snowflake trial account the project runs three ways, with the same marts row for row
-([D85](docs/DECISIONS.md)):
+On a Snowflake trial account (30 days, 7.6 of 400 credits used, unused since it ended: [D139](docs/DECISIONS.md)) the
+project ran three ways, with the same marts row for row ([D85](docs/DECISIONS.md)):
 
 - **dbt Core from outside**, like the other engines: dlt loads `RAW`, `dbt build --target snowflake`.
 - **dbt Projects on Snowflake**: [`snowflake/deploy.py`](snowflake/deploy.py) uploads `transform/` with its packages
@@ -685,7 +683,7 @@ On a Snowflake trial account the project runs three ways, with the same marts ro
   (task error integrations take cloud queues only). ~0.075 credits a run, ~2.3 a month
   ([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)).
 
-The account is code ([`infra/snowflake`](infra/snowflake)): warehouse with 60 s auto-suspend, an account-wide
+The account was code ([`infra/snowflake`](infra/snowflake), kept as it was): warehouse with 60 s auto-suspend, an account-wide
 resource monitor (20 credits a month), roles, key-pair service users, the email integration.
 
 ## Same project, four engines
@@ -890,8 +888,8 @@ Options that were tried or priced, then left out:
   estimated at ~$30–40/month, mostly for the hourly Airflow check waking a SQL warehouse, with no per-query byte cap
   or daily quota. Prod on BigQuery stays inside the free tier
   ([D58](docs/DECISIONS.md#d58--2026-10-21--databricks-as-a-third-engine-free-edition)).
-- **Snowflake as prod.** The project runs there (above), but on a 30-day trial: a prod would stop working a month
-  after it was built ([D2](docs/DECISIONS.md#d2--2026-10-10--warehouse-duckdb-dev--bigquery-ciprod-phase-3), [D85](docs/DECISIONS.md)).
+- **Snowflake as prod.** The project ran there (above), but on a 30-day trial with no free plan after it: a prod would
+  stop working a month after it was built ([D2](docs/DECISIONS.md#d2--2026-10-10--warehouse-duckdb-dev--bigquery-ciprod-phase-3), [D85](docs/DECISIONS.md)).
 - **Iceberg tables for the marts (BigLake, read from DuckDB).** BigQuery wrote two marts as Iceberg and DuckDB read
   them from GCS with 0 diffs, but `catalogs.yml` is project-wide and the DuckDB and Databricks targets fail to parse
   with a BigLake catalog. Builds took about 2× as long, readers need a metadata export after every build, and dropped or

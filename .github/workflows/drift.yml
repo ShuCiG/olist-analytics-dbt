@@ -170,7 +170,7 @@ jobs:
       - name: Check key age
         run: uv run python .github/scripts/sa_keys.py olist-analytics-dbt-472315
 
-  # databricks.yml / snowflake.yml are started by Cloud Scheduler (infra/scheduler.tf);
+  # databricks.yml is started by Cloud Scheduler (infra/scheduler.tf);
   # a dispatch that fails leaves no run behind to send an email
   weekly-runs:
     name: Weekly engine runs
