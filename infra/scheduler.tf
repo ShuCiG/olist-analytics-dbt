@@ -18,7 +18,6 @@ locals {
   # GitHub schedules
   weekly_dispatches = {
     weekly-databricks = { workflow = "databricks.yml", cron = "17 6 * * 1" } # Mondays 06:17
-    weekly-snowflake  = { workflow = "snowflake.yml", cron = "37 6 * * 1" }  # Mondays 06:37
   }
 }
 

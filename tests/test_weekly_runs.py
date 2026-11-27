@@ -16,7 +16,7 @@ MONDAY = datetime(2026, 11, 9, 6, 17, tzinfo=UTC)
 
 
 def test_this_weeks_runs_pass() -> None:
-    assert weekly_runs.stale({"databricks.yml": MONDAY, "snowflake.yml": MONDAY}, NOW) == []
+    assert weekly_runs.stale({"databricks.yml": MONDAY}, NOW) == []
 
 
 def test_last_weeks_run_counts_all_monday_while_the_drift_check_is_late() -> None:
@@ -25,13 +25,13 @@ def test_last_weeks_run_counts_all_monday_while_the_drift_check_is_late() -> Non
 
 
 def test_missed_monday_fails_on_tuesday() -> None:
-    assert weekly_runs.stale({"databricks.yml": MONDAY - timedelta(days=7), "snowflake.yml": MONDAY}, NOW) == [
+    assert weekly_runs.stale({"databricks.yml": MONDAY - timedelta(days=7)}, NOW) == [
         "databricks.yml: last successful run 2026-11-02 06:17 UTC, more than 7 days, 12:00:00 ago"
     ]
 
 
 def test_no_success_at_all_fails() -> None:
-    assert weekly_runs.stale({"snowflake.yml": None}, NOW) == ["snowflake.yml: no successful run on main"]
+    assert weekly_runs.stale({"databricks.yml": None}, NOW) == ["databricks.yml: no successful run on main"]
 
 
 def test_newest_success_skips_failed_and_running_runs() -> None:

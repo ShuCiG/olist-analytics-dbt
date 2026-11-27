@@ -601,7 +601,8 @@ uv run datacontract ci data-product/contracts/olist-marts.odcs.yaml --server dat
 
 ## Snowflake
 
-A trial account works for 30 days (no external access: see D85). Set up the account with Terraform once
+The trial account this section was written for ended on 2026-11-29 and was retired (D139); the commands below need a
+new (paid) account. A trial works for 30 days (no external access: see D85). Set up the account with Terraform once
 ([infra/snowflake/README.md](../infra/snowflake/README.md): key pairs, `bootstrap.sql`, `terraform apply`), then as
 service user `OLIST_SVC`:
 
@@ -626,10 +627,11 @@ SELECT SYSTEM$GET_DBT_LOG('<query id>');                                        
 ALTER TASK OLIST.DBT_PROJECTS.DBT_ELEMENTARY SUSPEND;                                   -- stop the daily schedule
 ```
 
-The weekly CI (`.github/workflows/snowflake.yml`, target `snowflake_ci`) needs environment `snowflake-ci` with
+The CI workflow (`.github/workflows/snowflake.yml`, target `snowflake_ci`) needs environment `snowflake-ci` with
 variable `SNOWFLAKE_ACCOUNT` and secret `SNOWFLAKE_PRIVATE_KEY` (the PEM text of `olist_svc.p8`); without the
-secret it skips. When the trial ends: delete the secret, `terraform destroy` in `infra/snowflake` (the database has
-`prevent_destroy`: remove it first), or keep everything on a paid account.
+secret it skips. Since the trial ended (D139) it has no weekly dispatch and the secret is deleted, so it only skips
+when started by hand. To use a new account again: new keys, `terraform apply` in `infra/snowflake` (its state still
+lists the trial's objects: `terraform state rm` them first), the secret, and a Scheduler job in `infra/scheduler.tf`.
 
 ## Engines comparison (re-measure)
 
@@ -761,7 +763,7 @@ The third job, **Service account keys** (D63), lists the user-managed keys of ev
 - `key on an account that should have none  <account>  <key id>` — a key nobody declared: delete it, or, if the
   account really needs one, add it to `infra/sa_keys.yaml` with where it is used.
 
-The fourth job, **Weekly engine runs** (D95), fails when `databricks.yml` or `snowflake.yml` has no successful run on
+The fourth job, **Weekly engine runs** (D95), fails when `databricks.yml` has no successful run on
 main within 7.5 days: the Monday dispatch didn't happen (see *Weekly runs* below). A run that started and failed sends
 its own email.
 
@@ -769,8 +771,8 @@ Run it on demand: `gh workflow run drift.yml` (main only). Once fixed, the next 
 
 ## Weekly runs (Cloud Scheduler)
 
-`databricks.yml` and `snowflake.yml` have no GitHub `schedule` (D95). Cloud Scheduler jobs `weekly-databricks`
-(Mondays 06:17 UTC) and `weekly-snowflake` (06:37) start the Cloud Workflows workflow `github-dispatch`
+`databricks.yml` has no GitHub `schedule` (D95). Cloud Scheduler job `weekly-databricks`
+(Mondays 06:17 UTC) starts the Cloud Workflows workflow `github-dispatch`
 (region `europe-west1`, `infra/scheduler.tf`), which calls GitHub's `workflow_dispatch` API with a token from
 Secret Manager. Terraform makes the secret `github-dispatch-token` empty; the token goes in by hand, so its value never
 sits in the Terraform state.

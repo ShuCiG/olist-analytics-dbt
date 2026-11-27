@@ -88,7 +88,7 @@ olist:
       database: "{{ env_var('SNOWFLAKE_DATABASE', 'OLIST') }}"
       schema: main
       threads: 4
-    # Scheduled CI on Snowflake (.github/workflows/snowflake.yml): same user, schemas
+    # Scheduled CI on Snowflake (manual since the trial ended, D139): same user, schemas
     # <DBT_CI_SCHEMA>_staging, ..._marts in OLIST, dropped after the run
     snowflake_ci:
       type: snowflake
