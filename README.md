@@ -688,23 +688,29 @@ resource monitor (20 credits a month), roles, key-pair service users, the email 
 
 ## Same project, four engines
 
-One commit, the full dump already in each engine's `raw` (same row counts on all four), 4 threads, Elementary's
-tables built first and not timed, then `dbt build --exclude package:elementary`
-([D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)):
+One commit (`d0b593d`), the full dump already in each engine's `raw` (99,441 orders, the same feeds on all four), 4
+threads, Elementary's tables built first and not timed, then `dbt build --exclude package:elementary`, measured on
+2026-11-27 ([D140](docs/DECISIONS.md), first measured in
+[D91](docs/DECISIONS.md#d91--2026-11-02--same-project-four-engines-one-build-measured-on-each)). Time is dbt's own
+elapsed time, the wall clock of the command in brackets; DuckDB, Snowflake and BigQuery ran from a laptop, Databricks in
+its weekly CI workflow on a GitHub runner (its step takes 248 s):
 
 | | DuckDB | Snowflake | BigQuery | Databricks |
 |---|---|---|---|---|
-| Runs on | a laptop, in process | X-Small Gen2 warehouse (trial, AWS eu-central-1) | on-demand, EU | Free Edition, serverless 2X-Small SQL warehouse (AWS us-east-2) |
-| `dbt build` (wall clock) | 38 s (48 s) | 108 s (126 s) | 150 s (165 s) | 294 s (315 s) |
-| without Elementary's on-run-end upload | 26 s | 66 s | 102 s | 219 s |
-| Result | PASS 194, WARN 7 | PASS 179, WARN 7 | PASS 179, WARN 7 | PASS 194, WARN 7 |
-| Cost of one build | none | 0.063 credits: 168 s of warehouse time incl. the 60 s auto-suspend (≈ $0.17–0.25 at list price) | 2.74 GiB billed by 294 jobs, most at the 10 MiB minimum (≈ $0.017 at list price, $0 in the free tier) | ~1.7 DBU: 1.3 for the SQL warehouse's hour (incl. Elementary's setup and the idle time before its 10 min auto-stop), 0.4 for the Python model's serverless job; $0 on Free Edition |
+| Runs on | a laptop, in process | X-Small Gen2 warehouse (trial, AWS eu-central-1; not used since it ended, D139) | on-demand, EU | Free Edition, serverless 2X-Small SQL warehouse (AWS us-east-2) |
+| `dbt build` (wall clock) | 71 s (84 s) | 86 s (99 s) | 203 s (220 s) | 243 s (248 s) |
+| without Elementary's on-run-end upload | 52 s | 54 s | 159 s | 194 s |
+| Result | PASS 324, WARN 9 | PASS 309, WARN 9 | PASS 342, WARN 9 (unit tests excluded as in its CI; 3 BQML models only here, D96) | PASS 328, WARN 5 |
+| Cost of one build | none | 0.10 credits in the hour of the run (Elementary's tables, the build and the 60 s auto-suspend; ≈ $0.27–0.41 at list price) | 4.56 GiB billed by 460 jobs, BQML included (≈ $0.03 at list price, $0 in the free tier) | $0 on Free Edition (DBU not re-measured) |
 | What the engine needed | the reference: dev and every PR | integer division is `NUMBER(p, 6)` → `to_float()`; `TIMESTAMP_LTZ` for `_loaded_at`; one `week_of_year` for all engines ([D85](docs/DECISIONS.md#d85--2026-10-30--snowflake-as-a-fourth-engine-dbt-core-dbt-projects-on-snowflake-a-task-graph), [D86](docs/DECISIONS.md#d86--2026-10-31--one-week_of_year-on-every-engine)) | no parameterized types in `CAST` → `to_money()` dispatch, contract types per engine ([D15](docs/DECISIONS.md#d15--2026-10-11--bigquery-targets-and-cross-db-types)); day partitions on raw ([D70](docs/DECISIONS.md#d70--2026-10-25--raw-order-tables-partitioned-by-load-day-incremental-filter-that-prunes)); no Python model ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) | liquid clustering instead of partitions, `timestamp` / `string` types ([D58](docs/DECISIONS.md#d58--2026-10-21--databricks-as-a-third-engine-free-edition)); the Python model as a serverless notebook job ([D81](docs/DECISIONS.md#d81--2026-10-28--one-dbt-python-model-rfm-segments-on-databricks-and-duckdb-not-bigquery)) |
 
-DuckDB and Databricks also build the Python RFM model and its 14 tests (66 s of Databricks' time as a serverless
-job). Otherwise the slowest node on every engine is Elementary's on-run-end hook, which uploads the run's results to
-its tables: 12 s on DuckDB, 42–75 s on the cloud engines. The cloud times are mostly per-query overhead, not data:
-BigQuery processed 0.66 GiB for the whole build.
+DuckDB and Databricks also build the Python RFM model and its 14 tests (21 s on DuckDB, 52 s of Databricks' time as a
+serverless job). Otherwise the slowest node on every engine is Elementary's on-run-end hook, which uploads the run's
+results to its tables: 19 s on DuckDB, 32–50 s on the cloud engines. The cloud times are mostly per-query overhead,
+not data: BigQuery processed 1.12 GiB for the whole build. Since D91 the project grew from 194 to 338 nodes on DuckDB
+(the feeds of D126–D128, more marts and tests), which is why every time is longer. Databricks warns on 5
+tests where the other three warn on 9: four data-quality warnings (shipment distance, payment installments, delivery
+before carrier pickup, a freshness anomaly of Elementary) did not fire there, the cause is not investigated.
 
 ### Scale test: 1x, 10x, 100x the data
 
