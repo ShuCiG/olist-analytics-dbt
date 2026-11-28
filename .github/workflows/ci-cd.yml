@@ -448,6 +448,7 @@ jobs:
           key: kagglehub-olistbr-brazilian-ecommerce-v2
 
       - name: Ingest raw data (dlt → DuckDB)
+        timeout-minutes: 10  # normal: under a minute; a hung feed call must not eat the job limit
         run: uv run python ingestion/pipeline.py
 
       # Inputs of the /status/ page (D125): the tools' own result files, collected here
@@ -955,6 +956,7 @@ jobs:
       # (`shell: bash` runs with pipefail, so `tee` doesn't hide it).
       - name: Ingest raw data (dlt → BigQuery)
         id: ingest
+        timeout-minutes: 15  # a hung feed call must not eat the job limit
         run: |
           uv run python ingestion/pipeline.py --destination bigquery | tee ingest.log
           echo "orders_loaded=$(tail -n 1 ingest.log | jq '.orders_loaded')" >> "$GITHUB_OUTPUT"
