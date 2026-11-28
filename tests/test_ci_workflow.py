@@ -548,3 +548,14 @@ def test_cleanup_runs_as_the_janitor_from_main_only() -> None:
     run = next(s for s in job["steps"] if s.get("name") == "List and drop")
     assert run["env"]["APPLY"] == "${{ github.event_name == 'schedule' || inputs.apply }}"
     assert set(jobs["notify-failure"]["needs"]) == set(jobs) - {"notify-failure"}
+
+
+def test_ingest_steps_have_a_step_timeout() -> None:
+    """A hung feed call (issue #399) must fail the ingest step in minutes, not at the job limit."""
+    jobs = _jobs()
+    for job, prefix in (("dbt-build", "Ingest raw data (dlt"), ("deploy-prod", "Ingest raw data (dlt")):
+        steps = [s for s in jobs[job]["steps"] if str(s.get("name", "")).startswith(prefix)]
+        assert steps, f"{job}: no ingest step found"
+        for step in steps:
+            limit = step.get("timeout-minutes")
+            assert limit and limit < jobs[job]["timeout-minutes"], f"{job}: {step['name']} needs a step timeout"
